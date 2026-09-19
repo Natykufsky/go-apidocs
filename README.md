@@ -138,6 +138,31 @@ apidocs.Mount(app, apidocs.Config{
 
 ---
 
+## 📁 Recommended Project Layout & Modular OpenAPI Paths
+
+To keep your backend codebase organized and maintainable as your API grows to hundreds of endpoints, we recommend structuring your documentation folder like this:
+
+```text
+your-project/
+├── cmd/api/main.go
+├── docs/
+│   ├── swagger.json          # Master generated/merged OpenAPI 3.0 specification
+│   ├── schemas.json          # Reusable shared DTO/model definitions
+│   ├── qa_tracker.json       # Auto-created by go-apidocs for QA notes
+│   └── paths/                # (Optional & Recommended) Modular endpoint definitions
+│       ├── auth.json         # Authentication & Identity routes
+│       ├── users.json        # User profile & management routes
+│       ├── billing.json      # Invoices & wallet payment routes
+│       └── messaging.json    # Core business API routes
+```
+
+### 💡 Why Split into `docs/paths/*.json`?
+1. **Zero Merge Conflicts**: When multiple developers or teams add new endpoints in the same sprint, they edit separate files under `paths/` instead of conflicting on a 10,000-line `swagger.json`.
+2. **Modular Tag Mapping**: Easily map `paths/` domains to shorthand query filters in `apidocs.Mount()` (e.g. `?module=billing` or `?tag=Messaging`).
+3. **Automated Merging**: A simple script (PowerShell / Bash / Go generator) can stitch `paths/*.json` + `schemas.json` into `swagger.json` during your build pipeline or pre-commit hook.
+
+---
+
 ## 🤝 Collaboration & Contributor Roadmap
 
 We believe API documentation shouldn't just be static HTML—it should be a **collaborative workspace** connecting backend engineers, frontend developers, QA testers, and product managers.
