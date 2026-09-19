@@ -87,18 +87,17 @@ body {
   color: #4f46e5 !important;
 }
 
-/* Custom modern scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Custom overrides for Scalar Developer Guide */
+.scalar-api-reference,
+.scalar-app {
+  --scalar-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  --scalar-font-code: 'JetBrains Mono', monospace !important;
+  --scalar-background-1: #ffffff !important;
+  --scalar-background-2: #f8fafc !important;
+  --scalar-background-3: #f1f5f9 !important;
+  --scalar-color-1: #0f172a !important;
+  --scalar-color-2: #334155 !important;
+  --scalar-color-3: #64748b !important;
+  --scalar-color-accent: #4f46e5 !important;
 }
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
+
