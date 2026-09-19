@@ -3,15 +3,88 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: #030712;
-  color: #f8fafc;
+  background-color: #f8fafc;
+  color: #1e293b;
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Swagger UI Light Theme Overrides & Legibility Fixes */
+.swagger-ui {
+  color: #1e293b !important;
+}
+
+.swagger-ui .info .title {
+  color: #0f172a !important;
+}
+
+.swagger-ui .info p,
+.swagger-ui .info li,
+.swagger-ui .info table {
+  color: #334155 !important;
+}
+
+.swagger-ui .opblock-tag {
+  color: #0f172a !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.swagger-ui .opblock .opblock-summary-description {
+  color: #475569 !important;
+}
+
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .opblock-external-docs-wrapper p,
+.swagger-ui .opblock-title_normal p {
+  color: #334155 !important;
+}
+
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th {
+  color: #0f172a !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+.swagger-ui .parameter__name {
+  color: #0f172a !important;
+}
+
+.swagger-ui .parameter__type {
+  color: #64748b !important;
+}
+
+.swagger-ui .response-col_status {
+  color: #0f172a !important;
+}
+
+.swagger-ui .response-col_description {
+  color: #334155 !important;
+}
+
+.swagger-ui select {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.swagger-ui input[type=text],
+.swagger-ui textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.swagger-ui .model-title {
+  color: #0f172a !important;
+}
+
+.swagger-ui .prop-type {
+  color: #4f46e5 !important;
 }
 
 /* Custom modern scrollbars */
@@ -20,12 +93,12 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #f1f5f9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #94a3b8;
 }

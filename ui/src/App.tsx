@@ -101,7 +101,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       <Navbar
         config={navConfig}
         activeModule={activeModule}
@@ -115,7 +115,7 @@ export const App: React.FC = () => {
       {qaMode && <QABar stats={calculateStats()} />}
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl backdrop-blur-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
           <SwaggerUI
             url={specUrl}
             docExpansion="list"
@@ -126,14 +126,14 @@ export const App: React.FC = () => {
         </div>
       </main>
 
-      <footer className="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 bg-white">
         <p>
           &copy; {new Date().getFullYear()} {navConfig.title} &bull; Powered by{' '}
           <a
             href="https://github.com/Natykufsky/go-apidocs"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-indigo-400 hover:underline font-semibold"
+            className="text-indigo-600 hover:underline font-semibold"
           >
             go-apidocs
           </a>{' '}

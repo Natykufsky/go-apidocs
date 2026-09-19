@@ -58,65 +58,62 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `api_qa_report_${new Date().toISOString().split('T')[0]}.md`;
+    a.download = `QA_Report_${(title || 'API').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2">
             <span className="text-xl">📋</span>
-            <h2 className="text-base font-bold text-white">Live QA Testing Audit Report</h2>
+            <h2 className="text-base font-bold text-slate-900">
+              QA Audit & Test Report (Markdown Export)
+            </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-lg p-1 rounded-lg hover:bg-slate-800"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
           >
             ✕
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 flex-1 flex flex-col gap-3 overflow-hidden">
-          <p className="text-xs text-slate-400">
-            Export or copy this GitHub Flavored Markdown audit report to track test results and bugs with your development team.
-          </p>
-          <textarea
-            readOnly
-            value={mdContent}
-            className="w-full flex-1 min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-200 focus:outline-none resize-none selection:bg-indigo-500/30"
-          />
+        {/* Modal Body */}
+        <div className="flex-1 p-6 overflow-y-auto font-mono text-xs text-slate-800 bg-slate-50">
+          <pre className="p-4 bg-white border border-slate-200 rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner text-slate-800">
+            {mdContent}
+          </pre>
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-6 py-4 bg-slate-950/60 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        {/* Modal Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-white">
           <button
             onClick={() => {
-              if (confirm('Are you sure you want to reset all team QA notes and comments on the server?')) {
+              if (window.confirm('Are you sure you want to reset all team QA test records?')) {
                 onReset();
               }
             }}
-            className="px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/20"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-all"
           >
-            🗑️ Reset QA Data
+            🗑️ Reset All QA Data
           </button>
 
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
-              className="px-4 py-2 text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-all"
             >
-              {copied ? '✅ Copied!' : '📋 Copy Markdown'}
+              {copied ? '✅ Copied to Clipboard!' : '📋 Copy Markdown'}
             </button>
             <button
               onClick={handleDownload}
-              className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-md shadow-indigo-600/30 transition-colors"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
             >
-              📥 Download .md
+              ⬇️ Download .md Report
             </button>
           </div>
         </div>
