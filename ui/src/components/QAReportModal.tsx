@@ -27,6 +27,7 @@ interface QAReportModalProps {
   qaData: Record<string, QARecord>;
   onReset: () => void;
   onInspectEndpoint?: (endpoint: string) => void;
+  allEndpoints?: string[];
 }
 
 export const QAReportModal: React.FC<QAReportModalProps> = ({
@@ -36,6 +37,7 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
   qaData,
   onReset,
   onInspectEndpoint,
+  allEndpoints = [],
 }) => {
   const [activeTab, setActiveTab] = useState<'table' | 'markdown'>('table');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -44,8 +46,12 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Calculate sprint stats
-  const endpoints = Object.keys(qaData);
+  // Calculate sprint stats by merging all discovered OpenAPI endpoints with recorded QA data
+  const endpointSet = new Set<string>([
+    ...(allEndpoints || []),
+    ...Object.keys(qaData),
+  ]);
+  const endpoints = Array.from(endpointSet);
   let passedCount = 0;
   let retestCount = 0;
   let failedCount = 0;
@@ -53,15 +59,15 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
 
   for (const ep of endpoints) {
     const item = qaData[ep];
-    if (item.status === 'passed') passedCount++;
-    else if (item.status === 'retest') retestCount++;
-    else if (item.status === 'failed') failedCount++;
+    if (item?.status === 'passed') passedCount++;
+    else if (item?.status === 'retest') retestCount++;
+    else if (item?.status === 'failed') failedCount++;
     else untestedCount++;
   }
 
   const total = endpoints.length || 1;
   const testedCount = passedCount + retestCount + failedCount;
-  const passRate = Math.round((passedCount / (testedCount || 1)) * 100);
+  const passRate = testedCount > 0 ? Math.round((passedCount / testedCount) * 100) : 0;
 
   // Filter endpoints
   const filteredEndpoints = endpoints.filter((ep) => {

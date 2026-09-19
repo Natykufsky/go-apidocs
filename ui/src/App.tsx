@@ -31,6 +31,7 @@ export const App: React.FC = () => {
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
+  const [allEndpointsList, setAllEndpointsList] = useState<string[]>([]);
 
   // Handle initial search params (?module=... or ?tag=...)
   useEffect(() => {
@@ -110,23 +111,43 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Fetch OpenAPI tags to populate Scope filter dropdown
+  // Fetch OpenAPI spec to calculate total endpoints & populate Scope filter dropdown
   useEffect(() => {
-    fetch('/docs/swagger.json')
+    fetch(specUrl)
       .then((res) => res.json())
       .then((spec) => {
-        if (spec && Array.isArray(spec.tags) && spec.tags.length > 0) {
-          const tags = spec.tags
-            .map((t: any) => (typeof t === 'string' ? t : t.name))
-            .filter(Boolean)
-            .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-          if (tags.length > 0) {
-            setAvailableModules(tags);
+        if (spec) {
+          if (Array.isArray(spec.tags) && spec.tags.length > 0) {
+            const tags = spec.tags
+              .map((t: any) => (typeof t === 'string' ? t : t.name))
+              .filter(Boolean)
+              .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+            if (tags.length > 0) {
+              setAvailableModules(tags);
+            }
+          }
+
+          if (spec.paths && typeof spec.paths === 'object') {
+            const list: string[] = [];
+            const httpMethods = ['get', 'post', 'put', 'delete', 'patch', 'options', 'head'];
+            for (const pathKey in spec.paths) {
+              const pathObj = spec.paths[pathKey];
+              if (pathObj && typeof pathObj === 'object') {
+                for (const m of httpMethods) {
+                  if (pathObj[m]) {
+                    list.push(`${m.toUpperCase()} ${pathKey}`);
+                  }
+                }
+              }
+            }
+            if (list.length > 0) {
+              setAllEndpointsList(list);
+            }
           }
         }
       })
       .catch(() => {});
-  }, []);
+  }, [specUrl]);
 
   // Load QA Data from /docs/qa/data
   const loadQAData = async () => {
@@ -164,21 +185,24 @@ export const App: React.FC = () => {
     let passed = 0;
     let retest = 0;
     let failed = 0;
-    let total = Object.keys(qaData).length;
 
     for (const key in qaData) {
       const item = qaData[key];
-      if (item.status === 'passed') passed++;
-      else if (item.status === 'retest') retest++;
-      else if (item.status === 'failed') failed++;
+      if (item?.status === 'passed') passed++;
+      else if (item?.status === 'retest') retest++;
+      else if (item?.status === 'failed') failed++;
     }
+
+    const tested = passed + retest + failed;
+    const total = Math.max(allEndpointsList.length, Object.keys(qaData).length, tested);
+    const untested = Math.max(0, total - tested);
 
     return {
       passed,
       retest,
       failed,
-      untested: Math.max(0, total - (passed + retest + failed)),
-      total: Math.max(total, passed + retest + failed),
+      untested,
+      total,
     };
   };
 
@@ -296,6 +320,7 @@ export const App: React.FC = () => {
         onClose={() => setIsReportOpen(false)}
         title={navConfig.title}
         qaData={qaData}
+        allEndpoints={allEndpointsList}
         onReset={handleResetQA}
         onInspectEndpoint={(ep) => {
           setIsReportOpen(false);
@@ -308,7 +333,7 @@ export const App: React.FC = () => {
         isOpen={!!inspectEndpoint}
         onClose={() => setInspectEndpoint(null)}
         endpointKey={inspectEndpoint || ''}
-        endpointsList={Object.keys(qaData)}
+        endpointsList={allEndpointsList.length > 0 ? allEndpointsList : Object.keys(qaData)}
         qaData={qaData}
         onSaveRecord={handleSaveInspectRecord}
         onSelectEndpoint={(ep) => setInspectEndpoint(ep)}
