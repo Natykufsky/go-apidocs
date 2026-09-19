@@ -83,6 +83,21 @@ apidocs.Mount(app, apidocs.Config{
     // Title displayed on Swagger UI and QA Audit reports
     Title: "My REST API Documentation",
 
+    // Subtitle displayed in header brand
+    Subtitle: "Developer Portal & QA Hub",
+
+    // Brand emoji or icon
+    BrandIcon: "⚡",
+
+    // Unified Mobile-First Header Navigation (configurable in Go or loaded via /docs/nav JSON API)
+    NavItems: []apidocs.NavItem{
+        {Label: "Home", URL: "/", Icon: "🏠"},
+        {Label: "Guide", URL: "/guide", Icon: "📖"},
+        {Label: "API Sandbox", URL: "/docs", Icon: "⚡"},
+        {Label: "Health", URL: "/dashboard", Icon: "📊"},
+        {Label: "OpenAPI Spec", URL: "/docs/swagger.json", Icon: "📄", IsButton: true},
+    },
+
     // Username for docs login (auto-reads from DOCS_AUTH_USER if empty)
     AuthUser: "developer",
 
@@ -110,6 +125,7 @@ apidocs.Mount(app, apidocs.Config{
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
 | **`/docs`** | `GET` | Interactive Swagger UI with live QA checklist overlay and module filters. |
+| **`/docs/nav`** | `GET` | JSON endpoint delivering unified navigation links, brand titles, and menu structure. |
 | **`/docs/login`** | `GET/POST` | Password login gate with HMAC session cookie authentication. |
 | **`/docs/logout`** | `GET` | Invalidates docs session cookie and redirects to login. |
 | **`/docs/swagger.json`** | `GET` | Dynamic OpenAPI JSON spec (supports `?module=...` and `?tag=...`). |

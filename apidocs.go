@@ -13,6 +13,16 @@ import (
 	"github.com/Natykufsky/go-apidocs/assets"
 )
 
+// NavItem represents a link in the unified navigation header.
+type NavItem struct {
+	Label    string `json:"label"`
+	URL      string `json:"url"`
+	Icon     string `json:"icon,omitempty"`
+	Badge    string `json:"badge,omitempty"`
+	IsButton bool   `json:"is_button,omitempty"`
+	External bool   `json:"external,omitempty"`
+}
+
 // Config defines the options for the API Docs and QA Suite.
 type Config struct {
 	// SpecFilePath is the path to swagger.json (default: "./docs/swagger.json")
@@ -20,6 +30,15 @@ type Config struct {
 
 	// Title is the project title displayed on Swagger UI and QA reports
 	Title string
+
+	// Subtitle is an optional subtitle for the header/brand
+	Subtitle string
+
+	// BrandIcon is the emoji or SVG for the topbar (default: "⚡")
+	BrandIcon string
+
+	// NavItems allows configuring custom topbar navigation items via Go or JSON
+	NavItems []NavItem
 
 	// AuthUser configures the HTTP username for docs protection (reads from DOCS_AUTH_USER if empty)
 	AuthUser string
@@ -50,6 +69,18 @@ func Mount(app *fiber.App, cfg Config) {
 	}
 	if cfg.Title == "" {
 		cfg.Title = "API Documentation & QA Portal"
+	}
+	if cfg.BrandIcon == "" {
+		cfg.BrandIcon = "⚡"
+	}
+	if len(cfg.NavItems) == 0 {
+		cfg.NavItems = []NavItem{
+			{Label: "Home", URL: "/", Icon: "🏠"},
+			{Label: "Guide", URL: "/guide", Icon: "📖"},
+			{Label: "API Sandbox", URL: "/docs", Icon: "⚡"},
+			{Label: "Health", URL: "/dashboard", Icon: "📊"},
+			{Label: "OpenAPI Spec", URL: "/docs/swagger.json", Icon: "📄", IsButton: true},
+		}
 	}
 	if cfg.AuthUser == "" {
 		cfg.AuthUser = os.Getenv("DOCS_AUTH_USER")
@@ -86,13 +117,23 @@ func Mount(app *fiber.App, cfg Config) {
 	app.Get("/swagger/swagger.json", filter.ServeFilteredSwagger)
 	app.Get("/swagger.json", filter.ServeFilteredSwagger)
 
-	// 3. QA Tracking and Reports (Team-wide live sync)
+	// 3. Navigation & Branding Configuration API
+	app.Get("/docs/nav", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"title":     cfg.Title,
+			"subtitle":  cfg.Subtitle,
+			"icon":      cfg.BrandIcon,
+			"nav_items": cfg.NavItems,
+		})
+	})
+
+	// 4. QA Tracking and Reports (Team-wide live sync)
 	app.Get("/docs/qa/data", qa.HandleGetData)
 	app.Post("/docs/qa/record", qa.HandleSaveRecord)
 	app.Post("/docs/qa/reset", qa.HandleResetData)
 	app.Get("/docs/qa/report", qa.HandleGetReport)
 
-	// 4. Docs Authentication Middleware Gate
+	// 5. Docs Authentication Middleware Gate
 	docsGuard := WebAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
 
 	// 5. Login & Session Routes
