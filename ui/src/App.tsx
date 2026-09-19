@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navbar, NavConfig } from './components/Navbar';
-import { QABar, QAStats } from './components/QABar';
+import { QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
@@ -30,7 +30,7 @@ export const App: React.FC = () => {
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
 
-  // Handle browser back/forward buttons
+  // Handle browser navigation history (back/forward)
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname || '/');
@@ -65,7 +65,7 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Fetch OpenAPI tags to populate Scope dropdown dynamically
+  // Fetch OpenAPI tags to populate Scope filter dropdown
   useEffect(() => {
     fetch('/docs/swagger.json')
       .then((res) => res.json())
@@ -97,7 +97,7 @@ export const App: React.FC = () => {
     loadQAData();
   }, []);
 
-  // Update URL spec based on module / tag
+  // Update spec URL based on active module / scope
   const handleModuleChange = (mod: string) => {
     setActiveModule(mod);
     if (mod === 'all') {
@@ -138,7 +138,7 @@ export const App: React.FC = () => {
     } catch (e) {}
   };
 
-  // Route 1: Login View
+  // Route: Login View
   if (currentPath === '/docs/login' || currentPath === '/login') {
     return <LoginView config={navConfig} />;
   }
@@ -150,29 +150,43 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      {/* Single, consistent, mobile-first unified header across all routes */}
       <Navbar
         config={navConfig}
         currentPath={currentPath}
         onNavigate={handleNavigate}
-        activeModule={activeModule}
-        onModuleChange={handleModuleChange}
-        availableModules={availableModules}
-        qaMode={qaMode}
-        onToggleQAMode={() => setQAMode(!qaMode)}
-        onOpenQAReport={() => setIsReportOpen(true)}
       />
 
-      {isSandbox && qaMode && <QABar stats={calculateStats()} />}
-
-      {/* Render matching view */}
+      {/* Render route views */}
       {isGuide && <GuideView specUrl={specUrl} title={navConfig.title} />}
       {isHome && <LandingView config={navConfig} onNavigate={handleNavigate} />}
       {isDashboard && <HealthView />}
-      {isSandbox && <SwaggerSandboxView specUrl={specUrl} />}
+      {isSandbox && (
+        <SwaggerSandboxView
+          specUrl={specUrl}
+          activeModule={activeModule}
+          onModuleChange={handleModuleChange}
+          availableModules={availableModules}
+          qaMode={qaMode}
+          onToggleQAMode={() => setQAMode(!qaMode)}
+          onOpenQAReport={() => setIsReportOpen(true)}
+          qaStats={calculateStats()}
+        />
+      )}
       {!isGuide && !isHome && !isDashboard && !isSandbox && (
-        <SwaggerSandboxView specUrl={specUrl} />
+        <SwaggerSandboxView
+          specUrl={specUrl}
+          activeModule={activeModule}
+          onModuleChange={handleModuleChange}
+          availableModules={availableModules}
+          qaMode={qaMode}
+          onToggleQAMode={() => setQAMode(!qaMode)}
+          onOpenQAReport={() => setIsReportOpen(true)}
+          qaStats={calculateStats()}
+        />
       )}
 
+      {/* Unified Footer */}
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 bg-white">
         <p>
           &copy; {new Date().getFullYear()} {navConfig.title} &bull; Powered by{' '}
@@ -188,6 +202,7 @@ export const App: React.FC = () => {
         </p>
       </footer>
 
+      {/* QA Report Modal */}
       <QAReportModal
         isOpen={isReportOpen}
         onClose={() => setIsReportOpen(false)}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Menu, X, Lock, ExternalLink } from 'lucide-react';
 
 export interface NavItem {
   label: string;
@@ -20,29 +21,17 @@ interface NavbarProps {
   config: NavConfig;
   currentPath: string;
   onNavigate: (path: string) => void;
-  activeModule: string;
-  onModuleChange: (mod: string) => void;
-  availableModules: string[];
-  qaMode: boolean;
-  onToggleQAMode: () => void;
-  onOpenQAReport: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   config,
   currentPath,
   onNavigate,
-  activeModule,
-  onModuleChange,
-  availableModules,
-  qaMode,
-  onToggleQAMode,
-  onOpenQAReport,
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isCurrentActive = (url: string) => {
-    if (url === '/' && (currentPath === '/' || currentPath === '')) return true;
+    if (url === '/' && (currentPath === '/' || currentPath === '' || currentPath === '/landing')) return true;
     if (url === '/docs' && (currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger')) return true;
     if (url === '/guide' && currentPath.startsWith('/guide')) return true;
     if (url === '/dashboard' && (currentPath === '/dashboard' || currentPath === '/health')) return true;
@@ -51,209 +40,126 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, item: NavItem) => {
     if (item.external || item.url.endsWith('.json') || item.url.startsWith('http') || item.url.includes('/logout')) {
-      return; // Allow native navigation
+      return; // Native browser handling (e.g. file download, external URL, logout redirect)
     }
     e.preventDefault();
     onNavigate(item.url);
     setMobileOpen(false);
   };
 
-  const isSandboxView = currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger';
-
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Brand */}
+        {/* Brand Logo & Title */}
         <a
           href="/"
           onClick={(e) => handleLinkClick(e, { label: 'Home', url: '/' })}
-          className="flex items-center gap-3 group cursor-pointer"
+          className="flex items-center gap-3 group cursor-pointer shrink-0"
         >
           <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-lg shadow-md shadow-indigo-600/20 text-white group-hover:scale-105 transition-transform">
             {config.icon || '⚡'}
           </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-900 tracking-tight leading-none group-hover:text-indigo-600 transition-colors">
+          <div className="flex flex-col">
+            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight leading-none group-hover:text-indigo-600 transition-colors">
               {config.title || 'API Documentation'}
             </h1>
-            <p className="text-[11px] font-medium text-slate-500 leading-none mt-1">
-              {config.subtitle || 'Developer Reference & QA Suite'}
+            <p className="text-[11px] font-medium text-slate-500 leading-none mt-1 hidden sm:block">
+              {config.subtitle || 'Developer Reference & Sandbox Portal'}
             </p>
           </div>
         </a>
 
-        {/* Center / Right Actions (Desktop) */}
-        <div className="hidden lg:flex items-center gap-3">
-          {/* Module Selector (Only on Sandbox) */}
-          {isSandboxView && availableModules.length > 0 && (
-            <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-lg px-2.5 py-1.5">
-              <span className="text-xs font-semibold text-slate-600">📦 Scope:</span>
-              <select
-                value={activeModule}
-                onChange={(e) => onModuleChange(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer"
+        {/* Desktop Navigation Links */}
+        <nav className="hidden md:flex items-center gap-1.5">
+          {config.nav_items?.map((item) => {
+            const active = isCurrentActive(item.url);
+            return (
+              <a
+                key={item.label}
+                href={item.url}
+                onClick={(e) => handleLinkClick(e, item)}
+                target={item.external ? '_blank' : undefined}
+                rel={item.external ? 'noopener noreferrer' : undefined}
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  item.is_button
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20 ml-1'
+                    : active
+                    ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                }`}
               >
-                <option value="all" className="bg-white text-slate-900">
-                  🌟 All Endpoints
-                </option>
-                {availableModules.map((m) => (
-                  <option key={m} value={m} className="bg-white text-slate-900">
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+                {item.icon && <span>{item.icon}</span>}
+                <span>{item.label}</span>
+                {item.badge && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-200 text-slate-700 font-bold">
+                    {item.badge}
+                  </span>
+                )}
+                {item.external && <ExternalLink className="w-3 h-3 text-slate-400" />}
+              </a>
+            );
+          })}
 
-          {/* QA Toggle (Only on Sandbox) */}
-          {isSandboxView && (
-            <button
-              onClick={onToggleQAMode}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                qaMode
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
-                  : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              <span>🧪 QA Mode:</span>
-              <span className={qaMode ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
-                {qaMode ? 'Active' : 'Off'}
-              </span>
-            </button>
-          )}
+          {/* Session Lock / Logout */}
+          <a
+            href="/docs/logout"
+            title="Lock Session"
+            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200 transition-all text-xs flex items-center ml-2"
+          >
+            <Lock className="w-3.5 h-3.5" />
+          </a>
+        </nav>
 
-          {/* QA Report (Only on Sandbox) */}
-          {isSandboxView && (
-            <button
-              onClick={onOpenQAReport}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <span>📋 QA Report</span>
-            </button>
-          )}
-
-          {/* Nav Links */}
-          <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-            {config.nav_items?.map((item) => {
-              const active = isCurrentActive(item.url);
-              return (
-                <a
-                  key={item.label}
-                  href={item.url}
-                  onClick={(e) => handleLinkClick(e, item)}
-                  target={item.external ? '_blank' : undefined}
-                  rel={item.external ? 'noopener noreferrer' : undefined}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    item.is_button
-                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm'
-                      : active
-                      ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-200'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  {item.icon && <span className="mr-1.5">{item.icon}</span>}
-                  {item.label}
-                  {item.badge && (
-                    <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-200 text-slate-700">
-                      {item.badge}
-                    </span>
-                  )}
-                </a>
-              );
-            })}
-
-            {/* Logout button */}
-            <a
-              href="/docs/logout"
-              title="Lock Session"
-              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-200 transition-all text-xs flex items-center ml-1"
-            >
-              🔒
-            </a>
-          </div>
-        </div>
-
-        {/* Mobile Hamburger Toggle */}
+        {/* Mobile Hamburger Button */}
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="lg:hidden p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900"
-          aria-label="Toggle menu"
+          className="md:hidden p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 transition-colors"
+          aria-label="Toggle navigation menu"
         >
-          {mobileOpen ? '✕' : '☰'}
+          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer Navigation */}
       {mobileOpen && (
-        <div className="lg:hidden border-t border-slate-200 bg-white px-4 py-4 flex flex-col gap-3 shadow-md">
-          {isSandboxView && availableModules.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-slate-600">Filter Scope:</label>
-              <select
-                value={activeModule}
-                onChange={(e) => {
-                  onModuleChange(e.target.value);
-                  setMobileOpen(false);
-                }}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900"
+        <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4 flex flex-col gap-2 shadow-xl animate-in slide-in-from-top-2">
+          {config.nav_items?.map((item) => {
+            const active = isCurrentActive(item.url);
+            return (
+              <a
+                key={item.label}
+                href={item.url}
+                onClick={(e) => handleLinkClick(e, item)}
+                className={`px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-between transition-all ${
+                  item.is_button
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : active
+                    ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-200'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
               >
-                <option value="all">🌟 All Endpoints</option>
-                {availableModules.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {isSandboxView && (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  onToggleQAMode();
-                  setMobileOpen(false);
-                }}
-                className="py-2 px-3 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-300 text-emerald-700 text-center"
-              >
-                🧪 QA: {qaMode ? 'Active' : 'Off'}
-              </button>
-              <button
-                onClick={() => {
-                  onOpenQAReport();
-                  setMobileOpen(false);
-                }}
-                className="py-2 px-3 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 text-center"
-              >
-                📋 Report
-              </button>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-1 pt-2 border-t border-slate-200">
-            {config.nav_items?.map((item) => {
-              const active = isCurrentActive(item.url);
-              return (
-                <a
-                  key={item.label}
-                  href={item.url}
-                  onClick={(e) => handleLinkClick(e, item)}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between ${
-                    active ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    {item.icon && <span>{item.icon}</span>}
-                    {item.label}
+                <div className="flex items-center gap-2.5">
+                  {item.icon && <span className="text-base">{item.icon}</span>}
+                  <span>{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                    {item.badge}
                   </span>
-                  {item.badge && (
-                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
-                </a>
-              );
-            })}
+                )}
+              </a>
+            );
+          })}
+
+          <div className="pt-2 border-t border-slate-100 mt-1 flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-medium">Session Security</span>
+            <a
+              href="/docs/logout"
+              className="px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg flex items-center gap-1.5 transition-colors"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Lock Session
+            </a>
           </div>
         </div>
       )}
