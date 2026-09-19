@@ -18,6 +18,8 @@ export interface NavConfig {
 
 interface NavbarProps {
   config: NavConfig;
+  currentPath: string;
+  onNavigate: (path: string) => void;
   activeModule: string;
   onModuleChange: (mod: string) => void;
   availableModules: string[];
@@ -28,6 +30,8 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   config,
+  currentPath,
+  onNavigate,
   activeModule,
   onModuleChange,
   availableModules,
@@ -37,11 +41,34 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const isCurrentActive = (url: string) => {
+    if (url === '/' && (currentPath === '/' || currentPath === '')) return true;
+    if (url === '/docs' && (currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger')) return true;
+    if (url === '/guide' && currentPath.startsWith('/guide')) return true;
+    if (url === '/dashboard' && (currentPath === '/dashboard' || currentPath === '/health')) return true;
+    return currentPath === url;
+  };
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, item: NavItem) => {
+    if (item.external || item.url.endsWith('.json') || item.url.startsWith('http') || item.url.includes('/logout')) {
+      return; // Allow native navigation
+    }
+    e.preventDefault();
+    onNavigate(item.url);
+    setMobileOpen(false);
+  };
+
+  const isSandboxView = currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger';
+
   return (
     <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Brand */}
-        <a href="/" className="flex items-center gap-3 group">
+        <a
+          href="/"
+          onClick={(e) => handleLinkClick(e, { label: 'Home', url: '/' })}
+          className="flex items-center gap-3 group cursor-pointer"
+        >
           <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-lg shadow-md shadow-indigo-600/20 text-white group-hover:scale-105 transition-transform">
             {config.icon || '⚡'}
           </div>
@@ -57,8 +84,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Center / Right Actions (Desktop) */}
         <div className="hidden lg:flex items-center gap-3">
-          {/* Module Selector */}
-          {availableModules.length > 0 && (
+          {/* Module Selector (Only on Sandbox) */}
+          {isSandboxView && availableModules.length > 0 && (
             <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-lg px-2.5 py-1.5">
               <span className="text-xs font-semibold text-slate-600">📦 Scope:</span>
               <select
@@ -66,7 +93,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onChange={(e) => onModuleChange(e.target.value)}
                 className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer"
               >
-                <option value="all" className="bg-white text-slate-900">🌟 All Endpoints</option>
+                <option value="all" className="bg-white text-slate-900">
+                  🌟 All Endpoints
+                </option>
                 {availableModules.map((m) => (
                   <option key={m} value={m} className="bg-white text-slate-900">
                     {m}
@@ -76,52 +105,62 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* QA Toggle */}
-          <button
-            onClick={onToggleQAMode}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border ${
-              qaMode
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
-                : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <span>🧪 QA Mode:</span>
-            <span className={qaMode ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
-              {qaMode ? 'Active' : 'Off'}
-            </span>
-          </button>
+          {/* QA Toggle (Only on Sandbox) */}
+          {isSandboxView && (
+            <button
+              onClick={onToggleQAMode}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                qaMode
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                  : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>🧪 QA Mode:</span>
+              <span className={qaMode ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
+                {qaMode ? 'Active' : 'Off'}
+              </span>
+            </button>
+          )}
 
-          {/* QA Report */}
-          <button
-            onClick={onOpenQAReport}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 flex items-center gap-1.5 transition-all"
-          >
-            <span>📋 QA Report</span>
-          </button>
+          {/* QA Report (Only on Sandbox) */}
+          {isSandboxView && (
+            <button
+              onClick={onOpenQAReport}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>📋 QA Report</span>
+            </button>
+          )}
 
           {/* Nav Links */}
           <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-            {config.nav_items?.map((item) => (
-              <a
-                key={item.label}
-                href={item.url}
-                target={item.external ? '_blank' : undefined}
-                rel={item.external ? 'noopener noreferrer' : undefined}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  item.is_button
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                {item.icon && <span className="mr-1.5">{item.icon}</span>}
-                {item.label}
-                {item.badge && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-200 text-slate-700">
-                    {item.badge}
-                  </span>
-                )}
-              </a>
-            ))}
+            {config.nav_items?.map((item) => {
+              const active = isCurrentActive(item.url);
+              return (
+                <a
+                  key={item.label}
+                  href={item.url}
+                  onClick={(e) => handleLinkClick(e, item)}
+                  target={item.external ? '_blank' : undefined}
+                  rel={item.external ? 'noopener noreferrer' : undefined}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    item.is_button
+                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm'
+                      : active
+                      ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-200'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  {item.icon && <span className="mr-1.5">{item.icon}</span>}
+                  {item.label}
+                  {item.badge && (
+                    <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-200 text-slate-700">
+                      {item.badge}
+                    </span>
+                  )}
+                </a>
+              );
+            })}
 
             {/* Logout button */}
             <a
@@ -147,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Mobile Drawer */}
       {mobileOpen && (
         <div className="lg:hidden border-t border-slate-200 bg-white px-4 py-4 flex flex-col gap-3 shadow-md">
-          {availableModules.length > 0 && (
+          {isSandboxView && availableModules.length > 0 && (
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-slate-600">Filter Scope:</label>
               <select
@@ -160,51 +199,61 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <option value="all">🌟 All Endpoints</option>
                 {availableModules.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
                 ))}
               </select>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                onToggleQAMode();
-                setMobileOpen(false);
-              }}
-              className="py-2 px-3 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-300 text-emerald-700 text-center"
-            >
-              🧪 QA: {qaMode ? 'Active' : 'Off'}
-            </button>
-            <button
-              onClick={() => {
-                onOpenQAReport();
-                setMobileOpen(false);
-              }}
-              className="py-2 px-3 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 text-center"
-            >
-              📋 Report
-            </button>
-          </div>
+          {isSandboxView && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  onToggleQAMode();
+                  setMobileOpen(false);
+                }}
+                className="py-2 px-3 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-300 text-emerald-700 text-center"
+              >
+                🧪 QA: {qaMode ? 'Active' : 'Off'}
+              </button>
+              <button
+                onClick={() => {
+                  onOpenQAReport();
+                  setMobileOpen(false);
+                }}
+                className="py-2 px-3 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 text-center"
+              >
+                📋 Report
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1 pt-2 border-t border-slate-200">
-            {config.nav_items?.map((item) => (
-              <a
-                key={item.label}
-                href={item.url}
-                className="px-3 py-2 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  {item.icon && <span>{item.icon}</span>}
-                  {item.label}
-                </span>
-                {item.badge && (
-                  <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full">
-                    {item.badge}
+            {config.nav_items?.map((item) => {
+              const active = isCurrentActive(item.url);
+              return (
+                <a
+                  key={item.label}
+                  href={item.url}
+                  onClick={(e) => handleLinkClick(e, item)}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between ${
+                    active ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {item.icon && <span>{item.icon}</span>}
+                    {item.label}
                   </span>
-                )}
-              </a>
-            ))}
+                  {item.badge && (
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
+                </a>
+              );
+            })}
           </div>
         </div>
       )}

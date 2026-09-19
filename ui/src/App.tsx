@@ -1,11 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
-import SwaggerUI from 'swagger-ui-react';
-import 'swagger-ui-react/swagger-ui.css';
+import React, { useEffect, useState } from 'react';
 import { Navbar, NavConfig } from './components/Navbar';
 import { QABar, QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
+import { LoginView } from './components/LoginView';
+import { GuideView } from './components/GuideView';
+import { LandingView } from './components/LandingView';
+import { HealthView } from './components/HealthView';
+import { SwaggerSandboxView } from './components/SwaggerSandboxView';
 
 export const App: React.FC = () => {
+  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname || '/');
   const [navConfig, setNavConfig] = useState<NavConfig>({
     title: 'API Documentation',
     subtitle: 'Developer Portal & Sandbox',
@@ -26,6 +30,23 @@ export const App: React.FC = () => {
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
 
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname || '/');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleNavigate = (path: string) => {
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+      setCurrentPath(path);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   // Load Nav Config from /docs/nav
   useEffect(() => {
     fetch('/docs/nav')
@@ -39,6 +60,23 @@ export const App: React.FC = () => {
             icon: data.icon || prev.icon,
             nav_items: data.nav_items?.length ? data.nav_items : prev.nav_items,
           }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch OpenAPI tags to populate Scope dropdown dynamically
+  useEffect(() => {
+    fetch('/docs/swagger.json')
+      .then((res) => res.json())
+      .then((spec) => {
+        if (spec && Array.isArray(spec.tags) && spec.tags.length > 0) {
+          const tags = spec.tags
+            .map((t: any) => (typeof t === 'string' ? t : t.name))
+            .filter(Boolean);
+          if (tags.length > 0) {
+            setAvailableModules(tags);
+          }
         }
       })
       .catch(() => {});
@@ -69,7 +107,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Calculate stats
+  // Calculate QA stats
   const calculateStats = (): QAStats => {
     let passed = 0;
     let retest = 0;
@@ -100,10 +138,22 @@ export const App: React.FC = () => {
     } catch (e) {}
   };
 
+  // Route 1: Login View
+  if (currentPath === '/docs/login' || currentPath === '/login') {
+    return <LoginView config={navConfig} />;
+  }
+
+  const isSandbox = currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger';
+  const isGuide = currentPath.startsWith('/guide');
+  const isDashboard = currentPath === '/dashboard' || currentPath === '/health';
+  const isHome = currentPath === '/' || currentPath === '' || currentPath === '/landing';
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       <Navbar
         config={navConfig}
+        currentPath={currentPath}
+        onNavigate={handleNavigate}
         activeModule={activeModule}
         onModuleChange={handleModuleChange}
         availableModules={availableModules}
@@ -112,19 +162,16 @@ export const App: React.FC = () => {
         onOpenQAReport={() => setIsReportOpen(true)}
       />
 
-      {qaMode && <QABar stats={calculateStats()} />}
+      {isSandbox && qaMode && <QABar stats={calculateStats()} />}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
-          <SwaggerUI
-            url={specUrl}
-            docExpansion="list"
-            filter={true}
-            persistAuthorization={true}
-            displayRequestDuration={true}
-          />
-        </div>
-      </main>
+      {/* Render matching view */}
+      {isGuide && <GuideView specUrl={specUrl} title={navConfig.title} />}
+      {isHome && <LandingView config={navConfig} onNavigate={handleNavigate} />}
+      {isDashboard && <HealthView />}
+      {isSandbox && <SwaggerSandboxView specUrl={specUrl} />}
+      {!isGuide && !isHome && !isDashboard && !isSandbox && (
+        <SwaggerSandboxView specUrl={specUrl} />
+      )}
 
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 bg-white">
         <p>
