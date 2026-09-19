@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navbar, NavConfig } from './components/Navbar';
 import { QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
+import { QAInspectModal } from './components/QAInspectModal';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
 import { LandingView } from './components/LandingView';
@@ -28,6 +29,7 @@ export const App: React.FC = () => {
   const [qaMode, setQAMode] = useState<boolean>(true);
   const [qaData, setQAData] = useState<Record<string, QARecord>>({});
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
+  const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
 
   // Handle initial search params (?module=... or ?tag=...)
@@ -179,6 +181,35 @@ export const App: React.FC = () => {
     } catch (e) {}
   };
 
+  const handleSaveInspectRecord = async (
+    endpoint: string,
+    status: 'passed' | 'retest' | 'failed' | 'untested',
+    comment: string
+  ) => {
+    const timeStr = new Date().toLocaleString();
+    const updated = {
+      ...qaData,
+      [endpoint]: {
+        status,
+        comment,
+        tested_at: timeStr,
+      },
+    };
+    setQAData(updated);
+
+    try {
+      await fetch('/docs/qa/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint,
+          status,
+          comment,
+        }),
+      });
+    } catch (e) {}
+  };
+
   // Route: Login View
   if (currentPath === '/docs/login' || currentPath === '/login') {
     return <LoginView config={navConfig} />;
@@ -211,6 +242,7 @@ export const App: React.FC = () => {
           qaMode={qaMode}
           onToggleQAMode={() => setQAMode(!qaMode)}
           onOpenQAReport={() => setIsReportOpen(true)}
+          onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
           qaStats={calculateStats()}
           qaData={qaData}
           onUpdateQAData={setQAData}
@@ -225,6 +257,7 @@ export const App: React.FC = () => {
           qaMode={qaMode}
           onToggleQAMode={() => setQAMode(!qaMode)}
           onOpenQAReport={() => setIsReportOpen(true)}
+          onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
           qaStats={calculateStats()}
           qaData={qaData}
           onUpdateQAData={setQAData}
@@ -254,6 +287,21 @@ export const App: React.FC = () => {
         title={navConfig.title}
         qaData={qaData}
         onReset={handleResetQA}
+        onInspectEndpoint={(ep) => {
+          setIsReportOpen(false);
+          setInspectEndpoint(ep);
+        }}
+      />
+
+      {/* QA Endpoint Inspector Modal */}
+      <QAInspectModal
+        isOpen={!!inspectEndpoint}
+        onClose={() => setInspectEndpoint(null)}
+        endpointKey={inspectEndpoint || ''}
+        endpointsList={Object.keys(qaData)}
+        qaData={qaData}
+        onSaveRecord={handleSaveInspectRecord}
+        onSelectEndpoint={(ep) => setInspectEndpoint(ep)}
       />
     </div>
   );

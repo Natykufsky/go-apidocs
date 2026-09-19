@@ -29,6 +29,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [fontSize, setFontSize] = useState<string>(() => {
+    return localStorage.getItem('apidocs_font_size') || '100%';
+  });
+
+  const handleFontSizeChange = (size: string) => {
+    setFontSize(size);
+    document.documentElement.style.fontSize = size;
+    try {
+      localStorage.setItem('apidocs_font_size', size);
+    } catch (e) {}
+  };
 
   const isCurrentActive = (url: string) => {
     if (url === '/' && (currentPath === '/' || currentPath === '' || currentPath === '/landing')) return true;
@@ -100,11 +111,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             );
           })}
 
+          {/* Font Size Selector */}
+          <div className="flex items-center gap-1 bg-slate-100/90 border border-slate-200/80 rounded-xl px-2 py-1 text-xs">
+            <span className="text-slate-400 font-bold select-none text-[11px]">Aa</span>
+            <select
+              value={fontSize}
+              onChange={(e) => handleFontSizeChange(e.target.value)}
+              title="Adjust Portal Font Size"
+              className="bg-transparent text-slate-700 font-semibold outline-none cursor-pointer text-xs"
+            >
+              <option value="90%">Small (90%)</option>
+              <option value="100%">Default (100%)</option>
+              <option value="110%">Medium (110%)</option>
+              <option value="125%">Large (125%)</option>
+            </select>
+          </div>
+
           {/* Session Lock / Logout */}
           <a
             href="/docs/logout"
             title="Lock Session"
-            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200 transition-all text-xs flex items-center ml-2"
+            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200 transition-all text-xs flex items-center ml-1"
           >
             <Lock className="w-3.5 h-3.5" />
           </a>
@@ -150,6 +177,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               </a>
             );
           })}
+
+          <div className="pt-2 border-t border-slate-100 mt-1 flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-medium">Font Size</span>
+            <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1">
+              <span className="text-slate-400 font-bold select-none text-[11px]">Aa</span>
+              <select
+                value={fontSize}
+                onChange={(e) => handleFontSizeChange(e.target.value)}
+                className="bg-transparent text-slate-700 font-semibold outline-none cursor-pointer text-xs"
+              >
+                <option value="90%">Small (90%)</option>
+                <option value="100%">Default (100%)</option>
+                <option value="110%">Medium (110%)</option>
+                <option value="125%">Large (125%)</option>
+              </select>
+            </div>
+          </div>
 
           <div className="pt-2 border-t border-slate-100 mt-1 flex items-center justify-between">
             <span className="text-xs text-slate-500 font-medium">Session Security</span>

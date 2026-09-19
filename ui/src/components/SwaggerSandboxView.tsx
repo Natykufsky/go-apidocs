@@ -13,6 +13,7 @@ interface SwaggerSandboxViewProps {
   qaMode: boolean;
   onToggleQAMode: () => void;
   onOpenQAReport: () => void;
+  onInspectEndpoint?: (endpoint: string) => void;
   qaStats: QAStats;
   qaData: Record<string, QARecord>;
   onUpdateQAData: (data: Record<string, QARecord>) => void;
@@ -26,6 +27,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
   qaMode,
   onToggleQAMode,
   onOpenQAReport,
+  onInspectEndpoint,
   qaStats,
   qaData,
   onUpdateQAData,
