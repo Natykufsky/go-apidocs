@@ -72,10 +72,13 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
   // Filter endpoints
   const filteredEndpoints = endpoints.filter((ep) => {
     const item = qaData[ep] || { status: 'untested', comment: '' };
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+    const currentStatus = item.status || 'untested';
+    const matchesStatus = statusFilter === 'all' || currentStatus === statusFilter;
+    const cleanSearch = searchFilter.trim().toLowerCase();
     const matchesSearch =
-      ep.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      (item.comment && item.comment.toLowerCase().includes(searchFilter.toLowerCase()));
+      !cleanSearch ||
+      ep.toLowerCase().includes(cleanSearch) ||
+      (Boolean(item.comment) && item.comment.toLowerCase().includes(cleanSearch));
     return matchesStatus && matchesSearch;
   });
 

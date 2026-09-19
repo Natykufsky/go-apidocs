@@ -48,6 +48,56 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Live Search Filter for Swagger UI DOM
+  const applySearchFilter = (queryStr: string) => {
+    const swaggerRoot = containerRef.current;
+    if (!swaggerRoot) return;
+
+    const query = queryStr.trim().toLowerCase();
+    const tagSections = swaggerRoot.querySelectorAll('.opblock-tag-section');
+    const allBlocks = swaggerRoot.querySelectorAll('.opblock');
+
+    if (!query) {
+      allBlocks.forEach((el) => {
+        (el as HTMLElement).style.display = '';
+      });
+      tagSections.forEach((el) => {
+        (el as HTMLElement).style.display = '';
+      });
+      return;
+    }
+
+    tagSections.forEach((section) => {
+      let visibleInTag = 0;
+      const opblocks = section.querySelectorAll('.opblock');
+
+      opblocks.forEach((block) => {
+        const method = block.querySelector('.opblock-summary-method')?.textContent?.toLowerCase() || '';
+        const path = block.querySelector('.opblock-summary-path')?.textContent?.toLowerCase() || '';
+        const desc = block.querySelector('.opblock-summary-description')?.textContent?.toLowerCase() || '';
+        const fullText = `${method} ${path} ${desc}`;
+
+        if (fullText.includes(query)) {
+          (block as HTMLElement).style.display = '';
+          visibleInTag++;
+        } else {
+          (block as HTMLElement).style.display = 'none';
+        }
+      });
+
+      const tagName = section.querySelector('.opblock-tag')?.textContent?.toLowerCase() || '';
+      if (visibleInTag > 0 || tagName.includes(query)) {
+        (section as HTMLElement).style.display = '';
+      } else {
+        (section as HTMLElement).style.display = 'none';
+      }
+    });
+  };
+
+  useEffect(() => {
+    applySearchFilter(searchQuery);
+  }, [searchQuery]);
+
   // QA Panel Injection & DOM Synchronization
   useEffect(() => {
     const injectQAPanels = () => {
@@ -176,6 +226,10 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
           }
         }
       });
+
+      if (searchQuery.trim()) {
+        applySearchFilter(searchQuery);
+      }
     };
 
     // Run injection with initial delay & mutation observer
@@ -196,7 +250,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [qaMode, qaData, specUrl, onUpdateQAData]);
+  }, [qaMode, qaData, specUrl, onUpdateQAData, searchQuery]);
 
   return (
     <div className="flex-1 flex flex-col" ref={containerRef}>
