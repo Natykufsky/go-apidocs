@@ -303,6 +303,7 @@ export const App: React.FC = () => {
           qaStats={calculateStats()}
           qaData={qaData}
           onUpdateQAData={setQAData}
+          onOpenSearch={() => setIsSearchModalOpen(true)}
         />
       )}
       {!isGuide && !isHome && !isDashboard && !isSandbox && (
@@ -318,6 +319,7 @@ export const App: React.FC = () => {
           qaStats={calculateStats()}
           qaData={qaData}
           onUpdateQAData={setQAData}
+          onOpenSearch={() => setIsSearchModalOpen(true)}
         />
       )}
 

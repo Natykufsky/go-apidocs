@@ -17,6 +17,7 @@ interface SwaggerSandboxViewProps {
   qaStats: QAStats;
   qaData: Record<string, QARecord>;
   onUpdateQAData: (data: Record<string, QARecord>) => void;
+  onOpenSearch?: () => void;
 }
 
 export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
@@ -31,72 +32,9 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
   qaStats,
   qaData,
   onUpdateQAData,
+  onOpenSearch,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Keyboard shortcut (Cmd/Ctrl + K) to focus global search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // Live Search Filter for Swagger UI DOM
-  const applySearchFilter = (queryStr: string) => {
-    const swaggerRoot = containerRef.current;
-    if (!swaggerRoot) return;
-
-    const query = queryStr.trim().toLowerCase();
-    const tagSections = swaggerRoot.querySelectorAll('.opblock-tag-section');
-    const allBlocks = swaggerRoot.querySelectorAll('.opblock');
-
-    if (!query) {
-      allBlocks.forEach((el) => {
-        (el as HTMLElement).style.display = '';
-      });
-      tagSections.forEach((el) => {
-        (el as HTMLElement).style.display = '';
-      });
-      return;
-    }
-
-    tagSections.forEach((section) => {
-      let visibleInTag = 0;
-      const opblocks = section.querySelectorAll('.opblock');
-
-      opblocks.forEach((block) => {
-        const method = block.querySelector('.opblock-summary-method')?.textContent?.toLowerCase() || '';
-        const path = block.querySelector('.opblock-summary-path')?.textContent?.toLowerCase() || '';
-        const desc = block.querySelector('.opblock-summary-description')?.textContent?.toLowerCase() || '';
-        const fullText = `${method} ${path} ${desc}`;
-
-        if (fullText.includes(query)) {
-          (block as HTMLElement).style.display = '';
-          visibleInTag++;
-        } else {
-          (block as HTMLElement).style.display = 'none';
-        }
-      });
-
-      const tagName = section.querySelector('.opblock-tag')?.textContent?.toLowerCase() || '';
-      if (visibleInTag > 0 || tagName.includes(query)) {
-        (section as HTMLElement).style.display = '';
-      } else {
-        (section as HTMLElement).style.display = 'none';
-      }
-    });
-  };
-
-  useEffect(() => {
-    applySearchFilter(searchQuery);
-  }, [searchQuery]);
 
   // QA Panel Injection & DOM Synchronization
   useEffect(() => {
@@ -120,7 +58,16 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
           tested_at: '',
         };
 
-        let panel = block.querySelector('.qa-endpoint-panel') as HTMLDivElement;
+        // Check if panel already exists in block (prevent duplicates)
+        const existingPanels = block.querySelectorAll('.qa-endpoint-panel');
+        if (existingPanels.length > 1) {
+          // Remove any extraneous duplicates
+          for (let i = 1; i < existingPanels.length; i++) {
+            existingPanels[i].remove();
+          }
+        }
+
+        let panel = (existingPanels[0] as HTMLDivElement) || null;
 
         if (!panel) {
           panel = document.createElement('div');
@@ -226,10 +173,6 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
           }
         }
       });
-
-      if (searchQuery.trim()) {
-        applySearchFilter(searchQuery);
-      }
     };
 
     // Run injection with initial delay & mutation observer
@@ -250,33 +193,33 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [qaMode, qaData, specUrl, onUpdateQAData, searchQuery]);
+  }, [qaMode, qaData, specUrl, onUpdateQAData]);
 
   return (
     <div className="flex-1 flex flex-col" ref={containerRef}>
-      {/* Contextual Sandbox Header Toolbar with Global Search */}
+      {/* Contextual Sandbox Header Toolbar with Spotlight Search, Scope & QA */}
       <div className="bg-white border-b border-slate-200 sticky top-16 z-40 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
-          {/* Global Search Bar */}
-          <div className="relative flex-1 min-w-[260px] max-w-md">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search endpoints, routes, methods (e.g. GET, auth)... (Ctrl+K)"
-              className="w-full bg-slate-50 border border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-xl pl-10 pr-9 py-2 text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-md"
-                aria-label="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+          {/* Spotlight Search Trigger (replacing redundant search bar) */}
+          <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-sm">
+            <button
+              onClick={onOpenSearch}
+              type="button"
+              className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
+            >
+              <div className="flex items-center gap-2.5">
+                <Search className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                <span>Search API & Docs...</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-slate-200 text-slate-500 shadow-2xs">
+                  ⌘K
+                </kbd>
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-slate-200 text-slate-500 shadow-2xs">
+                  /
+                </kbd>
+              </div>
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -368,13 +311,12 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       {/* QA Stats Bar if QA mode is active */}
       {qaMode && <QABar stats={qaStats} />}
 
-      {/* Main Swagger Explorer with custom search filter */}
+      {/* Main Swagger Explorer */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-8 shadow-xs">
           <SwaggerUI
             url={specUrl}
             docExpansion="list"
-            filter={searchQuery ? searchQuery : false}
             persistAuthorization={true}
             displayRequestDuration={true}
           />
