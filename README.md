@@ -11,7 +11,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/Natykufsky/go-apidocs/graphs/commit-activity)
 
 <p align="center">
-  <strong>Drop-in OpenAPI 3.0 Documentation • Password Access Gate • Team-Wide QA Checklist & Commenting • Instant Markdown Audit Reports • Zero Deployment Dependencies</strong>
+  <strong>Drop-in OpenAPI 3.0 Documentation • Password Access Gate • ReadMe-Style Developer Guide • Real-Time Endpoint Stats & README Reader • Team-Wide QA Checklist • Instant Markdown Audit Reports • Zero Deployment Dependencies</strong>
 </p>
 
 </div>
@@ -20,14 +20,18 @@
 
 ## 🌟 Why `go-apidocs`?
 
-Standard Swagger UI solutions only display static API contracts. **`go-apidocs`** turns your API documentation into a complete **Developer & QA Collaboration Hub**:
+Standard Swagger UI solutions only display static API contracts. **`go-apidocs`** turns your API documentation into a complete **Developer Portal & QA Collaboration Hub**:
 
-1. **🔒 Password Security Gate (`/docs/login`)**: Protect staging and production API specs from unauthorized eyes with cryptographic HMAC-signed session cookies.
-2. **🧪 Live Team QA Checklist**: QA testers and developers can mark endpoints (`🟢 Passed`, `🟡 Needs Retest`, `🔴 Failed / Bug Found`) and leave notes directly on each endpoint box.
-3. **💾 Real-Time Team Synchronization**: All QA statuses and comments automatically sync to the backend server (`/docs/qa/*`) so the entire engineering team sees the exact same test progress.
-4. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown reports of all tested endpoints with bug notes ready to paste into GitHub Issues, Jira, or Slack.
-5. **⚡ Smart Token & Header Auto-Injector**: Automatically captures Bearer JWT tokens and tenant IDs upon login in Swagger UI and injects them into subsequent test requests.
-6. **📦 100% Self-Contained (`//go:embed`)**: All HTML, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel.
+1. **🏠 Interactive Developer Hub (`/`)**: Automatically reads and renders your project's `README.md` with rich typography and calculates **real-time live endpoint statistics**, HTTP method breakdowns, and engine domain explorers.
+2. **📖 ReadMe-Style Developer Guide (`/guide`)**: Interactive multi-column developer reference powered by Scalar with full support for hash anchors (e.g. `/guide#description/introduction`), search, and multi-language code snippets.
+3. **⚡ Swagger UI Sandbox (`/docs`)**: Interactive API playground with "Try It Out", token persistence, and dynamic scope filtering.
+4. **🔒 Password Security Gate (`/docs/login`)**: Protect staging and production API specs from unauthorized eyes with cryptographic HMAC-signed session cookies.
+5. **🧪 Live Team QA Checklist**: QA testers and developers can mark endpoints (`🟢 Passed`, `🟡 Needs Retest`, `🔴 Failed / Bug Found`) and leave notes directly on each endpoint box.
+6. **💾 Real-Time Team Synchronization**: All QA statuses and comments automatically sync to the backend server (`/docs/qa/*`) so the entire engineering team sees the exact same test progress.
+7. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown reports of all tested endpoints with bug notes ready to paste into GitHub Issues, Jira, or Slack.
+8. **📊 Operations Health Dashboard (`/dashboard`)**: Live service metrics, connection statuses, and interactive diagnostic log console.
+9. **📱 Unified Mobile-First Top Header**: Consistent, responsive top navigation bar across all views with mobile drawer support.
+10. **📦 100% Self-Contained (`//go:embed`)**: All React UI assets, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel.
 
 ---
 
@@ -60,7 +64,7 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// 🚀 Register all docs, auth gate, QA tracking & Swagger UI on Chi router
+	// 🚀 Register all docs, auth gate, QA tracking & portals on Chi router
 	chiadapter.Mount(r, apidocs.Config{
 		SpecFilePath: "./docs/swagger.json",
 		Title:        "HarvestPad Platform API",
@@ -89,7 +93,7 @@ import (
 func main() {
 	r := gin.Default()
 
-	// 🚀 Register all docs, auth gate, QA tracking & Swagger UI on Gin router
+	// 🚀 Register all docs, auth gate, QA tracking & portals on Gin router
 	ginadapter.Mount(r, apidocs.Config{
 		SpecFilePath: "./docs/swagger.json",
 		Title:        "HarvestPad Platform API",
@@ -117,7 +121,7 @@ import (
 func main() {
 	app := fiber.New()
 
-	// 🚀 Mount the entire docs, security gate, QA tracker & Swagger UI on Fiber
+	// 🚀 Mount the entire docs, security gate, QA tracker & portals on Fiber
 	apidocs.Mount(app, apidocs.Config{
 		SpecFilePath: "./docs/swagger.json",
 		Title:        "HarvestPad Platform API",
@@ -133,7 +137,7 @@ func main() {
 }
 ```
 
-Now open **`http://localhost:8080/docs`** in your browser! 🎉
+Now open **`http://localhost:8080/docs`** (or **`http://localhost:8080/`**) in your browser! 🎉
 
 ---
 
@@ -146,6 +150,9 @@ cfg := apidocs.Config{
 
     // Optional modular directory containing endpoint json files (default: "<DocsDir>/paths")
     PathsDir: "./docs/paths",
+
+    // Path to your project README markdown file (default: "<DocsDir>/README.md" or "./README.md")
+    ReadmePath: "./README.md",
 
     // Path to your monolithic swagger.json (default: "<DocsDir>/swagger.json")
     SpecFilePath: "./docs/swagger.json",
@@ -195,6 +202,9 @@ apidocs.MountGin(ginRouter, cfg)
 
 // Mount on Fiber
 apidocs.Mount(fiberApp, cfg)
+
+// Mount on standard net/http ServeMux
+apidocs.MountNetHTTP(mux, cfg)
 ```
 
 ---
@@ -203,8 +213,11 @@ apidocs.Mount(fiberApp, cfg)
 
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| **`/docs`** | `GET` | Interactive Swagger UI with live QA checklist overlay and module filters. |
+| **`/`** | `GET` | Developer Landing Hub with README.md markdown reader and live endpoint statistics. |
+| **`/guide`** | `GET` | ReadMe-style interactive Developer Reference powered by Scalar (supports deep links like `#description/introduction`). |
+| **`/docs`** | `GET` | Interactive Swagger UI Sandbox with QA checklist overlay, scope filters, and tester toolbar. |
 | **`/docs/nav`** | `GET` | JSON endpoint delivering unified navigation links, brand titles, and menu structure. |
+| **`/docs/readme`** | `GET` | Returns the raw project `README.md` markdown content. |
 | **`/docs/login`** | `GET/POST` | Password login gate with HMAC session cookie authentication. |
 | **`/docs/logout`** | `GET` | Invalidates docs session cookie and redirects to login. |
 | **`/docs/swagger.json`** | `GET` | Dynamic OpenAPI JSON spec (supports `?module=...` and `?tag=...`). |
@@ -212,7 +225,6 @@ apidocs.Mount(fiberApp, cfg)
 | **`/docs/qa/record`** | `POST` | Upserts a test status (`passed`, `failed`, `retest`, `untested`) and comment. |
 | **`/docs/qa/report`** | `GET` | Live formatted Markdown QA report table (`?format=json` supported). |
 | **`/docs/qa/reset`** | `POST` | Clears all QA test data on the server to start a fresh sprint. |
-| **`/guide`** | `GET` | Developer integration and onboarding guide portal. |
 | **`/dashboard`** | `GET` | System health and API status overview dashboard. |
 
 ---
@@ -224,6 +236,7 @@ To keep your backend codebase organized and maintainable as your API grows to hu
 ```text
 your-project/
 ├── cmd/api/main.go
+├── README.md                 # Project README (automatically rendered on /)
 ├── docs/
 │   ├── swagger.json          # Master generated/merged OpenAPI 3.0 specification
 │   ├── schemas.json          # Reusable shared DTO/model definitions
@@ -238,7 +251,7 @@ your-project/
 ### 💡 Why Split into `docs/paths/*.json`?
 1. **Zero Merge Conflicts**: When multiple developers or teams add new endpoints in the same sprint, they edit separate files under `paths/` instead of conflicting on a 10,000-line `swagger.json`.
 2. **Modular Tag Mapping**: Easily map `paths/` domains to shorthand query filters in `apidocs.Mount()` (e.g. `?module=billing` or `?tag=Messaging`).
-3. **Automated Merging**: A simple script (PowerShell / Bash / Go generator) can stitch `paths/*.json` + `schemas.json` into `swagger.json` during your build pipeline or pre-commit hook.
+3. **Automated Merging**: `go-apidocs` automatically resolves and merges modular schemas and paths during runtime filtering!
 
 ---
 
@@ -251,7 +264,7 @@ Whether you want to contribute in **Go**, **TypeScript / React**, **UI/UX Design
 ### 🗺️ High-Impact Contribution Areas:
 
 #### 1. 🌐 Multi-Router Ecosystem Adapters
-Expand framework coverage beyond Fiber with drop-in adapters:
+Expand framework coverage beyond Fiber, Chi, and Gin:
 - [x] **Gin Adapter** (`github.com/Natykufsky/go-apidocs/gin` & `apidocs.MountGin(r, cfg)`)
 - [x] **Chi / net/http Adapter** (`github.com/Natykufsky/go-apidocs/chi` & `apidocs.MountChi(r, cfg)`)
 - [ ] **Echo Adapter** (`github.com/Natykufsky/go-apidocs/echo` -> `apidocs.MountEcho(e, cfg)`)
@@ -264,10 +277,12 @@ Enable distributed teams to sync test results without relying only on local JSON
 
 #### 3. 🎨 Next-Gen React UI (`/ui`)
 Extend the React 18 + TypeScript + Tailwind portal with rich tooling:
-- [ ] **Multi-Language Code Snippet Generator** (instant cURL, JavaScript `fetch`/`axios`, Python `requests`, Go `net/http`, and PHP snippets)
+- [x] **Scalar Developer Guide Reference** with deep linking (`/guide#description/introduction`)
+- [x] **Real-time Live Endpoint Statistics** & HTTP method distribution
+- [x] **Integrated README.md Markdown Reader** on Landing portal
+- [x] **Unified Mobile-First Navigation Header**
 - [ ] **Interactive Webhook Simulator** (trigger test delivery payloads and inspect HMAC signatures in real time)
 - [ ] **Mock Server Simulator** (generate instant mock JSON responses directly in browser without a live backend)
-- [ ] **Dark / Light Theme Switcher** with persistent user preference
 - [ ] **1-Click Postman & Insomnia Collection Exporter**
 
 #### 4. 📢 Team Notifications & CI/CD Integrations
@@ -294,12 +309,12 @@ npm run build  # Compiles production bundle directly into ../assets/dist/
    ```
 3. **Create a Feature Branch**:
    ```bash
-   git checkout -b feat/multi-router-gin-adapter
+   git checkout -b feat/my-new-feature
    ```
 4. **Commit & Push**:
    ```bash
-   git commit -m "feat(gin): add native Gin framework router adapter"
-   git push origin feat/multi-router-gin-adapter
+   git commit -m "feat: describe your change"
+   git push origin feat/my-new-feature
    ```
 5. **Open a Pull Request**: Submit your PR with a clear description and tests. We review and merge active PRs quickly!
 
