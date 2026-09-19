@@ -190,13 +190,13 @@ apidocs.Mount(app, apidocs.Config{
 `go-apidocs` includes a zero-dependency **Authentication Gate** designed for air-gapped environments, offline local networks, staging environments, and internal enterprise systems:
 
 ```mermaid
-flowchart TD
-    User([Developer / QA Browser]) -->|GET /docs| Gate{Has Valid Session Cookie?}
-    Gate -->|Yes: Verified HMAC signature| Docs[Display Portal / Guide / Sandbox]
-    Gate -->|No / Expired| Login[Redirect to /docs/login]
-    Login -->|Submit Username & Password| Verify{Matches AuthUser & AuthPassword?}
-    Verify -->|Yes| Cookie[Issue 24h HMAC-Signed Cookie] --> Docs
-    Verify -->|No| Reject[Show 401 Error]
+graph TD
+    A["Developer / QA Browser"] -->|GET /docs| B{"Valid Session Cookie?"}
+    B -->|Yes| C["Display Portal / Sandbox"]
+    B -->|No / Expired| D["Redirect to /docs/login"]
+    D -->|Submit Credentials| E{"Valid AuthUser & Password?"}
+    E -->|Yes| F["Issue 24h HMAC Cookie"] --> C
+    E -->|No| G["Return 401 Unauthorized"]
 ```
 
 ### 1. Environment Variable Configuration (Recommended for Docker/K8s/CI)
@@ -390,35 +390,6 @@ Extend the React 18 + TypeScript + Tailwind portal with rich tooling:
 #### 4. 📢 Team Notifications & CI/CD Integrations
 - [ ] **Slack & Discord Webhook Alerts** (automatically notify your dev channel when QA marks an endpoint as `🔴 FAILED / BUG`)
 - [ ] **GitHub Actions / GitLab CI Runner** (fail automated builds if untested or broken endpoints exist)
-
----
-
-### 🎨 Frontend React UI Development (`/ui`):
-The UI is built with **React 18 + Vite + TypeScript + Tailwind CSS**:
-```bash
-cd ui
-npm install
-npm run dev    # Starts hot-reloading dev server on http://localhost:3000
-npm run build  # Compiles production bundle directly into ../assets/dist/
-```
-
-### 🛠️ Step-by-Step Contribution Workflow:
-1. **Fork the Repository**: Click the `Fork` button on [GitHub](https://github.com/Natykufsky/go-apidocs).
-2. **Clone your fork**:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/go-apidocs.git
-   cd go-apidocs
-   ```
-3. **Create a Feature Branch**:
-   ```bash
-   git checkout -b feat/my-new-feature
-   ```
-4. **Commit & Push**:
-   ```bash
-   git commit -m "feat: describe your change"
-   git push origin feat/my-new-feature
-   ```
-5. **Open a Pull Request**: Submit your PR with a clear description and tests. We review and merge active PRs quickly!
 
 ---
 
