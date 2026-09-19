@@ -211,11 +211,16 @@ func Mount(app *fiber.App, cfg Config) {
 		return c.Redirect("/docs?" + string(c.Request().URI().QueryString()))
 	})
 
-	// 7. Static Assets
+	// 7. Static Assets (Serving React bundle & assets)
 	if cfg.EmbeddedFS != nil {
 		app.Use("/docs", filesystem.New(filesystem.Config{
 			Root:       http.FS(cfg.EmbeddedFS),
-			PathPrefix: "docs",
+			PathPrefix: "dist",
+			Browse:     false,
+		}))
+		app.Use("/assets", filesystem.New(filesystem.Config{
+			Root:       http.FS(cfg.EmbeddedFS),
+			PathPrefix: "dist/assets",
 			Browse:     false,
 		}))
 		app.Use("/docs", filesystem.New(filesystem.Config{
@@ -230,15 +235,26 @@ func serveAsset(c *fiber.Ctx, embedded *embed.FS, filename string) error {
 	var err error
 
 	if embedded != nil {
-		data, err = fs.ReadFile(embedded, filename)
+		// 1. Try dist/<filename> (React build)
+		data, err = fs.ReadFile(embedded, "dist/"+filename)
 		if err != nil {
-			data, err = fs.ReadFile(embedded, "docs/"+filename)
+			// 2. Try root embedded file
+			data, err = fs.ReadFile(embedded, filename)
+			if err != nil {
+				data, err = fs.ReadFile(embedded, "docs/"+filename)
+			}
 		}
 	}
 	if len(data) == 0 {
-		data, err = os.ReadFile("./docs/" + filename)
+		data, err = os.ReadFile("./dist/" + filename)
 		if err != nil {
-			data, err = os.ReadFile("./backend/docs/" + filename)
+			data, err = os.ReadFile("./assets/dist/" + filename)
+			if err != nil {
+				data, err = os.ReadFile("./docs/" + filename)
+				if err != nil {
+					data, err = os.ReadFile("./backend/docs/" + filename)
+				}
+			}
 		}
 	}
 	if err != nil || len(data) == 0 {

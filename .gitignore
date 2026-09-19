@@ -1,0 +1,13 @@
+# Node / Frontend
+node_modules/
+.vite/
+*.local
+
+# Go binaries / builds
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out

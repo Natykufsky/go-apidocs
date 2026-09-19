@@ -143,11 +143,21 @@ apidocs.Mount(app, apidocs.Config{
 We believe API documentation should be interactive, secure, and collaborative. We welcome contributions from developers worldwide!
 
 ### 💡 Ideas for Contribution:
+- [ ] **React UI Components**: Extend `/ui` components (e.g., custom Monaco editor, cURL generators, payload mocks).
 - [ ] **Multi-Router Adapters**: Add native adapters for **Gin** (`apidocs.MountGin(r, cfg)`), **Chi** (`apidocs.MountChi(r, cfg)`), and **Echo**.
 - [ ] **Database QA Stores**: Add optional storage drivers for PostgreSQL, MySQL, and SQLite (`gorm` integration).
 - [ ] **Webhook Simulator**: Add an interactive webhook tester and payload inspector inside Swagger UI.
 - [ ] **Dark / Light Mode Toggle**: Smooth user-selectable themes.
 - [ ] **Postman / Insomnia Exporter**: 1-click collection export directly from the Swagger UI navbar.
+
+### 🎨 Frontend React UI Development (`/ui`):
+Want to work on the UI? It's powered by **React 18 + Vite + TypeScript + Tailwind CSS**:
+```bash
+cd ui
+npm install
+npm run dev    # Starts hot-reloading dev server on http://localhost:3000
+npm run build  # Compiles production bundle directly into assets/dist/
+```
 
 ### 🛠️ How to Contribute:
 1. **Fork the Repository**: Click the `Fork` button on GitHub.
