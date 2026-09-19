@@ -325,8 +325,42 @@ apidocs.MountNetHTTP(mux, cfg)
 The built-in QA Suite allows engineering and QA teams to review APIs collaboratively:
 
 1. **In-Line Status Badges & Comments**: Enable **QA Mode** in the sandbox header to interact directly with endpoints.
-2. **Dedicated QA Sprint Report Modal**: Click **QA Report** to view testing completion metrics, filter endpoints by status, search test comments, and download comprehensive Markdown audit summaries.
-3. **Endpoint Inspector Modal**: Click **Inspect** to review endpoint details, toggle statuses (`Passed`, `Needs Retest`, `Failed / Bug Found`, `Untested`), document bug reproduction steps, and navigate sequentially across endpoints using **Previous** / **Next** controls.
+2. **Dedicated QA Sprint Report Modal**: Click **QA Report** to view testing completion metrics, filter endpoints by status, and search test comments.
+3. **📊 1-Click Excel (.csv) & Markdown Audit Reports**:
+   - **Export to Excel (`.csv`)**: One-click download formatted with UTF-8 BOM and RFC 4180 escaping for instant spreadsheet opening in Microsoft Excel or Google Sheets.
+   - **Download Markdown (`.md`)**: Formatted Markdown audit table ready to paste into GitHub Issues, PRs, or Jira.
+   - **REST API Automation**: Download reports programmatically via `GET /docs/qa/report?format=csv` or `GET /docs/qa/report?format=excel`.
+4. **Endpoint Inspector Modal**: Click **Inspect** to review endpoint details, toggle statuses (`Passed`, `Needs Retest`, `Failed / Bug Found`, `Untested`), document bug reproduction steps, and navigate sequentially across endpoints using **Previous** / **Next** controls.
+
+---
+
+## 👥 Using `go-apidocs` in Any Stack (Node.js, Python, Java, PHP, Rust)
+
+You don't need to be a Go developer to use `go-apidocs`. Run it as a **standalone documentation microservice / container sidecar** for your backend:
+
+```mermaid
+graph LR
+    A["Your App (Node / Python / Java / PHP)"] -->|Exports| B["docs/swagger.json & README.md"]
+    C["go-apidocs Server"] -->|Serves & Protects| B
+    D["Team / Developers / QA"] -->|Access :8080| C
+```
+
+### Option A: Standalone Docker Container
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -v $(pwd)/docs:/docs \
+  -v $(pwd)/README.md:/docs/README.md \
+  -e DOCS_AUTH_USER="admin" \
+  -e DOCS_AUTH_PASS="SuperSecretPassword" \
+  natykufsky/go-apidocs:latest
+```
+
+### Option B: Standalone Precompiled Binary
+Download the precompiled single binary release and run:
+```bash
+./go-apidocs --spec=./docs/swagger.json --readme=./README.md --port=8080
+```
 
 ---
 
