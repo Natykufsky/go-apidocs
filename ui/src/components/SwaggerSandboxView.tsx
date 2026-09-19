@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SwaggerUI from 'swagger-ui-react';
 import 'swagger-ui-react/swagger-ui.css';
 import { QABar, QAStats } from './QABar';
-import { Filter, FlaskConical, FileSpreadsheet } from 'lucide-react';
+import { QARecord } from './QAReportModal';
+import { Search, Filter, FlaskConical, FileSpreadsheet, X } from 'lucide-react';
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
@@ -13,6 +14,8 @@ interface SwaggerSandboxViewProps {
   onToggleQAMode: () => void;
   onOpenQAReport: () => void;
   qaStats: QAStats;
+  qaData: Record<string, QARecord>;
+  onUpdateQAData: (data: Record<string, QARecord>) => void;
 }
 
 export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
@@ -24,17 +27,198 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
   onToggleQAMode,
   onOpenQAReport,
   qaStats,
+  qaData,
+  onUpdateQAData,
 }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut (Cmd/Ctrl + K) to focus global search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // QA Panel Injection & DOM Synchronization
+  useEffect(() => {
+    const injectQAPanels = () => {
+      const swaggerRoot = containerRef.current;
+      if (!swaggerRoot) return;
+
+      const opblocks = swaggerRoot.querySelectorAll('.opblock');
+      opblocks.forEach((block) => {
+        const methodEl = block.querySelector('.opblock-summary-method');
+        const pathEl = block.querySelector('.opblock-summary-path');
+        if (!methodEl || !pathEl) return;
+
+        const method = methodEl.textContent?.trim().toUpperCase() || '';
+        const path = pathEl.getAttribute('data-path') || pathEl.textContent?.trim() || '';
+        const endpointKey = `${method} ${path}`;
+
+        const itemData = qaData[endpointKey] || {
+          status: 'untested',
+          comment: '',
+          tested_at: '',
+        };
+
+        let panel = block.querySelector('.qa-endpoint-panel') as HTMLDivElement;
+
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = `qa-endpoint-panel ${itemData.status}`;
+          if (!qaMode) {
+            panel.style.display = 'none';
+          }
+
+          panel.innerHTML = `
+            <div class="qa-panel-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-weight: 700; font-size: 12px; color: #334155;">🧪 QA Status:</span>
+                <select class="qa-status-select">
+                  <option value="untested" ${itemData.status === 'untested' ? 'selected' : ''}>⚪ Not Tested</option>
+                  <option value="passed" ${itemData.status === 'passed' ? 'selected' : ''}>🟢 Passed (Working)</option>
+                  <option value="retest" ${itemData.status === 'retest' ? 'selected' : ''}>🟡 Needs Retest</option>
+                  <option value="failed" ${itemData.status === 'failed' ? 'selected' : ''}>🔴 Failed / Bug Found</option>
+                </select>
+              </div>
+              <span class="qa-timestamp" style="font-size: 11px; color: #64748b; font-weight: 600;">
+                ${itemData.tested_at ? 'Synced: ' + itemData.tested_at : ''}
+              </span>
+            </div>
+            <textarea class="qa-comment-input" placeholder="Leave QA test notes, bug details, status codes, or payload comments here (synced to server)...">${itemData.comment || ''}</textarea>
+          `;
+
+          // Event handlers
+          const selectEl = panel.querySelector('.qa-status-select') as HTMLSelectElement;
+          const textareaEl = panel.querySelector('.qa-comment-input') as HTMLTextAreaElement;
+
+          selectEl.addEventListener('change', async () => {
+            const newStatus = selectEl.value as 'passed' | 'retest' | 'failed' | 'untested';
+            panel.className = `qa-endpoint-panel ${newStatus}`;
+            const timeStr = new Date().toLocaleString();
+            const timeEl = panel.querySelector('.qa-timestamp');
+            if (timeEl) timeEl.textContent = 'Synced: ' + timeStr;
+
+            const updatedData: Record<string, QARecord> = {
+              ...qaData,
+              [endpointKey]: {
+                status: newStatus,
+                comment: textareaEl.value,
+                tested_at: timeStr,
+              },
+            };
+            onUpdateQAData(updatedData);
+
+            try {
+              await fetch('/docs/qa/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  endpoint: endpointKey,
+                  status: newStatus,
+                  comment: textareaEl.value,
+                }),
+              });
+            } catch (err) {}
+          });
+
+          textareaEl.addEventListener('blur', async () => {
+            const timeStr = new Date().toLocaleString();
+            const statusVal = selectEl.value as 'passed' | 'retest' | 'failed' | 'untested';
+            const updatedData: Record<string, QARecord> = {
+              ...qaData,
+              [endpointKey]: {
+                status: statusVal,
+                comment: textareaEl.value,
+                tested_at: timeStr,
+              },
+            };
+            onUpdateQAData(updatedData);
+
+            try {
+              await fetch('/docs/qa/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  endpoint: endpointKey,
+                  status: statusVal,
+                  comment: textareaEl.value,
+                }),
+              });
+            } catch (err) {}
+          });
+
+          block.appendChild(panel);
+        } else {
+          // Update existing panel visibility & values
+          panel.style.display = qaMode ? 'block' : 'none';
+          panel.className = `qa-endpoint-panel ${itemData.status}`;
+
+          const selectEl = panel.querySelector('.qa-status-select') as HTMLSelectElement;
+          if (selectEl && selectEl.value !== itemData.status && document.activeElement !== selectEl) {
+            selectEl.value = itemData.status;
+          }
+
+          const textareaEl = panel.querySelector('.qa-comment-input') as HTMLTextAreaElement;
+          if (textareaEl && textareaEl.value !== (itemData.comment || '') && document.activeElement !== textareaEl) {
+            textareaEl.value = itemData.comment || '';
+          }
+        }
+      });
+    };
+
+    // Run injection with initial delay & mutation observer
+    const timer = setTimeout(injectQAPanels, 200);
+
+    const observer = new MutationObserver(() => {
+      injectQAPanels();
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [qaMode, qaData, specUrl, onUpdateQAData]);
+
   return (
-    <div className="flex-1 flex flex-col">
-      {/* Contextual Sandbox Header Toolbar */}
-      <div className="bg-white border-b border-slate-200 sticky top-16 z-40">
+    <div className="flex-1 flex flex-col" ref={containerRef}>
+      {/* Contextual Sandbox Header Toolbar with Global Search */}
+      <div className="bg-white border-b border-slate-200 sticky top-16 z-40 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Interactive API Sandbox & Tester
-            </span>
+          {/* Global Search Bar */}
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search endpoints, routes, methods (e.g. GET, auth)... (Ctrl+K)"
+              className="w-full bg-slate-50 border border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-xl pl-10 pr-9 py-2 text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-md"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -69,7 +253,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
             >
               <FlaskConical className="w-3.5 h-3.5" />
               <span>QA Mode:</span>
-              <span className={qaMode ? 'text-emerald-700' : 'text-slate-500'}>
+              <span className={qaMode ? 'text-emerald-700 font-black' : 'text-slate-500'}>
                 {qaMode ? 'Active' : 'Off'}
               </span>
             </button>
@@ -89,13 +273,13 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       {/* QA Stats Bar if QA mode is active */}
       {qaMode && <QABar stats={qaStats} />}
 
-      {/* Main Swagger Explorer */}
+      {/* Main Swagger Explorer with custom search filter */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-8 shadow-xs">
           <SwaggerUI
             url={specUrl}
             docExpansion="list"
-            filter={true}
+            filter={searchQuery ? searchQuery : false}
             persistAuthorization={true}
             displayRequestDuration={true}
           />

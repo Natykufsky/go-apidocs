@@ -212,6 +212,8 @@ export const App: React.FC = () => {
           onToggleQAMode={() => setQAMode(!qaMode)}
           onOpenQAReport={() => setIsReportOpen(true)}
           qaStats={calculateStats()}
+          qaData={qaData}
+          onUpdateQAData={setQAData}
         />
       )}
       {!isGuide && !isHome && !isDashboard && !isSandbox && (
@@ -224,6 +226,8 @@ export const App: React.FC = () => {
           onToggleQAMode={() => setQAMode(!qaMode)}
           onOpenQAReport={() => setIsReportOpen(true)}
           qaStats={calculateStats()}
+          qaData={qaData}
+          onUpdateQAData={setQAData}
         />
       )}
 
