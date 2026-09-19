@@ -170,7 +170,13 @@ apidocs.Mount(app, apidocs.Config{
 ```
 `go-apidocs` automatically merges all schemas and paths in memory without requiring manual build scripts!
 
-### Option 3: Embedded Binary Distribution (`//go:embed`)
+### Option 3: In-Browser Live Drag & Drop / File Upload (📥 Import Spec)
+Developers and QA testers can import any local `swagger.json` or `openapi.json` file directly into the sandbox UI:
+1. Open the sandbox at **`/docs`**.
+2. Click the **📥 Import Spec** button in the top toolbar.
+3. Select your local `.json` or `.yaml` file. The Swagger explorer and real-time QA testing suite will immediately render the imported endpoints in memory without restarting the backend!
+
+### Option 4: Embedded Binary Distribution (`//go:embed`)
 For standalone or offline binaries where no external files exist on disk, embed your spec directly in Go:
 
 ```go
@@ -182,6 +188,23 @@ apidocs.Mount(app, apidocs.Config{
     SpecFilePath: "docs/swagger.json",
 })
 ```
+
+---
+
+## 📦 Standalone Binary Releases (No Go Environment Required)
+
+If you or your team use Node.js, Python, Java, PHP, or C# and don't have Go installed, you can download the precompiled single binary directly from GitHub Releases:
+
+1. Go to **[GitHub Releases](https://github.com/Natykufsky/go-apidocs/releases)**.
+2. Download the binary for your platform (`go-apidocs-linux-amd64`, `go-apidocs-darwin-arm64`, or `go-apidocs-windows-amd64.exe`).
+3. Run it pointing to your OpenAPI file:
+   ```bash
+   ./go-apidocs --spec=./docs/swagger.json --readme=./README.md --port=8080
+   ```
+   Or install via `go install`:
+   ```bash
+   go install github.com/Natykufsky/go-apidocs/cmd/go-apidocs@latest
+   ```
 
 ---
 

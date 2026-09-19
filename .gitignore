@@ -4,6 +4,7 @@ node_modules/
 *.local
 
 # Go binaries / builds
+bin/
 *.exe
 *.exe~
 *.dll
