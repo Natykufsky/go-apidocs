@@ -117,6 +117,30 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadCSV = () => {
+    // Generate CSV (Excel Compatible with UTF-8 BOM for perfect Excel opening)
+    const header = ['Method & Endpoint', 'Status', 'Last Tested', 'QA Bug Notes & Comments'];
+    const rows = endpoints.map((ep) => {
+      const item = qaData[ep] || { status: 'untested', comment: '', tested_at: '' };
+      let statusText = 'Untested';
+      if (item.status === 'passed') statusText = 'PASSED';
+      if (item.status === 'failed') statusText = 'FAILED / BUG';
+      if (item.status === 'retest') statusText = 'RETEST';
+
+      const cleanComment = (item.comment || '').replace(/"/g, '""').replace(/\r?\n/g, ' ');
+      return `"${ep}","${statusText}","${item.tested_at || '-'}","${cleanComment}"`;
+    });
+
+    const csvContent = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `QA_Sprint_Report_${(title || 'API').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'passed':
@@ -326,20 +350,27 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
             <span>Reset Sprint Data</span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleCopy}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
             >
               <Copy className="w-3.5 h-3.5 text-indigo-600" />
               <span>{copied ? '✅ Copied!' : 'Copy Markdown'}</span>
+            </button>
+            <button
+              onClick={handleDownloadCSV}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Export to Excel (.csv)</span>
             </button>
             <button
               onClick={handleDownload}
               className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Download .md Report</span>
+              <span>Download .md</span>
             </button>
           </div>
         </div>

@@ -151,6 +151,40 @@ func (q *QATracker) BuildReport() (string, int, int, int, int, map[string]Endpoi
 	return md.String(), total, passed, failed, retest, data
 }
 
+func (q *QATracker) BuildCSVReport() string {
+	q.mu.RLock()
+	data := q.loadData()
+	q.mu.RUnlock()
+
+	var sb strings.Builder
+	// UTF-8 BOM for Microsoft Excel auto-detection
+	sb.WriteString("\xEF\xBB\xBF")
+	sb.WriteString("Method & Endpoint,Status,Tester,Tested At,QA Comments / Notes\r\n")
+
+	for ep, item := range data {
+		statusText := "Untested"
+		switch item.Status {
+		case "passed":
+			statusText = "PASSED"
+		case "failed":
+			statusText = "FAILED / BUG"
+		case "retest":
+			statusText = "RETEST"
+		}
+
+		tester := item.Tester
+		if tester == "" {
+			tester = "QA / Developer"
+		}
+		comment := strings.ReplaceAll(item.Comment, `"`, `""`)
+		comment = strings.ReplaceAll(comment, "\r", " ")
+		comment = strings.ReplaceAll(comment, "\n", " ")
+
+		sb.WriteString(fmt.Sprintf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\r\n", ep, statusText, tester, item.TestedAt, comment))
+	}
+	return sb.String()
+}
+
 // Standard net/http Handlers
 func (q *QATracker) HandleGetDataHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -201,9 +235,20 @@ func (q *QATracker) HandleResetDataHTTP(w http.ResponseWriter, r *http.Request) 
 }
 
 func (q *QATracker) HandleGetReportHTTP(w http.ResponseWriter, r *http.Request) {
+	fmtParam := strings.ToLower(r.URL.Query().Get("format"))
+
+	if fmtParam == "csv" || fmtParam == "excel" {
+		csvData := q.BuildCSVReport()
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", "attachment; filename=\"qa_sprint_report.csv\"")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(csvData))
+		return
+	}
+
 	reportStr, total, passed, failed, retest, records := q.BuildReport()
 
-	if r.URL.Query().Get("format") == "json" {
+	if fmtParam == "json" {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"total":   total,
@@ -258,9 +303,18 @@ func (q *QATracker) HandleResetData(c *fiber.Ctx) error {
 }
 
 func (q *QATracker) HandleGetReport(c *fiber.Ctx) error {
+	fmtParam := strings.ToLower(c.Query("format"))
+
+	if fmtParam == "csv" || fmtParam == "excel" {
+		csvData := q.BuildCSVReport()
+		c.Set("Content-Type", "text/csv; charset=utf-8")
+		c.Set("Content-Disposition", "attachment; filename=\"qa_sprint_report.csv\"")
+		return c.SendString(csvData)
+	}
+
 	reportStr, total, passed, failed, retest, records := q.BuildReport()
 
-	if c.Query("format") == "json" {
+	if fmtParam == "json" {
 		return c.JSON(fiber.Map{
 			"total":   total,
 			"passed":  passed,
