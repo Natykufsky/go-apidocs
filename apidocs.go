@@ -66,6 +66,9 @@ type Config struct {
 	// DocsDir is the base directory containing docs files like schemas.json, swagger_base.json (default: "./docs")
 	DocsDir string
 
+	// ReadmePath is the path to README.md (default: "<DocsDir>/README.md" or "./README.md")
+	ReadmePath string
+
 	// PathsDir is the directory containing modular endpoint definitions (default: "<DocsDir>/paths")
 	PathsDir string
 
@@ -83,6 +86,9 @@ func NormalizeConfig(cfg Config) (Config, bool) {
 	}
 	if cfg.PathsDir == "" {
 		cfg.PathsDir = filepath.Join(cfg.DocsDir, "paths")
+	}
+	if cfg.ReadmePath == "" {
+		cfg.ReadmePath = filepath.Join(cfg.DocsDir, "README.md")
 	}
 	if cfg.SpecFilePath == "" {
 		cfg.SpecFilePath = filepath.Join(cfg.DocsDir, "swagger.json")
@@ -156,6 +162,35 @@ func MountFiber(app *fiber.App, cfg Config) {
 			"icon":      cfg.BrandIcon,
 			"nav_items": cfg.NavItems,
 		})
+	})
+
+	// Markdown README content API
+	app.Get("/docs/readme", func(c *fiber.Ctx) error {
+		candidates := []string{
+			cfg.ReadmePath,
+			filepath.Join(cfg.DocsDir, "README.md"),
+			filepath.Join(cfg.DocsDir, "readme.md"),
+			"./README.md",
+			"./readme.md",
+			"README.md",
+		}
+		for _, p := range candidates {
+			if p == "" {
+				continue
+			}
+			if b, err := os.ReadFile(p); err == nil && len(b) > 0 {
+				c.Set("Content-Type", "text/markdown; charset=utf-8")
+				return c.Send(b)
+			}
+		}
+		if cfg.EmbeddedFS != nil {
+			if b, err := LoadAsset(cfg.EmbeddedFS, "README.md"); err == nil && len(b) > 0 {
+				c.Set("Content-Type", "text/markdown; charset=utf-8")
+				return c.Send(b)
+			}
+		}
+		c.Set("Content-Type", "text/markdown; charset=utf-8")
+		return c.SendString("# " + cfg.Title + "\n\nWelcome to the API Documentation & Developer Portal.")
 	})
 
 	// QA Tracking and Reports
@@ -264,6 +299,7 @@ func MountChi(r chi.Router, cfg Config) {
 
 	// Navigation API
 	r.Get("/docs/nav", NavHandler(cfg))
+	r.Get("/docs/readme", ReadmeHandler(cfg))
 
 	// QA Tracking and Reports
 	r.Get("/docs/qa/data", qa.HandleGetDataHTTP)
@@ -316,6 +352,7 @@ func MountGin(r gin.IRoutes, cfg Config) {
 
 	// Navigation API
 	r.GET("/docs/nav", gin.WrapF(NavHandler(cfg)))
+	r.GET("/docs/readme", gin.WrapF(ReadmeHandler(cfg)))
 
 	// QA Tracking and Reports
 	r.GET("/docs/qa/data", gin.WrapF(qa.HandleGetDataHTTP))
@@ -358,6 +395,7 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 
 	// Nav & QA APIs
 	mux.HandleFunc("/docs/nav", NavHandler(cfg))
+	mux.HandleFunc("/docs/readme", ReadmeHandler(cfg))
 	mux.HandleFunc("/docs/qa/data", qa.HandleGetDataHTTP)
 	mux.HandleFunc("/docs/qa/record", qa.HandleSaveRecordHTTP)
 	mux.HandleFunc("/docs/qa/reset", qa.HandleResetDataHTTP)
@@ -410,6 +448,42 @@ func NavHandler(cfg Config) http.HandlerFunc {
 			"icon":      cfg.BrandIcon,
 			"nav_items": cfg.NavItems,
 		})
+	}
+}
+
+// ReadmeHandler returns the project README markdown.
+func ReadmeHandler(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+
+		candidates := []string{
+			cfg.ReadmePath,
+			filepath.Join(cfg.DocsDir, "README.md"),
+			filepath.Join(cfg.DocsDir, "readme.md"),
+			"./README.md",
+			"./readme.md",
+			"README.md",
+		}
+		for _, p := range candidates {
+			if p == "" {
+				continue
+			}
+			if b, err := os.ReadFile(p); err == nil && len(b) > 0 {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(b)
+				return
+			}
+		}
+		if cfg.EmbeddedFS != nil {
+			if b, err := LoadAsset(cfg.EmbeddedFS, "README.md"); err == nil && len(b) > 0 {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(b)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("# " + cfg.Title + "\n\nWelcome to the API Documentation & Developer Portal."))
 	}
 }
 
