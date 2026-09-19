@@ -51,9 +51,29 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 		}
 	}
 	if len(data) == 0 {
-		data, err = os.ReadFile(f.specPath)
-		if err != nil {
-			return nil, err
+		candidates := []string{
+			f.specPath,
+			"./docs/" + f.specPath,
+			"./backend/docs/" + f.specPath,
+			"./docs/swagger.json",
+			"./backend/docs/swagger.json",
+			"./swagger.json",
+			"swagger.json",
+		}
+		for _, p := range candidates {
+			if p == "" {
+				continue
+			}
+			if b, readErr := os.ReadFile(p); readErr == nil && len(b) > 0 {
+				data = b
+				break
+			}
+		}
+		if len(data) == 0 {
+			data, err = os.ReadFile(f.specPath)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
