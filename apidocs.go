@@ -645,6 +645,9 @@ func ServeAssetHTTP(w http.ResponseWriter, r *http.Request, embedded *embed.FS, 
 		return
 	}
 
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	w.Header().Set("Content-Type", GetMimeType(filename))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
@@ -656,6 +659,9 @@ func serveAsset(c *fiber.Ctx, embedded *embed.FS, filename string) error {
 		return c.Status(fiber.StatusNotFound).SendString("Documentation file not found")
 	}
 
+	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Set("Pragma", "no-cache")
+	c.Set("Expires", "0")
 	c.Set("Content-Type", GetMimeType(filename))
 	return c.Send(data)
 }
