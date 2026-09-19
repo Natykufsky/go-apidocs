@@ -138,29 +138,51 @@ apidocs.Mount(app, apidocs.Config{
 
 ---
 
-## 🤝 Call for Contributors & Roadmap
+## 🤝 Collaboration & Contributor Roadmap
 
-We believe API documentation should be interactive, secure, and collaborative. We welcome contributions from developers worldwide!
+We believe API documentation shouldn't just be static HTML—it should be a **collaborative workspace** connecting backend engineers, frontend developers, QA testers, and product managers.
 
-### 💡 Ideas for Contribution:
-- [ ] **React UI Components**: Extend `/ui` components (e.g., custom Monaco editor, cURL generators, payload mocks).
-- [ ] **Multi-Router Adapters**: Add native adapters for **Gin** (`apidocs.MountGin(r, cfg)`), **Chi** (`apidocs.MountChi(r, cfg)`), and **Echo**.
-- [ ] **Database QA Stores**: Add optional storage drivers for PostgreSQL, MySQL, and SQLite (`gorm` integration).
-- [ ] **Webhook Simulator**: Add an interactive webhook tester and payload inspector inside Swagger UI.
-- [ ] **Dark / Light Mode Toggle**: Smooth user-selectable themes.
-- [ ] **Postman / Insomnia Exporter**: 1-click collection export directly from the Swagger UI navbar.
+Whether you want to contribute in **Go**, **TypeScript / React**, **UI/UX Design**, or **Documentation**, here is where we're headed and where we need your help:
+
+### 🗺️ High-Impact Contribution Areas:
+
+#### 1. 🌐 Multi-Router Ecosystem Adapters
+Expand framework coverage beyond Fiber with drop-in adapters:
+- [ ] **Gin Adapter** (`github.com/Natykufsky/go-apidocs/gin` -> `apidocs.MountGin(r, cfg)`)
+- [ ] **Chi / net/http Adapter** (`github.com/Natykufsky/go-apidocs/chi` -> `apidocs.MountChi(r, cfg)`)
+- [ ] **Echo Adapter** (`github.com/Natykufsky/go-apidocs/echo` -> `apidocs.MountEcho(e, cfg)`)
+
+#### 2. 💾 Multi-Tenant QA Persistence Backends
+Enable distributed teams to sync test results without relying only on local JSON:
+- [ ] **PostgreSQL / MySQL Driver** (stores QA test runs directly in your database via `gorm` or `sqlx`)
+- [ ] **SQLite Embedded Driver** (lightweight zero-config persistence for local containers)
+- [ ] **Redis Streams Driver** (pub/sub live test notifications across the engineering team)
+
+#### 3. 🎨 Next-Gen React UI (`/ui`)
+Extend the React 18 + TypeScript + Tailwind portal with rich tooling:
+- [ ] **Multi-Language Code Snippet Generator** (instant cURL, JavaScript `fetch`/`axios`, Python `requests`, Go `net/http`, and PHP snippets)
+- [ ] **Interactive Webhook Simulator** (trigger test delivery payloads and inspect HMAC signatures in real time)
+- [ ] **Mock Server Simulator** (generate instant mock JSON responses directly in browser without a live backend)
+- [ ] **Dark / Light Theme Switcher** with persistent user preference
+- [ ] **1-Click Postman & Insomnia Collection Exporter**
+
+#### 4. 📢 Team Notifications & CI/CD Integrations
+- [ ] **Slack & Discord Webhook Alerts** (automatically notify your dev channel when QA marks an endpoint as `🔴 FAILED / BUG`)
+- [ ] **GitHub Actions / GitLab CI Runner** (fail automated builds if untested or broken endpoints exist)
+
+---
 
 ### 🎨 Frontend React UI Development (`/ui`):
-Want to work on the UI? It's powered by **React 18 + Vite + TypeScript + Tailwind CSS**:
+The UI is built with **React 18 + Vite + TypeScript + Tailwind CSS**:
 ```bash
 cd ui
 npm install
 npm run dev    # Starts hot-reloading dev server on http://localhost:3000
-npm run build  # Compiles production bundle directly into assets/dist/
+npm run build  # Compiles production bundle directly into ../assets/dist/
 ```
 
-### 🛠️ How to Contribute:
-1. **Fork the Repository**: Click the `Fork` button on GitHub.
+### 🛠️ Step-by-Step Contribution Workflow:
+1. **Fork the Repository**: Click the `Fork` button on [GitHub](https://github.com/Natykufsky/go-apidocs).
 2. **Clone your fork**:
    ```bash
    git clone https://github.com/YOUR_USERNAME/go-apidocs.git
@@ -168,22 +190,23 @@ npm run build  # Compiles production bundle directly into assets/dist/
    ```
 3. **Create a Feature Branch**:
    ```bash
-   git checkout -b feat/my-awesome-feature
+   git checkout -b feat/multi-router-gin-adapter
    ```
 4. **Commit & Push**:
    ```bash
-   git commit -m "feat: add support for Gin router"
-   git push origin feat/my-awesome-feature
+   git commit -m "feat(gin): add native Gin framework router adapter"
+   git push origin feat/multi-router-gin-adapter
    ```
-5. **Open a Pull Request**: Submit your PR with a brief summary of the changes.
+5. **Open a Pull Request**: Submit your PR with a clear description and tests. We review and merge active PRs quickly!
 
 ---
 
-## 💬 Community & Support
+## 💬 Community, Support & Author
 
-- 🐛 **Found a bug or need a feature?** [Open an Issue](https://github.com/Natykufsky/go-apidocs/issues)
-- ⭐ **Like this project?** Give it a **Star** on GitHub to help other Go developers discover it!
-- 📧 **Enterprise Support & Inquiries**: Reach out to the author at [natykufsky@gmail.com](mailto:natykufsky@gmail.com) or connect on [GitHub (@Natykufsky)](https://github.com/Natykufsky).
+- 👨‍💻 **Author & Maintainer**: **[Eng. Kufre N. Moses (Natykufsky)](https://github.com/Natykufsky)**
+- 📧 **Direct Inquiries & Support**: [natykufsky@gmail.com](mailto:natykufsky@gmail.com)
+- 🐛 **Found a bug or have an idea?** [Open a GitHub Issue](https://github.com/Natykufsky/go-apidocs/issues)
+- ⭐ **Star the Repo**: If you find `go-apidocs` helpful, please give it a star on [GitHub](https://github.com/Natykufsky/go-apidocs)!
 
 ---
 
