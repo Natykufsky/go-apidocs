@@ -16,7 +16,8 @@ import (
 // EndpointRecord holds the QA review and test status of an individual endpoint.
 type EndpointRecord struct {
 	EndpointKey string `json:"endpoint_key"` // e.g., "GET /api/v1/entities"
-	Status      string `json:"status"`       // "passed", "failed", "retest", "untested"
+	Endpoint    string `json:"endpoint,omitempty"`
+	Status      string `json:"status"` // "passed", "failed", "retest", "untested"
 	Comment     string `json:"comment"`
 	Tester      string `json:"tester"`
 	TestedAt    string `json:"tested_at"`
@@ -72,9 +73,13 @@ func (q *QATracker) GetData() map[string]EndpointRecord {
 }
 
 func (q *QATracker) SaveRecord(req EndpointRecord) (EndpointRecord, error) {
+	if req.EndpointKey == "" && req.Endpoint != "" {
+		req.EndpointKey = req.Endpoint
+	}
 	if req.EndpointKey == "" {
 		return req, fmt.Errorf("endpoint_key is required")
 	}
+	req.Endpoint = "" // normalize
 	if req.TestedAt == "" {
 		req.TestedAt = time.Now().Format("2006-01-02 15:04:05")
 	}

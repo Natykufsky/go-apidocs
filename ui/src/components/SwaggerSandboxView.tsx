@@ -124,6 +124,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   endpoint: endpointKey,
+                  endpoint_key: endpointKey,
                   status: newStatus,
                   comment: textareaEl.value,
                 }),
@@ -150,6 +151,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   endpoint: endpointKey,
+                  endpoint_key: endpointKey,
                   status: statusVal,
                   comment: textareaEl.value,
                 }),

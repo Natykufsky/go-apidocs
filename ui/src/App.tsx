@@ -212,6 +212,7 @@ export const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           endpoint,
+          endpoint_key: endpoint,
           status,
           comment,
         }),
