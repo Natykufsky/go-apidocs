@@ -30,20 +30,54 @@ export const App: React.FC = () => {
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
 
+  // Handle initial search params (?module=... or ?tag=...)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const mod = urlParams.get('module') || urlParams.get('tag');
+    if (mod) {
+      setActiveModule(mod);
+      setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
+    }
+  }, []);
+
   // Handle browser navigation history (back/forward)
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname || '/');
+      const urlParams = new URLSearchParams(window.location.search);
+      const mod = urlParams.get('module') || urlParams.get('tag');
+      if (mod) {
+        setActiveModule(mod);
+        setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
+      } else if (window.location.pathname.startsWith('/docs')) {
+        setActiveModule('all');
+        setSpecUrl('/docs/swagger.json');
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const handleNavigate = (path: string) => {
-    if (window.location.pathname !== path) {
+    try {
+      const dummy = new URL(path, window.location.origin);
+      const targetPath = dummy.pathname;
+      const targetModule = dummy.searchParams.get('module') || dummy.searchParams.get('tag');
+
+      if (targetModule) {
+        setActiveModule(targetModule);
+        setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(targetModule)}`);
+      } else if (targetPath.startsWith('/docs') && !dummy.search) {
+        setActiveModule('all');
+        setSpecUrl('/docs/swagger.json');
+      }
+
+      window.history.pushState(null, '', path);
+      setCurrentPath(targetPath);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
       window.history.pushState(null, '', path);
       setCurrentPath(path);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -73,7 +107,8 @@ export const App: React.FC = () => {
         if (spec && Array.isArray(spec.tags) && spec.tags.length > 0) {
           const tags = spec.tags
             .map((t: any) => (typeof t === 'string' ? t : t.name))
-            .filter(Boolean);
+            .filter(Boolean)
+            .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
           if (tags.length > 0) {
             setAvailableModules(tags);
           }
@@ -102,8 +137,14 @@ export const App: React.FC = () => {
     setActiveModule(mod);
     if (mod === 'all') {
       setSpecUrl('/docs/swagger.json');
+      if (currentPath.startsWith('/docs')) {
+        window.history.replaceState(null, '', '/docs');
+      }
     } else {
       setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
+      if (currentPath.startsWith('/docs')) {
+        window.history.replaceState(null, '', `/docs?module=${encodeURIComponent(mod)}`);
+      }
     }
   };
 

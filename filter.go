@@ -190,27 +190,43 @@ func (f *SpecFilter) FilterSpec(module, customTag string) (map[string]interface{
 		return nil, err
 	}
 
-	module = strings.TrimSpace(strings.ToLower(module))
+	module = strings.TrimSpace(module)
 	customTag = strings.TrimSpace(customTag)
 
-	if (module == "" || module == "all") && customTag == "" {
+	if (module == "" || strings.ToLower(module) == "all") && customTag == "" {
 		return spec, nil
 	}
 
 	allowedTags := make(map[string]bool)
 	if customTag != "" {
 		allowedTags[customTag] = true
-	} else if tags, ok := f.moduleTagMap[module]; ok && len(tags) > 0 {
-		for _, t := range tags {
-			allowedTags[t] = true
-		}
-	} else {
-		for key, tags := range f.moduleTagMap {
-			if strings.Contains(key, module) {
-				for _, t := range tags {
-					allowedTags[t] = true
+		allowedTags[strings.ToLower(customTag)] = true
+	}
+	if module != "" && strings.ToLower(module) != "all" {
+		moduleLower := strings.ToLower(module)
+		matchedInMap := false
+		if tags, ok := f.moduleTagMap[moduleLower]; ok && len(tags) > 0 {
+			for _, t := range tags {
+				allowedTags[t] = true
+				allowedTags[strings.ToLower(t)] = true
+			}
+			matchedInMap = true
+		} else {
+			for key, tags := range f.moduleTagMap {
+				keyLower := strings.ToLower(key)
+				if strings.Contains(keyLower, moduleLower) || strings.Contains(moduleLower, keyLower) {
+					for _, t := range tags {
+						allowedTags[t] = true
+						allowedTags[strings.ToLower(t)] = true
+					}
+					matchedInMap = true
 				}
 			}
+		}
+		// If not matched via moduleTagMap, treat module directly as the tag name or keyword!
+		if !matchedInMap || len(allowedTags) == 0 {
+			allowedTags[module] = true
+			allowedTags[moduleLower] = true
 		}
 	}
 
@@ -244,16 +260,21 @@ func (f *SpecFilter) FilterSpec(module, customTag string) (map[string]interface{
 			hasTag := false
 			for _, t := range tags {
 				if tagStr, ok := t.(string); ok {
-					if allowedTags[tagStr] {
-						hasTag = true
-						break
-					}
+					tagClean := strings.TrimSpace(tagStr)
+					tagLower := strings.ToLower(tagClean)
 					for allowed := range allowedTags {
-						if strings.Contains(strings.ToLower(allowed), strings.ToLower(tagStr)) ||
-							strings.Contains(strings.ToLower(tagStr), strings.ToLower(allowed)) {
+						allowedClean := strings.TrimSpace(allowed)
+						allowedLower := strings.ToLower(allowedClean)
+						if tagClean == allowedClean ||
+							tagLower == allowedLower ||
+							strings.Contains(tagLower, allowedLower) ||
+							strings.Contains(allowedLower, tagLower) {
 							hasTag = true
 							break
 						}
+					}
+					if hasTag {
+						break
 					}
 				}
 			}
@@ -285,16 +306,22 @@ func (f *SpecFilter) FilterSpec(module, customTag string) (map[string]interface{
 				continue
 			}
 			name, _ := tMap["name"].(string)
-			if allowedTags[name] {
-				filteredTags = append(filteredTags, t)
-				continue
-			}
+			nameClean := strings.TrimSpace(name)
+			nameLower := strings.ToLower(nameClean)
+			hasTag := false
 			for allowed := range allowedTags {
-				if strings.Contains(strings.ToLower(allowed), strings.ToLower(name)) ||
-					strings.Contains(strings.ToLower(name), strings.ToLower(allowed)) {
-					filteredTags = append(filteredTags, t)
+				allowedClean := strings.TrimSpace(allowed)
+				allowedLower := strings.ToLower(allowedClean)
+				if nameClean == allowedClean ||
+					nameLower == allowedLower ||
+					strings.Contains(nameLower, allowedLower) ||
+					strings.Contains(allowedLower, nameLower) {
+					hasTag = true
 					break
 				}
+			}
+			if hasTag {
+				filteredTags = append(filteredTags, t)
 			}
 		}
 		filtered["tags"] = filteredTags

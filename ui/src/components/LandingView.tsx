@@ -136,7 +136,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
       description: tagMap[k].description,
       count: tagMap[k].count,
       methods: tagMap[k].methods,
-    })).sort((a, b) => b.count - a.count);
+    })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
     const schemasCount =
       Object.keys(spec.components?.schemas || spec.definitions || {}).length;
