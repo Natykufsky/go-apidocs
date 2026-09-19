@@ -71,6 +71,64 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 			}
 		}
 		if len(data) == 0 {
+			// Check if modular OpenAPI directory structure exists (e.g. swagger_base.json + schemas.json + paths/*.json)
+			baseCandidates := []string{
+				"./docs/swagger_base.json",
+				"../docs/swagger_base.json",
+				"../../docs/swagger_base.json",
+				"./swagger_base.json",
+			}
+			var baseData []byte
+			var baseDir string
+			for _, bp := range baseCandidates {
+				if b, readErr := os.ReadFile(bp); readErr == nil && len(b) > 0 {
+					baseData = b
+					if strings.Contains(bp, "docs") {
+						baseDir = bp[:strings.Index(bp, "swagger_base.json")]
+					}
+					break
+				}
+			}
+
+			if len(baseData) > 0 {
+				var modularSpec map[string]interface{}
+				if json.Unmarshal(baseData, &modularSpec) == nil {
+					// Merge schemas
+					if schemasBytes, sErr := os.ReadFile(baseDir + "schemas.json"); sErr == nil {
+						var schemas map[string]interface{}
+						if json.Unmarshal(schemasBytes, &schemas) == nil {
+							components, ok := modularSpec["components"].(map[string]interface{})
+							if !ok {
+								components = make(map[string]interface{})
+								modularSpec["components"] = components
+							}
+							components["schemas"] = schemas
+						}
+					}
+
+					// Merge paths
+					mergedPaths := make(map[string]interface{})
+					pathsDir := baseDir + "paths"
+					if dirEntries, dErr := os.ReadDir(pathsDir); dErr == nil {
+						for _, entry := range dirEntries {
+							if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+								if pBytes, pErr := os.ReadFile(pathsDir + "/" + entry.Name()); pErr == nil {
+									var subPaths map[string]interface{}
+									if json.Unmarshal(pBytes, &subPaths) == nil {
+										for k, v := range subPaths {
+											mergedPaths[k] = v
+										}
+									}
+								}
+							}
+						}
+					}
+					modularSpec["paths"] = mergedPaths
+					f.rawSpec = modularSpec
+					return f.rawSpec, nil
+				}
+			}
+
 			data, err = os.ReadFile(f.specPath)
 			if err != nil {
 				return nil, err
