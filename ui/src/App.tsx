@@ -3,6 +3,7 @@ import { Navbar, NavConfig } from './components/Navbar';
 import { QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
 import { QAInspectModal } from './components/QAInspectModal';
+import { SpotlightSearchModal } from './components/SpotlightSearchModal';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
 import { LandingView } from './components/LandingView';
@@ -29,6 +30,7 @@ export const App: React.FC = () => {
   const [qaMode, setQAMode] = useState<boolean>(true);
   const [qaData, setQAData] = useState<Record<string, QARecord>>({});
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
   const [allEndpointsList, setAllEndpointsList] = useState<string[]>([]);
@@ -68,6 +70,26 @@ export const App: React.FC = () => {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Global Spotlight Search shortcut (Cmd+K / Ctrl+K or '/')
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input or textarea
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchModalOpen((prev) => !prev);
+      } else if (e.key === '/' && !isInput) {
+        e.preventDefault();
+        setIsSearchModalOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
   const handleNavigate = (path: string) => {
@@ -261,6 +283,7 @@ export const App: React.FC = () => {
         config={navConfig}
         currentPath={currentPath}
         onNavigate={handleNavigate}
+        onOpenSearch={() => setIsSearchModalOpen(true)}
       />
 
       {/* Render route views */}
@@ -313,6 +336,19 @@ export const App: React.FC = () => {
           &bull; Eng. Kufre N. Moses
         </p>
       </footer>
+
+      {/* Mac Glassmorphic Spotlight Search Modal */}
+      <SpotlightSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        allEndpoints={allEndpointsList}
+        qaData={qaData}
+        availableModules={availableModules}
+        navItems={navConfig.nav_items}
+        onNavigate={handleNavigate}
+        onSelectModule={handleModuleChange}
+        onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
+      />
 
       {/* QA Report Modal */}
       <QAReportModal

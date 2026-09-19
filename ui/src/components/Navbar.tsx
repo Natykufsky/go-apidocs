@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, Lock, ExternalLink } from 'lucide-react';
+import { Menu, X, Lock, ExternalLink, Search } from 'lucide-react';
 
 export interface NavItem {
   label: string;
@@ -21,12 +21,14 @@ interface NavbarProps {
   config: NavConfig;
   currentPath: string;
   onNavigate: (path: string) => void;
+  onOpenSearch?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   config,
   currentPath,
   onNavigate,
+  onOpenSearch,
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fontSize, setFontSize] = useState<string>(() => {
@@ -111,6 +113,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             );
           })}
 
+          {/* Global Spotlight Search Trigger (Mac Style) */}
+          <button
+            onClick={onOpenSearch}
+            title="Spotlight Search (Cmd+K / Ctrl+K)"
+            className="flex items-center gap-2 bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 hover:text-slate-900 transition-all cursor-pointer shadow-2xs"
+          >
+            <Search className="w-3.5 h-3.5 text-slate-500" />
+            <span className="font-semibold hidden lg:inline">Search API...</span>
+            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-slate-200 text-slate-500 shadow-2xs">
+              ⌘K
+            </kbd>
+          </button>
+
           {/* Font Size Selector */}
           <div className="flex items-center gap-1 bg-slate-100/90 border border-slate-200/80 rounded-xl px-2 py-1 text-xs">
             <span className="text-slate-400 font-bold select-none text-[11px]">Aa</span>
@@ -150,6 +165,25 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Mobile Drawer Navigation */}
       {mobileOpen && (
         <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4 flex flex-col gap-2 shadow-xl animate-in slide-in-from-top-2">
+          {/* Mobile Spotlight Search Button */}
+          {onOpenSearch && (
+            <button
+              onClick={() => {
+                setMobileOpen(false);
+                onOpenSearch();
+              }}
+              className="w-full px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-between shadow-2xs cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Search className="w-4 h-4 text-indigo-600" />
+                <span>Search API & Docs (Spotlight)</span>
+              </div>
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-slate-200 text-slate-500">
+                ⌘K
+              </kbd>
+            </button>
+          )}
+
           {config.nav_items?.map((item) => {
             const active = isCurrentActive(item.url);
             return (
