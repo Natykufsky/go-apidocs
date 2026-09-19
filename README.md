@@ -456,6 +456,22 @@ npm run build  # Compiles production bundle directly into ../assets/dist/
 
 ---
 
+## 🙏 Acknowledgements & Third-Party Credits
+
+`go-apidocs` is built on top of incredible open-source tools, libraries, and frameworks. Huge thanks to their authors and maintainers:
+
+- **[Swagger UI](https://swagger.io/tools/swagger-ui/)** (`swagger-ui-react`): The industry standard interactive OpenAPI API exploration and testing sandbox.
+- **[Scalar](https://scalar.com)** (`@scalar/api-reference-react`): Beautiful, modern, multi-column interactive API reference and documentation renderer.
+- **[Fiber](https://gofiber.io/)**: Express-inspired, ultra-fast web framework built on top of Fasthttp.
+- **[Chi](https://github.com/go-chi/chi)**: Lightweight, idiomatic, and composable router for Go HTTP services.
+- **[Gin](https://gin-gonic.com/)**: Fast HTTP web framework with martini-like API for Go.
+- **[React 18](https://react.dev/) & [Vite](https://vitejs.dev/)**: Next-generation frontend framework and lightning-fast build tooling.
+- **[Tailwind CSS](https://tailwindcss.com/)**: Utility-first CSS framework for clean, responsive UI styling.
+- **[Lucide Icons](https://lucide.dev/)**: Crisp, consistent, and beautiful icon set for modern web applications.
+- **[marked](https://marked.js.org/)**: Fast, lightweight markdown parser and compiler for project `README.md` rendering.
+
+---
+
 ## 💬 Community, Support & Author
 
 - 👨‍💻 **Author & Maintainer**: **[Eng. Kufre N. Moses (Natykufsky)](https://github.com/Natykufsky)**
