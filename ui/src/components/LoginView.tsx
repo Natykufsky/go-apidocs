@@ -51,37 +51,37 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center p-4 sm:p-6 text-slate-100 font-sans">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 text-slate-900 font-sans">
       <div className="w-full max-w-md">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-3xl shadow-xl shadow-indigo-500/25 mb-4 ring-8 ring-indigo-500/10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-3xl shadow-lg shadow-indigo-600/20 mb-4 ring-8 ring-indigo-50 text-white">
             {config.icon || '⚡'}
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white mb-2">
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
             {config.title || 'API Documentation'}
           </h1>
-          <p className="text-sm font-medium text-slate-400">
+          <p className="text-sm font-medium text-slate-500">
             {config.subtitle || 'Developer Reference & Swagger QA Portal'}
           </p>
-          <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+          <div className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
             Protected Developer Access
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-6 sm:p-8 shadow-2xl">
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs">
           {errorMessage && (
-            <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-start gap-3 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div className="leading-relaxed">{errorMessage}</div>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-2" htmlFor="username">
+              <label className="block text-xs font-bold text-slate-700 mb-2" htmlFor="username">
                 Developer Username
               </label>
               <div className="relative flex items-center">
@@ -96,13 +96,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
                   placeholder="admin or developer ID"
                   required
                   autoFocus
-                  className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-2" htmlFor="password">
+              <label className="block text-xs font-bold text-slate-700 mb-2" htmlFor="password">
                 Access Password
               </label>
               <div className="relative flex items-center">
@@ -116,12 +116,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   required
-                  className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-3 pl-10 pr-11 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-10 pr-11 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 p-1 text-slate-400 hover:text-slate-200 transition-colors"
+                  className="absolute right-3 p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                   aria-label="Toggle password visibility"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -132,7 +132,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-[0.99] cursor-pointer"
+              className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-[0.99] cursor-pointer"
             >
               {loading ? (
                 <>
@@ -148,8 +148,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-700/60 text-center">
-            <p className="text-xs text-slate-400">
+          <div className="mt-6 pt-6 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-500">
               Session is secured with encrypted HTTP-only JWT token.
             </p>
           </div>
@@ -157,7 +157,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
 
         {/* Footer info */}
         <p className="text-center text-xs text-slate-500 mt-6">
-          &copy; {new Date().getFullYear()} {config.title} &bull; Protected Gateway
+          &copy; {new Date().getFullYear()} {config.title} &bull; Protected Developer Gateway
         </p>
       </div>
     </div>

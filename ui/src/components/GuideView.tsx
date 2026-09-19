@@ -23,6 +23,8 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title }) => {
       'data-configuration',
       JSON.stringify({
         theme: 'default',
+        darkMode: false,
+        forceDarkModeState: 'light',
         layout: 'modern',
         showSidebar: true,
         searchHotKey: 'k',
