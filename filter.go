@@ -12,18 +12,22 @@ import (
 
 type SpecFilter struct {
 	specPath      string
+	docsDir       string
+	pathsDir      string
 	moduleTagMap  map[string][]string
 	mu            sync.RWMutex
 	rawSpec       map[string]interface{}
 	embeddedFiles map[string][]byte
 }
 
-func newSpecFilter(specPath string, moduleTagMap map[string][]string, embeddedFiles map[string][]byte) *SpecFilter {
+func newSpecFilter(specPath, docsDir, pathsDir string, moduleTagMap map[string][]string, embeddedFiles map[string][]byte) *SpecFilter {
 	if moduleTagMap == nil {
 		moduleTagMap = make(map[string][]string)
 	}
 	return &SpecFilter{
 		specPath:      specPath,
+		docsDir:       docsDir,
+		pathsDir:      pathsDir,
 		moduleTagMap:  moduleTagMap,
 		embeddedFiles: embeddedFiles,
 	}
@@ -54,9 +58,14 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 	if len(data) == 0 {
 		candidates := []string{
 			f.specPath,
+			f.docsDir + "/swagger.json",
 			"./docs/" + f.specPath,
 			"./backend/docs/" + f.specPath,
+			"../docs/" + f.specPath,
+			"../../docs/" + f.specPath,
 			"./docs/swagger.json",
+			"../docs/swagger.json",
+			"../../docs/swagger.json",
 			"./backend/docs/swagger.json",
 			"./swagger.json",
 			"swagger.json",
@@ -73,19 +82,22 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 		if len(data) == 0 {
 			// Check if modular OpenAPI directory structure exists (e.g. swagger_base.json + schemas.json + paths/*.json)
 			baseCandidates := []string{
+				f.docsDir + "/swagger_base.json",
 				"./docs/swagger_base.json",
 				"../docs/swagger_base.json",
 				"../../docs/swagger_base.json",
+				"./backend/docs/swagger_base.json",
 				"./swagger_base.json",
 			}
 			var baseData []byte
 			var baseDir string
 			for _, bp := range baseCandidates {
+				if bp == "" {
+					continue
+				}
 				if b, readErr := os.ReadFile(bp); readErr == nil && len(b) > 0 {
 					baseData = b
-					if strings.Contains(bp, "docs") {
-						baseDir = bp[:strings.Index(bp, "swagger_base.json")]
-					}
+					baseDir = bp[:strings.Index(bp, "swagger_base.json")]
 					break
 				}
 			}
@@ -94,35 +106,62 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 				var modularSpec map[string]interface{}
 				if json.Unmarshal(baseData, &modularSpec) == nil {
 					// Merge schemas
-					if schemasBytes, sErr := os.ReadFile(baseDir + "schemas.json"); sErr == nil {
-						var schemas map[string]interface{}
-						if json.Unmarshal(schemasBytes, &schemas) == nil {
-							components, ok := modularSpec["components"].(map[string]interface{})
-							if !ok {
-								components = make(map[string]interface{})
-								modularSpec["components"] = components
+					schemaCandidates := []string{
+						baseDir + "schemas.json",
+						f.docsDir + "/schemas.json",
+						"./docs/schemas.json",
+						"../docs/schemas.json",
+						"../../docs/schemas.json",
+					}
+					for _, sp := range schemaCandidates {
+						if schemasBytes, sErr := os.ReadFile(sp); sErr == nil && len(schemasBytes) > 0 {
+							var schemas map[string]interface{}
+							if json.Unmarshal(schemasBytes, &schemas) == nil {
+								components, ok := modularSpec["components"].(map[string]interface{})
+								if !ok {
+									components = make(map[string]interface{})
+									modularSpec["components"] = components
+								}
+								components["schemas"] = schemas
+								break
 							}
-							components["schemas"] = schemas
 						}
 					}
 
 					// Merge paths
 					mergedPaths := make(map[string]interface{})
-					pathsDir := baseDir + "paths"
-					if dirEntries, dErr := os.ReadDir(pathsDir); dErr == nil {
-						for _, entry := range dirEntries {
-							if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-								if pBytes, pErr := os.ReadFile(pathsDir + "/" + entry.Name()); pErr == nil {
-									var subPaths map[string]interface{}
-									if json.Unmarshal(pBytes, &subPaths) == nil {
-										for k, v := range subPaths {
-											mergedPaths[k] = v
+					pathsDirCandidates := []string{
+						f.pathsDir,
+						baseDir + "paths",
+						f.docsDir + "/paths",
+						"./docs/paths",
+						"../docs/paths",
+						"../../docs/paths",
+					}
+
+					for _, pd := range pathsDirCandidates {
+						if pd == "" {
+							continue
+						}
+						if dirEntries, dErr := os.ReadDir(pd); dErr == nil && len(dirEntries) > 0 {
+							for _, entry := range dirEntries {
+								if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+									if pBytes, pErr := os.ReadFile(pd + "/" + entry.Name()); pErr == nil {
+										var subPaths map[string]interface{}
+										if json.Unmarshal(pBytes, &subPaths) == nil {
+											for k, v := range subPaths {
+												mergedPaths[k] = v
+											}
 										}
 									}
 								}
 							}
+							if len(mergedPaths) > 0 {
+								break
+							}
 						}
 					}
+
 					modularSpec["paths"] = mergedPaths
 					f.rawSpec = modularSpec
 					return f.rawSpec, nil

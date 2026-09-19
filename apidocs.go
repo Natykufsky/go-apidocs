@@ -63,6 +63,12 @@ type Config struct {
 	// QAStoragePath is where QA test reviews and bug notes are persisted (default: "./docs/qa_tracker.json")
 	QAStoragePath string
 
+	// DocsDir is the base directory containing docs files like schemas.json, swagger_base.json (default: "./docs")
+	DocsDir string
+
+	// PathsDir is the directory containing modular endpoint definitions (default: "<DocsDir>/paths")
+	PathsDir string
+
 	// ModuleTagMap maps custom module shorthand queries (?module=auth) to OpenAPI tag names
 	ModuleTagMap map[string][]string
 
@@ -72,8 +78,14 @@ type Config struct {
 
 // NormalizeConfig applies default configuration values.
 func NormalizeConfig(cfg Config) (Config, bool) {
+	if cfg.DocsDir == "" {
+		cfg.DocsDir = "./docs"
+	}
+	if cfg.PathsDir == "" {
+		cfg.PathsDir = filepath.Join(cfg.DocsDir, "paths")
+	}
 	if cfg.SpecFilePath == "" {
-		cfg.SpecFilePath = "./docs/swagger.json"
+		cfg.SpecFilePath = filepath.Join(cfg.DocsDir, "swagger.json")
 	}
 	if cfg.Title == "" {
 		cfg.Title = "API Documentation & QA Portal"
@@ -128,7 +140,7 @@ func Mount(app *fiber.App, cfg Config) {
 func MountFiber(app *fiber.App, cfg Config) {
 	cfg, authEnabled := NormalizeConfig(cfg)
 
-	filter := newSpecFilter(cfg.SpecFilePath, cfg.ModuleTagMap, nil)
+	filter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	qa := newQATracker(cfg.QAStoragePath, cfg.Title)
 
 	// Swagger JSON routes
@@ -240,7 +252,7 @@ func MountFiber(app *fiber.App, cfg Config) {
 func MountChi(r chi.Router, cfg Config) {
 	cfg, authEnabled := NormalizeConfig(cfg)
 
-	filter := newSpecFilter(cfg.SpecFilePath, cfg.ModuleTagMap, nil)
+	filter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	qa := newQATracker(cfg.QAStoragePath, cfg.Title)
 	authGuard := HTTPAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
 	assetServer := NewAssetFileServer(cfg.EmbeddedFS)
@@ -292,7 +304,7 @@ func MountChi(r chi.Router, cfg Config) {
 func MountGin(r gin.IRoutes, cfg Config) {
 	cfg, authEnabled := NormalizeConfig(cfg)
 
-	filter := newSpecFilter(cfg.SpecFilePath, cfg.ModuleTagMap, nil)
+	filter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	qa := newQATracker(cfg.QAStoragePath, cfg.Title)
 	authGuard := GinAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
 	assetServer := NewAssetFileServer(cfg.EmbeddedFS)
@@ -334,7 +346,7 @@ func MountGin(r gin.IRoutes, cfg Config) {
 func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	cfg, authEnabled := NormalizeConfig(cfg)
 
-	filter := newSpecFilter(cfg.SpecFilePath, cfg.ModuleTagMap, nil)
+	filter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	qa := newQATracker(cfg.QAStoragePath, cfg.Title)
 	authGuard := HTTPAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
 	assetServer := NewAssetFileServer(cfg.EmbeddedFS)

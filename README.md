@@ -141,7 +141,13 @@ Now open **`http://localhost:8080/docs`** in your browser! 🎉
 
 ```go
 cfg := apidocs.Config{
-    // Path to your swagger.json or openapi.json file (default: "./docs/swagger.json")
+    // Base directory for documentation assets and OpenAPI schema files (default: "./docs")
+    DocsDir: "./docs",
+
+    // Optional modular directory containing endpoint json files (default: "<DocsDir>/paths")
+    PathsDir: "./docs/paths",
+
+    // Path to your monolithic swagger.json (default: "<DocsDir>/swagger.json")
     SpecFilePath: "./docs/swagger.json",
 
     // Title displayed on Swagger UI and QA Audit reports
