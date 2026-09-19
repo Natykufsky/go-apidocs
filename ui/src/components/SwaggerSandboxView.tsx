@@ -268,6 +268,43 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
               <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
               <span>QA Report</span>
             </button>
+
+            {/* In-Browser OpenAPI Spec File / URL Importer */}
+            <label
+              title="Import local swagger.json or openapi.json directly into sandbox"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            >
+              <span>📥 Import Spec</span>
+              <input
+                type="file"
+                accept=".json,.yaml,.yml"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      try {
+                        const content = event.target?.result as string;
+                        // Verify valid JSON
+                        JSON.parse(content);
+                        const blob = new Blob([content], { type: 'application/json' });
+                        const objUrl = URL.createObjectURL(blob);
+                        onModuleChange('imported');
+                        // Update spec URL to imported blob
+                        window.history.replaceState(null, '', '/docs?imported=true');
+                        // Reload swagger spec via blob URL
+                        const customEvent = new CustomEvent('apidocs:import_spec', { detail: objUrl });
+                        window.dispatchEvent(customEvent);
+                      } catch (err) {
+                        alert('Invalid OpenAPI/Swagger JSON file.');
+                      }
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+              />
+            </label>
           </div>
         </div>
       </div>

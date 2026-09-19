@@ -40,6 +40,15 @@ export const App: React.FC = () => {
       setActiveModule(mod);
       setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
     }
+
+    const handleImportEvent = (e: any) => {
+      if (e.detail) {
+        setSpecUrl(e.detail);
+        setActiveModule('imported');
+      }
+    };
+    window.addEventListener('apidocs:import_spec', handleImportEvent);
+    return () => window.removeEventListener('apidocs:import_spec', handleImportEvent);
   }, []);
 
   // Handle browser navigation history (back/forward)
