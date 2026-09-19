@@ -24,14 +24,15 @@ Standard Swagger UI solutions only display static API contracts. **`go-apidocs`*
 
 1. **🏠 Interactive Developer Hub (`/`)**: Automatically reads and renders your project's `README.md` with rich typography and calculates **real-time live endpoint statistics**, HTTP method breakdowns, and engine domain explorers.
 2. **📖 ReadMe-Style Developer Guide (`/guide`)**: Interactive multi-column developer reference powered by Scalar with full support for hash anchors (e.g. `/guide#description/introduction`), search, and multi-language code snippets.
-3. **⚡ Swagger UI Sandbox (`/docs`)**: Interactive API playground with "Try It Out", token persistence, and dynamic scope filtering.
-4. **🔒 Password Security Gate (`/docs/login`)**: Protect staging and production API specs from unauthorized eyes with cryptographic HMAC-signed session cookies.
-5. **🧪 Live Team QA Checklist**: QA testers and developers can mark endpoints (`🟢 Passed`, `🟡 Needs Retest`, `🔴 Failed / Bug Found`) and leave notes directly on each endpoint box.
-6. **💾 Real-Time Team Synchronization**: All QA statuses and comments automatically sync to the backend server (`/docs/qa/*`) so the entire engineering team sees the exact same test progress.
-7. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown reports of all tested endpoints with bug notes ready to paste into GitHub Issues, Jira, or Slack.
-8. **📊 Operations Health Dashboard (`/dashboard`)**: Live service metrics, connection statuses, and interactive diagnostic log console.
-9. **📱 Unified Mobile-First Top Header**: Consistent, responsive top navigation bar across all views with mobile drawer support.
-10. **📦 100% Self-Contained (`//go:embed`)**: All React UI assets, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel.
+3. **⚡ Swagger UI Sandbox (`/docs`)**: Interactive API playground with "Try It Out", token persistence, live global search (Ctrl+K), and dynamic scope filtering.
+4. **🔒 Password Security Gate (`/docs/login`)**: Protect staging, offline, and production API specs from unauthorized eyes with cryptographic HMAC-signed session cookies and zero external auth dependencies.
+5. **🔤 Portal Font Size Manager**: Accessible font scaling (`90% Compact`, `100% Default`, `110% Medium`, `125% Large`) directly in the header with `localStorage` persistence.
+6. **🧪 Interactive QA Endpoint Inspector**: Step through endpoints sequentially (`Previous` / `Next`), toggle verification results (`🟢 Passed`, `🟡 Needs Retest`, `🔴 Failed / Bug Found`), and record Markdown reproduction steps.
+7. **💾 Real-Time Team Synchronization**: All QA statuses and comments automatically sync to the backend server (`/docs/qa/*`) so the entire engineering team sees the exact same test progress.
+8. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown reports of all tested endpoints with bug notes ready to download or copy into GitHub Issues, Jira, or Slack.
+9. **📊 Operations Health Dashboard (`/dashboard`)**: Live service metrics, connection statuses, and interactive diagnostic log console.
+10. **📱 Unified Mobile-First Top Header**: Consistent, responsive top navigation bar across all views with mobile drawer support.
+11. **📦 100% Self-Contained (`//go:embed`)**: All React UI assets, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel/Air-gapped offline networks.
 
 ---
 
@@ -141,6 +142,96 @@ Now open **`http://localhost:8080/docs`** (or **`http://localhost:8080/`**) in y
 
 ---
 
+## 📥 How Developers Can Import Their OpenAPI Spec
+
+`go-apidocs` gives developers **3 flexible ways** to import their OpenAPI specs:
+
+### Option 1: Single Monolithic `swagger.json` / `openapi.json`
+Point `SpecFilePath` directly to your generated OpenAPI file (from tools like `swag`, `oapi-codegen`, `go-swagger`, or Postman exports):
+
+```go
+apidocs.Mount(app, apidocs.Config{
+    SpecFilePath: "./docs/swagger.json", // or "./api/openapi.json"
+    Title:        "My API Documentation",
+})
+```
+
+### Option 2: Modular Multi-File Schema Structure (Zero Merge Conflicts)
+As APIs scale, monolithic files cause Git merge conflicts. You can split your spec into modular files:
+- `docs/swagger_base.json` (OpenAPI version, server URLs, security schemes)
+- `docs/schemas.json` (Reusable DTO models)
+- `docs/paths/*.json` (One JSON file per domain / controller, e.g. `auth.json`, `orders.json`)
+
+```go
+apidocs.Mount(app, apidocs.Config{
+    DocsDir:  "./docs",       // Contains swagger_base.json and schemas.json
+    PathsDir: "./docs/paths", // Auto-merges all JSON path files
+})
+```
+`go-apidocs` automatically merges all schemas and paths in memory without requiring manual build scripts!
+
+### Option 3: Embedded Binary Distribution (`//go:embed`)
+For standalone or offline binaries where no external files exist on disk, embed your spec directly in Go:
+
+```go
+//go:embed docs/*
+var embeddedDocs embed.FS
+
+apidocs.Mount(app, apidocs.Config{
+    EmbeddedFS:   &embeddedDocs,
+    SpecFilePath: "docs/swagger.json",
+})
+```
+
+---
+
+## 🔐 Managing Passwords & Security for Offline & Enterprise Usage
+
+`go-apidocs` includes a zero-dependency **Authentication Gate** designed for air-gapped environments, offline local networks, staging environments, and internal enterprise systems:
+
+```mermaid
+flowchart TD
+    User([Developer / QA Browser]) -->|GET /docs| Gate{Has Valid Session Cookie?}
+    Gate -->|Yes: Verified HMAC signature| Docs[Display Portal / Guide / Sandbox]
+    Gate -->|No / Expired| Login[Redirect to /docs/login]
+    Login -->|Submit Username & Password| Verify{Matches AuthUser & AuthPassword?}
+    Verify -->|Yes| Cookie[Issue 24h HMAC-Signed Cookie] --> Docs
+    Verify -->|No| Reject[Show 401 Error]
+```
+
+### 1. Environment Variable Configuration (Recommended for Docker/K8s/CI)
+No hardcoded passwords in source code. `go-apidocs` automatically reads standard environment variables:
+
+```bash
+export DOCS_AUTH_USER="developer"
+export DOCS_AUTH_PASS="SuperSecretPassword123!"
+export JWT_SECRET="cryptographic_signing_key_32_chars"
+export DOCS_AUTH_ENABLED="true"
+```
+
+```go
+// Reads directly from environment variables when fields are left blank
+apidocs.Mount(app, apidocs.Config{
+    Title: "Air-Gapped Core API",
+})
+```
+
+### 2. Code-Level Configuration
+```go
+apidocs.Mount(app, apidocs.Config{
+    AuthUser:     "staging_tester",
+    AuthPassword: "StrongPassword2026#",
+    JWTSecret:    "custom_hmac_secret_key",
+})
+```
+
+### 3. Offline / Air-Gapped Operation
+- **Zero Internet Requirement**: All assets (Vite React bundle, Swagger UI, Scalar engine, Lucide icons, and Tailwind styles) are embedded (`//go:embed`).
+- **No External OAuth / Auth0 Needed**: The built-in HMAC token system authenticates offline users on private VPCs and on-premise servers.
+- **Session Expiry & Invalidation**: Sessions expire after 24 hours or immediately when clicking the **Lock Session** (`/docs/logout`) button in the navbar.
+
+---
+
 ## 🛠️ Configuration Reference
 
 ```go
@@ -215,7 +306,7 @@ apidocs.MountNetHTTP(mux, cfg)
 | :--- | :--- | :--- |
 | **`/`** | `GET` | Developer Landing Hub with README.md markdown reader and live endpoint statistics. |
 | **`/guide`** | `GET` | ReadMe-style interactive Developer Reference powered by Scalar (supports deep links like `#description/introduction`). |
-| **`/docs`** | `GET` | Interactive Swagger UI Sandbox with QA checklist overlay, scope filters, and tester toolbar. |
+| **`/docs`** | `GET` | Interactive Swagger UI Sandbox with QA checklist overlay, scope filters, and global search. |
 | **`/docs/nav`** | `GET` | JSON endpoint delivering unified navigation links, brand titles, and menu structure. |
 | **`/docs/readme`** | `GET` | Returns the raw project `README.md` markdown content. |
 | **`/docs/login`** | `GET/POST` | Password login gate with HMAC session cookie authentication. |
@@ -226,6 +317,16 @@ apidocs.MountNetHTTP(mux, cfg)
 | **`/docs/qa/report`** | `GET` | Live formatted Markdown QA report table (`?format=json` supported). |
 | **`/docs/qa/reset`** | `POST` | Clears all QA test data on the server to start a fresh sprint. |
 | **`/dashboard`** | `GET` | System health and API status overview dashboard. |
+
+---
+
+## 🧪 Interactive QA Testing Flow & Modals
+
+The built-in QA Suite allows engineering and QA teams to review APIs collaboratively:
+
+1. **In-Line Status Badges & Comments**: Enable **QA Mode** in the sandbox header to interact directly with endpoints.
+2. **Dedicated QA Sprint Report Modal**: Click **QA Report** to view testing completion metrics, filter endpoints by status, search test comments, and download comprehensive Markdown audit summaries.
+3. **Endpoint Inspector Modal**: Click **Inspect** to review endpoint details, toggle statuses (`Passed`, `Needs Retest`, `Failed / Bug Found`, `Untested`), document bug reproduction steps, and navigate sequentially across endpoints using **Previous** / **Next** controls.
 
 ---
 
@@ -280,7 +381,8 @@ Extend the React 18 + TypeScript + Tailwind portal with rich tooling:
 - [x] **Scalar Developer Guide Reference** with deep linking (`/guide#description/introduction`)
 - [x] **Real-time Live Endpoint Statistics** & HTTP method distribution
 - [x] **Integrated README.md Markdown Reader** on Landing portal
-- [x] **Unified Mobile-First Navigation Header**
+- [x] **Unified Mobile-First Navigation Header with Font Size Manager**
+- [x] **Interactive QA Endpoint Inspector & Sprint Report Modals**
 - [ ] **Interactive Webhook Simulator** (trigger test delivery payloads and inspect HMAC signatures in real time)
 - [ ] **Mock Server Simulator** (generate instant mock JSON responses directly in browser without a live backend)
 - [ ] **1-Click Postman & Insomnia Collection Exporter**
@@ -288,6 +390,35 @@ Extend the React 18 + TypeScript + Tailwind portal with rich tooling:
 #### 4. 📢 Team Notifications & CI/CD Integrations
 - [ ] **Slack & Discord Webhook Alerts** (automatically notify your dev channel when QA marks an endpoint as `🔴 FAILED / BUG`)
 - [ ] **GitHub Actions / GitLab CI Runner** (fail automated builds if untested or broken endpoints exist)
+
+---
+
+### 🎨 Frontend React UI Development (`/ui`):
+The UI is built with **React 18 + Vite + TypeScript + Tailwind CSS**:
+```bash
+cd ui
+npm install
+npm run dev    # Starts hot-reloading dev server on http://localhost:3000
+npm run build  # Compiles production bundle directly into ../assets/dist/
+```
+
+### 🛠️ Step-by-Step Contribution Workflow:
+1. **Fork the Repository**: Click the `Fork` button on [GitHub](https://github.com/Natykufsky/go-apidocs).
+2. **Clone your fork**:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/go-apidocs.git
+   cd go-apidocs
+   ```
+3. **Create a Feature Branch**:
+   ```bash
+   git checkout -b feat/my-new-feature
+   ```
+4. **Commit & Push**:
+   ```bash
+   git commit -m "feat: describe your change"
+   git push origin feat/my-new-feature
+   ```
+5. **Open a Pull Request**: Submit your PR with a clear description and tests. We review and merge active PRs quickly!
 
 ---
 
