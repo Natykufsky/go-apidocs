@@ -2,6 +2,7 @@ package apidocs
 
 import (
 	"encoding/json"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -85,18 +86,18 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 	return f.rawSpec, nil
 }
 
-// ServeFilteredSwagger dynamically filters OpenAPI spec tags and endpoints based on ?module= or ?tag=
-func (f *SpecFilter) ServeFilteredSwagger(c *fiber.Ctx) error {
+// FilterSpec dynamically filters OpenAPI spec tags and endpoints based on module or customTag
+func (f *SpecFilter) FilterSpec(module, customTag string) (map[string]interface{}, error) {
 	spec, err := f.loadSpec()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load swagger spec: " + err.Error()})
+		return nil, err
 	}
 
-	module := strings.TrimSpace(strings.ToLower(c.Query("module")))
-	customTag := strings.TrimSpace(c.Query("tag"))
+	module = strings.TrimSpace(strings.ToLower(module))
+	customTag = strings.TrimSpace(customTag)
 
 	if (module == "" || module == "all") && customTag == "" {
-		return c.JSON(spec)
+		return spec, nil
 	}
 
 	allowedTags := make(map[string]bool)
@@ -202,5 +203,28 @@ func (f *SpecFilter) ServeFilteredSwagger(c *fiber.Ctx) error {
 		filtered["tags"] = filteredTags
 	}
 
+	return filtered, nil
+}
+
+// ServeFilteredSwagger dynamically filters OpenAPI spec tags and endpoints based on ?module= or ?tag= for Fiber
+func (f *SpecFilter) ServeFilteredSwagger(c *fiber.Ctx) error {
+	filtered, err := f.FilterSpec(c.Query("module"), c.Query("tag"))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load swagger spec: " + err.Error()})
+	}
 	return c.JSON(filtered)
+}
+
+// ServeHTTP serves filtered OpenAPI spec for standard net/http and Chi routers
+func (f *SpecFilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filtered, err := f.FilterSpec(q.Get("module"), q.Get("tag"))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to load swagger spec: " + err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(filtered)
 }

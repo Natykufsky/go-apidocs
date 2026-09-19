@@ -33,14 +33,79 @@ Standard Swagger UI solutions only display static API contracts. **`go-apidocs`*
 
 ## ⚡ Quick Start: Is that all to run docs on any project?
 
-**Yes! Literally 2 steps and 3 lines of code:**
+**Yes! Literally 2 steps and 3 lines of code on any router:**
 
 ### 1. Install the package
 ```bash
 go get github.com/Natykufsky/go-apidocs
 ```
 
-### 2. Mount it in your `main.go`
+### 2. Mount it on your favorite router
+
+#### 🚀 Chi Router (`cmd/api/main.go` / `chi`)
+```go
+package main
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/Natykufsky/go-apidocs"
+	chiadapter "github.com/Natykufsky/go-apidocs/chi"
+)
+
+func main() {
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	// 🚀 Register all docs, auth gate, QA tracking & Swagger UI on Chi router
+	chiadapter.Mount(r, apidocs.Config{
+		SpecFilePath: "./docs/swagger.json",
+		Title:        "HarvestPad Platform API",
+		AuthUser:     "admin",
+		AuthPassword: "SecretPassword",
+	})
+
+	r.Get("/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	http.ListenAndServe(":8080", r)
+}
+```
+
+#### 🚀 Gin Router (`cmd/api/main.go` / `gin`)
+```go
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/Natykufsky/go-apidocs"
+	ginadapter "github.com/Natykufsky/go-apidocs/gin"
+)
+
+func main() {
+	r := gin.Default()
+
+	// 🚀 Register all docs, auth gate, QA tracking & Swagger UI on Gin router
+	ginadapter.Mount(r, apidocs.Config{
+		SpecFilePath: "./docs/swagger.json",
+		Title:        "HarvestPad Platform API",
+		AuthUser:     "admin",
+		AuthPassword: "SecretPassword",
+	})
+
+	r.GET("/api/v1/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
+	r.Run(":8080")
+}
+```
+
+#### 🚀 Fiber Router (`cmd/api/main.go` / `fiber`)
 ```go
 package main
 
@@ -52,15 +117,14 @@ import (
 func main() {
 	app := fiber.New()
 
-	// 🚀 Mount the entire docs, security gate, QA tracker & Swagger UI
+	// 🚀 Mount the entire docs, security gate, QA tracker & Swagger UI on Fiber
 	apidocs.Mount(app, apidocs.Config{
 		SpecFilePath: "./docs/swagger.json",
 		Title:        "HarvestPad Platform API",
-		AuthUser:     "admin",          // Optional: Reads from DOCS_AUTH_USER env if omitted
-		AuthPassword: "SecretPassword", // Optional: Reads from DOCS_AUTH_PASS env if omitted
+		AuthUser:     "admin",
+		AuthPassword: "SecretPassword",
 	})
 
-	// Your existing API routes...
 	app.Get("/api/v1/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
@@ -76,7 +140,7 @@ Now open **`http://localhost:8080/docs`** in your browser! 🎉
 ## 🛠️ Configuration Reference
 
 ```go
-apidocs.Mount(app, apidocs.Config{
+cfg := apidocs.Config{
     // Path to your swagger.json or openapi.json file (default: "./docs/swagger.json")
     SpecFilePath: "./docs/swagger.json",
 
@@ -115,7 +179,16 @@ apidocs.Mount(app, apidocs.Config{
         "auth":  {"01. Authentication & Identity"},
         "users": {"02. User Management"},
     },
-})
+}
+
+// Mount on Chi
+apidocs.MountChi(chiRouter, cfg)
+
+// Mount on Gin
+apidocs.MountGin(ginRouter, cfg)
+
+// Mount on Fiber
+apidocs.Mount(fiberApp, cfg)
 ```
 
 ---
@@ -173,8 +246,8 @@ Whether you want to contribute in **Go**, **TypeScript / React**, **UI/UX Design
 
 #### 1. 🌐 Multi-Router Ecosystem Adapters
 Expand framework coverage beyond Fiber with drop-in adapters:
-- [ ] **Gin Adapter** (`github.com/Natykufsky/go-apidocs/gin` -> `apidocs.MountGin(r, cfg)`)
-- [ ] **Chi / net/http Adapter** (`github.com/Natykufsky/go-apidocs/chi` -> `apidocs.MountChi(r, cfg)`)
+- [x] **Gin Adapter** (`github.com/Natykufsky/go-apidocs/gin` & `apidocs.MountGin(r, cfg)`)
+- [x] **Chi / net/http Adapter** (`github.com/Natykufsky/go-apidocs/chi` & `apidocs.MountChi(r, cfg)`)
 - [ ] **Echo Adapter** (`github.com/Natykufsky/go-apidocs/echo` -> `apidocs.MountEcho(e, cfg)`)
 
 #### 2. 💾 Multi-Tenant QA Persistence Backends

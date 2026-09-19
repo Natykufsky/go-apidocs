@@ -6,11 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -67,7 +69,7 @@ func VerifyDocsSessionToken(tokenStr, expectedUsername, secret string) bool {
 	return hmac.Equal([]byte(providedSignature), []byte(expectedSignature))
 }
 
-// WebAuthMiddleware protects documentation and UI routes behind a login gate if enabled.
+// WebAuthMiddleware protects documentation and UI routes behind a login gate if enabled for Fiber.
 func WebAuthMiddleware(authEnabled bool, authUser, authPass, jwtSecret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if !authEnabled || authUser == "" {
@@ -85,5 +87,54 @@ func WebAuthMiddleware(authEnabled bool, authUser, authPass, jwtSecret string) f
 			loginURL = fmt.Sprintf("/docs/login?redirect=%s", url.QueryEscape(originalPath))
 		}
 		return c.Redirect(loginURL)
+	}
+}
+
+// HTTPAuthMiddleware protects documentation and UI routes behind a login gate for standard net/http & Chi.
+func HTTPAuthMiddleware(authEnabled bool, authUser, authPass, jwtSecret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !authEnabled || authUser == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			cookie, err := r.Cookie(DocsSessionCookieName)
+			if err == nil && cookie != nil && cookie.Value != "" && VerifyDocsSessionToken(cookie.Value, authUser, jwtSecret) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			originalPath := r.RequestURI
+			loginURL := "/docs/login"
+			if originalPath != "" && originalPath != "/" && originalPath != "/docs/login" {
+				loginURL = fmt.Sprintf("/docs/login?redirect=%s", url.QueryEscape(originalPath))
+			}
+			http.Redirect(w, r, loginURL, http.StatusFound)
+		})
+	}
+}
+
+// GinAuthMiddleware protects documentation and UI routes behind a login gate for Gin.
+func GinAuthMiddleware(authEnabled bool, authUser, authPass, jwtSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !authEnabled || authUser == "" {
+			c.Next()
+			return
+		}
+
+		cookieVal, err := c.Cookie(DocsSessionCookieName)
+		if err == nil && cookieVal != "" && VerifyDocsSessionToken(cookieVal, authUser, jwtSecret) {
+			c.Next()
+			return
+		}
+
+		originalPath := c.Request.RequestURI
+		loginURL := "/docs/login"
+		if originalPath != "" && originalPath != "/" && originalPath != "/docs/login" {
+			loginURL = fmt.Sprintf("/docs/login?redirect=%s", url.QueryEscape(originalPath))
+		}
+		c.Redirect(http.StatusFound, loginURL)
+		c.Abort()
 	}
 }

@@ -11,3 +11,4 @@ node_modules/
 *.dylib
 *.test
 *.out
+.wakatime-project
