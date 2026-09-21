@@ -53,94 +53,118 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
 
   // In-endpoint QA Button & Note Snippet Injection
   useEffect(() => {
+    let isInjecting = false;
     const injectQAPills = () => {
+      if (isInjecting) return;
       const swaggerRoot = containerRef.current;
       if (!swaggerRoot) return;
 
-      const opblocks = swaggerRoot.querySelectorAll('.opblock');
-      opblocks.forEach((block) => {
-        const methodEl = block.querySelector('.opblock-summary-method');
-        const pathEl = block.querySelector('.opblock-summary-path');
-        const summaryEl = block.querySelector('.opblock-summary');
-        if (!methodEl || !pathEl || !summaryEl) return;
+      isInjecting = true;
+      try {
+        const opblocks = swaggerRoot.querySelectorAll('.opblock');
+        opblocks.forEach((block) => {
+          const methodEl = block.querySelector('.opblock-summary-method');
+          const pathEl = block.querySelector('.opblock-summary-path');
+          const summaryEl = block.querySelector('.opblock-summary');
+          if (!methodEl || !pathEl || !summaryEl) return;
 
-        const method = methodEl.textContent?.trim().toUpperCase() || '';
-        const path = pathEl.getAttribute('data-path') || pathEl.textContent?.trim() || '';
-        const endpointKey = `${method} ${path}`;
+          const method = methodEl.textContent?.trim().toUpperCase() || '';
+          const path = pathEl.getAttribute('data-path') || pathEl.textContent?.trim() || '';
+          const endpointKey = `${method} ${path}`;
 
-        const itemData = qaData[endpointKey] || {
-          status: 'untested',
-          comment: '',
-          tested_at: '',
-        };
+          const itemData = qaData[endpointKey] || {
+            status: 'untested',
+            comment: '',
+            tested_at: '',
+          };
 
-        const existingPills = summaryEl.querySelectorAll('.qa-pill-trigger');
-        if (existingPills.length > 1) {
-          for (let i = 1; i < existingPills.length; i++) {
-            existingPills[i].remove();
-          }
-        }
-
-        let pill = (existingPills[0] as HTMLDivElement) || null;
-
-        const getStatusBadgeHtml = (status: string, comment: string) => {
-          let badgeClass = 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200';
-          let label = '⚪ QA';
-          if (status === 'passed') {
-            badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100';
-            label = '🟢 Passed';
-          } else if (status === 'retest') {
-            badgeClass = 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100';
-            label = '🟡 Retest';
-          } else if (status === 'failed') {
-            badgeClass = 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100';
-            label = '🔴 Bug / Failed';
-          }
-
-          const hasComment = !!comment;
-          const commentSnippet = hasComment
-            ? `<span class="qa-note-snippet" title="${comment.replace(/"/g, '&quot;')}" style="font-size: 11px; max-width: 140px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: #64748b; font-weight: 500; margin-left: 6px; display: inline-block;">💬 ${comment}</span>`
-            : '';
-
-          return `
-            <div style="display: flex; align-items: center; margin-right: 12px;" onclick="event.stopPropagation();">
-              <button type="button" class="qa-pill-btn ${badgeClass}" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; border-width: 1px; border-style: solid; cursor: pointer; transition: all 0.15s ease;">
-                <span>${label}</span>
-              </button>
-              ${commentSnippet}
-            </div>
-          `;
-        };
-
-        if (!pill) {
-          pill = document.createElement('div');
-          pill.className = 'qa-pill-trigger';
-          pill.style.display = qaMode ? 'flex' : 'none';
-          pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
-
-          pill.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (onInspectEndpoint) {
-              onInspectEndpoint(endpointKey);
+          const existingPills = summaryEl.querySelectorAll('.qa-pill-trigger');
+          if (existingPills.length > 1) {
+            for (let i = 1; i < existingPills.length; i++) {
+              existingPills[i].remove();
             }
-          });
-
-          const arrowBtn = summaryEl.querySelector('.opblock-summary-control');
-          if (arrowBtn) {
-            summaryEl.insertBefore(pill, arrowBtn);
-          } else {
-            summaryEl.appendChild(pill);
           }
-        } else {
-          pill.style.display = qaMode ? 'flex' : 'none';
-          pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
-        }
-      });
+
+          let pill = (existingPills[0] as HTMLDivElement) || null;
+
+          const getStatusBadgeHtml = (status: string, comment: string) => {
+            let badgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-200';
+            let label = '⚪ QA';
+            if (status === 'passed') {
+              badgeClass = 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100';
+              label = '🟢 Passed';
+            } else if (status === 'retest') {
+              badgeClass = 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-100';
+              label = '🟡 Retest';
+            } else if (status === 'failed') {
+              badgeClass = 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100';
+              label = '🔴 Bug / Failed';
+            }
+
+            const hasComment = !!comment;
+            const commentSnippet = hasComment
+              ? `<span class="qa-note-snippet" title="${comment.replace(/"/g, '&quot;')}" style="font-size: 11px; max-width: 140px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: #64748b; font-weight: 500; margin-left: 6px; display: inline-block;">💬 ${comment}</span>`
+              : '';
+
+            return `
+              <div style="display: flex; align-items: center; margin-right: 12px;" onclick="event.stopPropagation();">
+                <button type="button" class="qa-pill-btn ${badgeClass}" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; border-width: 1px; border-style: solid; cursor: pointer; transition: all 0.15s ease;">
+                  <span>${label}</span>
+                </button>
+                ${commentSnippet}
+              </div>
+            `;
+          };
+
+          if (!pill) {
+            pill = document.createElement('div');
+            pill.className = 'qa-pill-trigger';
+            pill.style.display = qaMode ? 'flex' : 'none';
+            pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
+
+            pill.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (onInspectEndpoint) {
+                onInspectEndpoint(endpointKey);
+              }
+            });
+
+            const arrowBtn = summaryEl.querySelector('.opblock-summary-control');
+            if (arrowBtn) {
+              summaryEl.insertBefore(pill, arrowBtn);
+            } else {
+              summaryEl.appendChild(pill);
+            }
+          } else {
+            pill.style.display = qaMode ? 'flex' : 'none';
+            pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
+          }
+        });
+      } finally {
+        setTimeout(() => {
+          isInjecting = false;
+        }, 100);
+      }
     };
 
-    const timeout = setTimeout(injectQAPills, 250);
-    const observer = new MutationObserver(() => {
-      injectQAPills();
+    let debounceTimer: any = null;
+    const debouncedInject = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(injectQAPills, 150);
+    };
+
+    const timeout = setTimeout(injectQAPills, 300);
+    const observer = new MutationObserver((mutations) => {
+      // Ignore mutations generated by our own QA pill triggers
+      const isInternal = mutations.every(
+        (m) =>
+          (m.target as HTMLElement)?.classList?.contains('qa-pill-trigger') ||
+          (m.target as HTMLElement)?.classList?.contains('qa-pill-btn') ||
+          (m.target as HTMLElement)?.closest?.('.qa-pill-trigger')
+      );
+      if (!isInternal) {
+        debouncedInject();
+      }
     });
 
     if (containerRef.current) {
@@ -149,6 +173,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
 
     return () => {
       clearTimeout(timeout);
+      clearTimeout(debounceTimer);
       observer.disconnect();
     };
   }, [qaMode, qaData, specUrl, onInspectEndpoint]);
