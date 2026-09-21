@@ -13,6 +13,10 @@ import {
   Search,
   Sparkles,
   ExternalLink,
+  ShieldAlert,
+  Eye,
+  EyeOff,
+  Copy,
 } from 'lucide-react';
 import { marked } from 'marked';
 import { NavConfig } from './Navbar';
@@ -46,6 +50,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
   const [readmeLoading, setReadmeLoading] = useState<boolean>(true);
   const [spec, setSpec] = useState<any>(null);
   const [tagFilter, setTagFilter] = useState<string>('');
+  const [maskConfidential, setMaskConfidential] = useState<boolean>(true);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
   // Fetch README.md from /docs/readme
   useEffect(() => {
@@ -98,45 +104,50 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
     // Populate explicit tags from spec
     if (Array.isArray(spec.tags)) {
       spec.tags.forEach((t: any) => {
-        const tagName = typeof t === 'string' ? t : t.name;
-        const tagDesc = typeof t === 'object' ? t.description : '';
-        if (tagName) {
-          tagMap[tagName] = { description: tagDesc, count: 0, methods: {} };
+        if (t && t.name) {
+          tagMap[t.name] = {
+            description: t.description,
+            count: 0,
+            methods: { GET: 0, POST: 0, PUT: 0, DELETE: 0, PATCH: 0 },
+          };
         }
       });
     }
 
-    const httpMethods = ['get', 'post', 'put', 'delete', 'patch', 'options', 'head'];
-
-    for (const pathKey in spec.paths) {
-      const pathItem = spec.paths[pathKey];
-      if (!pathItem || typeof pathItem !== 'object') continue;
-
-      for (const m of httpMethods) {
-        const op = pathItem[m];
-        if (op) {
+    // Traverse all OpenAPI paths and operations
+    for (const path in spec.paths) {
+      const pathItem = spec.paths[path];
+      for (const method in pathItem) {
+        const upperMethod = method.toUpperCase();
+        if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(upperMethod)) {
           totalEndpoints++;
-          const upperM = m.toUpperCase();
-          methods[upperM] = (methods[upperM] || 0) + 1;
+          methods[upperMethod] = (methods[upperMethod] || 0) + 1;
 
-          const opTags = Array.isArray(op.tags) && op.tags.length > 0 ? op.tags : ['General'];
-          opTags.forEach((t: string) => {
-            if (!tagMap[t]) {
-              tagMap[t] = { description: '', count: 0, methods: {} };
+          const op = pathItem[method];
+          const tags: string[] = op.tags && op.tags.length > 0 ? op.tags : ['General'];
+
+          tags.forEach((tag) => {
+            if (!tagMap[tag]) {
+              tagMap[tag] = {
+                count: 0,
+                methods: { GET: 0, POST: 0, PUT: 0, DELETE: 0, PATCH: 0 },
+              };
             }
-            tagMap[t].count++;
-            tagMap[t].methods[upperM] = (tagMap[t].methods[upperM] || 0) + 1;
+            tagMap[tag].count++;
+            tagMap[tag].methods[upperMethod] = (tagMap[tag].methods[upperMethod] || 0) + 1;
           });
         }
       }
     }
 
-    const tagStats: TagStat[] = Object.keys(tagMap).map((k) => ({
-      name: k,
-      description: tagMap[k].description,
-      count: tagMap[k].count,
-      methods: tagMap[k].methods,
-    })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    const tagStats: TagStat[] = Object.keys(tagMap).map((name) => ({
+      name,
+      description: tagMap[name].description,
+      count: tagMap[name].count,
+      methods: tagMap[name].methods,
+    }));
+
+    tagStats.sort((a, b) => b.count - a.count);
 
     const schemasCount =
       Object.keys(spec.components?.schemas || spec.definitions || {}).length;
@@ -153,15 +164,32 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
     };
   }, [spec]);
 
-  // Convert README Markdown to HTML
-  const parsedReadmeHtml = useMemo(() => {
+  // Sanitize & redact confidential details from README text
+  const sanitizedReadmeText = useMemo(() => {
     if (!readmeContent) return '';
+    if (!maskConfidential) return readmeContent;
+
+    let text = readmeContent;
+
+    // Redact JWT secret keys, passwords, bearer tokens, AWS keys, database connection strings
+    text = text.replace(/JWT_SECRET\s*=\s*["']?[^\s"'\n]+["']?/gi, 'JWT_SECRET="********************************"');
+    text = text.replace(/DOCS_AUTH_PASS\s*=\s*["']?[^\s"'\n]+["']?/gi, 'DOCS_AUTH_PASS="****************"');
+    text = text.replace(/(password|passwd|secret|token|api_key|apikey|client_secret)\s*[:=]\s*["']?[^\s"',\n]+["']?/gi, '$1: "********"');
+    text = text.replace(/Bearer\s+ey[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g, 'Bearer eyJhbGciOi...[REDACTED_JWT]');
+    text = text.replace(/(postgres|mysql|mongodb|redis):\/\/[^:\s]+:[^@\s]+@[^\s/]+/gi, '$1://user:********@host:port');
+
+    return text;
+  }, [readmeContent, maskConfidential]);
+
+  // Convert README Markdown to GitHub-style HTML
+  const parsedReadmeHtml = useMemo(() => {
+    if (!sanitizedReadmeText) return '';
     try {
-      return marked.parse(readmeContent) as string;
+      return marked.parse(sanitizedReadmeText) as string;
     } catch (e) {
-      return `<pre class="p-4 bg-slate-900 text-white rounded-xl overflow-x-auto">${readmeContent}</pre>`;
+      return `<pre class="p-4 bg-slate-900 text-white rounded-xl overflow-x-auto">${sanitizedReadmeText}</pre>`;
     }
-  }, [readmeContent]);
+  }, [sanitizedReadmeText]);
 
   // Filtered tags for exploration
   const filteredTags = stats.tagStats.filter((t) =>
@@ -319,45 +347,103 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
       )}
 
       {/* View Switcher Tabs (README.md vs Live Domain Explorer) */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => setActiveTab('readme')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-            activeTab === 'readme'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Project README & Guide</span>
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('readme')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'readme'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Project README.md</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('endpoints')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-            activeTab === 'endpoints'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>Realtime Domain & Endpoint Explorer ({stats.totalTags})</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('endpoints')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'endpoints'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Realtime Domain & Endpoint Explorer ({stats.totalTags})</span>
+          </button>
+        </div>
+
+        {/* Confidential Redaction Toggle in README View */}
+        {activeTab === 'readme' && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMaskConfidential(!maskConfidential)}
+              title="Toggle Masking of API Secrets, JWT Tokens, and Passwords in README"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                maskConfidential
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 shadow-2xs'
+                  : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+              }`}
+            >
+              {maskConfidential ? (
+                <>
+                  <ShieldAlert className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Secrets Masked (Safe Mode)</span>
+                  <EyeOff className="w-3 h-3 text-emerald-600 ml-1" />
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Showing Raw Secrets</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* TAB 1: Render User README.md */}
+      {/* TAB 1: Render GitHub-Style README.md Container */}
       {activeTab === 'readme' && (
-        <section className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-10 shadow-xs">
-          {readmeLoading ? (
-            <div className="py-12 text-center text-slate-400 text-xs font-medium animate-pulse">
-              Loading documentation from README.md...
+        <section className="bg-white border border-slate-200/80 rounded-3xl shadow-xs overflow-hidden">
+          {/* GitHub-Style File Header */}
+          <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <FileText className="w-4 h-4 text-slate-500" />
+              <span className="font-mono text-xs font-bold text-slate-800">README.md</span>
+              <span className="text-[11px] text-slate-400 font-mono">
+                {readmeContent ? `${readmeContent.split('\n').length} lines` : ''}
+              </span>
             </div>
-          ) : (
-            <div
-              className="prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-2xl prose-code:font-mono prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-table:border-collapse prose-th:bg-slate-50 prose-th:p-3 prose-td:p-3 prose-a:text-indigo-600 prose-a:font-semibold"
-              dangerouslySetInnerHTML={{ __html: parsedReadmeHtml }}
-            />
-          )}
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(sanitizedReadmeText);
+                  setCopiedCode(true);
+                  setTimeout(() => setCopiedCode(false), 2000);
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                <span>{copiedCode ? 'Copied Markdown!' : 'Copy Raw'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Markdown Body */}
+          <div className="p-6 sm:p-10">
+            {readmeLoading ? (
+              <div className="py-12 text-center text-slate-400 text-xs font-medium animate-pulse">
+                Loading documentation from README.md...
+              </div>
+            ) : (
+              <article
+                className="markdown-body"
+                dangerouslySetInnerHTML={{ __html: parsedReadmeHtml }}
+              />
+            )}
+          </div>
         </section>
       )}
 
@@ -373,13 +459,13 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
             </div>
 
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type="text"
+                placeholder="Filter services..."
                 value={tagFilter}
                 onChange={(e) => setTagFilter(e.target.value)}
-                placeholder="Search domains & tags..."
-                className="bg-slate-50 border border-slate-300 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none w-64"
+                className="w-full sm:w-64 bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-indigo-600 transition-all font-medium"
               />
             </div>
           </div>
@@ -389,45 +475,46 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
               <div
                 key={tag.name}
                 onClick={() => onNavigate(`/docs?module=${encodeURIComponent(tag.name)}`)}
-                className="bg-white border border-slate-200 hover:border-indigo-400 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+                className="bg-white border border-slate-200/80 hover:border-indigo-500 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors text-sm">
                       {tag.name}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
-                      {tag.count} {tag.count === 1 ? 'Op' : 'Ops'}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700">
+                      {tag.count} endpoints
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {tag.description || 'Modular API collection and endpoints for ' + tag.name + '.'}
-                  </p>
+                  {tag.description && (
+                    <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                      {tag.description}
+                    </p>
+                  )}
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    {Object.keys(tag.methods).map((m) => (
-                      <span key={m} className="text-[10px] font-bold text-slate-600 font-mono bg-slate-100 px-1.5 py-0.5 rounded">
-                        {m}
-                      </span>
-                    ))}
+                    {Object.entries(tag.methods)
+                      .filter(([_, count]) => count > 0)
+                      .map(([method, count]) => (
+                        <span
+                          key={method}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-black font-mono bg-slate-100 text-slate-700"
+                        >
+                          {method} ({count})
+                        </span>
+                      ))}
                   </div>
 
-                  <div className="text-xs font-semibold text-indigo-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    <span>Test Sandbox</span>
-                    <ArrowRight className="w-3 h-3" />
+                  <div className="flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
+                    <span>Inspect</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
               </div>
             ))}
-
-            {filteredTags.length === 0 && (
-              <div className="col-span-full py-12 text-center text-slate-400 text-xs">
-                No engine domains matching filter "{tagFilter}".
-              </div>
-            )}
           </div>
         </section>
       )}

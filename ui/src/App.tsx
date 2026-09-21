@@ -4,6 +4,8 @@ import { QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
 import { QAInspectModal } from './components/QAInspectModal';
 import { SpotlightSearchModal } from './components/SpotlightSearchModal';
+import { CredentialManagerModal, StoredCredentials } from './components/CredentialManagerModal';
+import { CodeSnippetModal } from './components/CodeSnippetModal';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
 import { LandingView } from './components/LandingView';
@@ -31,9 +33,72 @@ export const App: React.FC = () => {
   const [qaData, setQAData] = useState<Record<string, QARecord>>({});
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
+  const [isCredsModalOpen, setIsCredsModalOpen] = useState<boolean>(false);
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
+  const [snippetEndpoint, setSnippetEndpoint] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
   const [allEndpointsList, setAllEndpointsList] = useState<string[]>([]);
+
+  // Stored Credentials state synced with localStorage
+  const [credentials, setCredentials] = useState<StoredCredentials>(() => {
+    try {
+      const access = localStorage.getItem('apidocs_access_token') || undefined;
+      const refresh = localStorage.getItem('apidocs_refresh_token') || undefined;
+      const tenant = localStorage.getItem('apidocs_tenant_id') || undefined;
+      const entity = localStorage.getItem('apidocs_entity_id') || undefined;
+      const updated = localStorage.getItem('apidocs_creds_updated_at') || undefined;
+      const customHeadersStr = localStorage.getItem('apidocs_custom_headers');
+      const customHeaders = customHeadersStr ? JSON.parse(customHeadersStr) : undefined;
+      return {
+        accessToken: access,
+        refreshToken: refresh,
+        tenantId: tenant,
+        entityId: entity,
+        customHeaders,
+        updatedAt: updated,
+      };
+    } catch {
+      return {};
+    }
+  });
+
+  const handleUpdateCredentials = (creds: StoredCredentials) => {
+    setCredentials(creds);
+    try {
+      if (creds.accessToken) localStorage.setItem('apidocs_access_token', creds.accessToken);
+      else localStorage.removeItem('apidocs_access_token');
+
+      if (creds.refreshToken) localStorage.setItem('apidocs_refresh_token', creds.refreshToken);
+      else localStorage.removeItem('apidocs_refresh_token');
+
+      if (creds.tenantId) localStorage.setItem('apidocs_tenant_id', creds.tenantId);
+      else localStorage.removeItem('apidocs_tenant_id');
+
+      if (creds.entityId) localStorage.setItem('apidocs_entity_id', creds.entityId);
+      else localStorage.removeItem('apidocs_entity_id');
+
+      if (creds.customHeaders && Object.keys(creds.customHeaders).length > 0) {
+        localStorage.setItem('apidocs_custom_headers', JSON.stringify(creds.customHeaders));
+      } else {
+        localStorage.removeItem('apidocs_custom_headers');
+      }
+
+      if (creds.updatedAt) localStorage.setItem('apidocs_creds_updated_at', creds.updatedAt);
+      else localStorage.removeItem('apidocs_creds_updated_at');
+    } catch (e) {}
+  };
+
+  const handleClearCredentials = () => {
+    setCredentials({});
+    try {
+      localStorage.removeItem('apidocs_access_token');
+      localStorage.removeItem('apidocs_refresh_token');
+      localStorage.removeItem('apidocs_tenant_id');
+      localStorage.removeItem('apidocs_entity_id');
+      localStorage.removeItem('apidocs_custom_headers');
+      localStorage.removeItem('apidocs_creds_updated_at');
+    } catch (e) {}
+  };
 
   // Handle initial search params (?module=... or ?tag=...)
   useEffect(() => {
@@ -75,7 +140,6 @@ export const App: React.FC = () => {
   // Global Spotlight Search shortcut (Cmd+K / Ctrl+K or '/')
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if typing in an input or textarea
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
@@ -98,105 +162,102 @@ export const App: React.FC = () => {
       const targetPath = dummy.pathname;
       const targetModule = dummy.searchParams.get('module') || dummy.searchParams.get('tag');
 
-      if (targetModule) {
-        setActiveModule(targetModule);
-        setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(targetModule)}`);
-      } else if (targetPath.startsWith('/docs') && !dummy.search) {
-        setActiveModule('all');
-        setSpecUrl('/docs/swagger.json');
-      }
+      if (window.location.pathname !== targetPath || (targetModule && targetModule !== activeModule)) {
+        window.history.pushState(null, '', path);
+        setCurrentPath(targetPath);
 
-      window.history.pushState(null, '', path);
-      setCurrentPath(targetPath);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (targetModule) {
+          setActiveModule(targetModule);
+          setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(targetModule)}`);
+        } else if (targetPath.startsWith('/docs')) {
+          setActiveModule('all');
+          setSpecUrl('/docs/swagger.json');
+        }
+      }
     } catch (e) {
       window.history.pushState(null, '', path);
       setCurrentPath(path);
     }
   };
 
-  // Load Nav Config from /docs/nav
+  // Fetch nav config from backend
   useEffect(() => {
-    fetch('/docs/nav')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data) {
-          setNavConfig((prev) => ({
-            ...prev,
-            title: data.title || prev.title,
-            subtitle: data.subtitle || prev.subtitle,
-            icon: data.icon || prev.icon,
-            nav_items: data.nav_items?.length ? data.nav_items : prev.nav_items,
-          }));
+    fetch('/docs/nav.json')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load nav config');
+        return res.json();
+      })
+      .then((data: NavConfig) => {
+        if (data && data.title) {
+          setNavConfig(data);
+          document.title = data.title;
         }
       })
       .catch(() => {});
   }, []);
 
-  // Fetch OpenAPI spec to calculate total endpoints & populate Scope filter dropdown
+  // Fetch swagger.json to extract available modules/tags and all endpoint keys
   useEffect(() => {
-    fetch(specUrl)
+    fetch('/docs/swagger.json')
       .then((res) => res.json())
-      .then((spec) => {
-        if (spec) {
-          if (Array.isArray(spec.tags) && spec.tags.length > 0) {
-            const tags = spec.tags
-              .map((t: any) => (typeof t === 'string' ? t : t.name))
-              .filter(Boolean)
-              .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-            if (tags.length > 0) {
-              setAvailableModules(tags);
-            }
+      .then((swagger: any) => {
+        if (swagger) {
+          const tagsSet = new Set<string>();
+          const endpoints: string[] = [];
+
+          if (swagger.tags && Array.isArray(swagger.tags)) {
+            swagger.tags.forEach((t: any) => {
+              if (t && t.name) tagsSet.add(t.name);
+            });
           }
 
-          if (spec.paths && typeof spec.paths === 'object') {
-            const list: string[] = [];
-            const httpMethods = ['get', 'post', 'put', 'delete', 'patch', 'options', 'head'];
-            for (const pathKey in spec.paths) {
-              const pathObj = spec.paths[pathKey];
-              if (pathObj && typeof pathObj === 'object') {
-                for (const m of httpMethods) {
-                  if (pathObj[m]) {
-                    list.push(`${m.toUpperCase()} ${pathKey}`);
+          if (swagger.paths && typeof swagger.paths === 'object') {
+            for (const path in swagger.paths) {
+              const methods = swagger.paths[path];
+              for (const method in methods) {
+                if (['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(method.toLowerCase())) {
+                  endpoints.push(`${method.toUpperCase()} ${path}`);
+                  const op = methods[method];
+                  if (op && op.tags && Array.isArray(op.tags)) {
+                    op.tags.forEach((t: string) => tagsSet.add(t));
                   }
                 }
               }
             }
-            if (list.length > 0) {
-              setAllEndpointsList(list);
-            }
           }
+
+          setAvailableModules(Array.from(tagsSet));
+          setAllEndpointsList(endpoints);
         }
       })
       .catch(() => {});
-  }, [specUrl]);
-
-  // Load QA Data from /docs/qa/data
-  const loadQAData = async () => {
-    try {
-      const res = await fetch('/docs/qa/data');
-      if (res.ok) {
-        const data = await res.json();
-        setQAData(data || {});
-      }
-    } catch (e) {}
-  };
-
-  useEffect(() => {
-    loadQAData();
   }, []);
 
-  // Update spec URL based on active module / scope
+  // Fetch persisted QA test records from server
+  useEffect(() => {
+    fetch('/docs/qa/data')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data === 'object') {
+          setQAData(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Module filter handler
   const handleModuleChange = (mod: string) => {
     setActiveModule(mod);
     if (mod === 'all') {
       setSpecUrl('/docs/swagger.json');
-      if (currentPath.startsWith('/docs')) {
+      if (window.location.pathname.startsWith('/docs')) {
         window.history.replaceState(null, '', '/docs');
       }
+    } else if (mod === 'imported') {
+      // Keep specUrl untouched
     } else {
       setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
-      if (currentPath.startsWith('/docs')) {
+      if (window.location.pathname.startsWith('/docs')) {
         window.history.replaceState(null, '', `/docs?module=${encodeURIComponent(mod)}`);
       }
     }
@@ -276,6 +337,13 @@ export const App: React.FC = () => {
   const isDashboard = currentPath === '/dashboard' || currentPath === '/health';
   const isHome = currentPath === '/' || currentPath === '' || currentPath === '/landing';
 
+  const hasCredentials = !!(
+    credentials.accessToken ||
+    credentials.tenantId ||
+    credentials.entityId ||
+    (credentials.customHeaders && Object.keys(credentials.customHeaders).length > 0)
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Single, consistent, mobile-first unified header across all routes */}
@@ -284,6 +352,8 @@ export const App: React.FC = () => {
         currentPath={currentPath}
         onNavigate={handleNavigate}
         onOpenSearch={() => setIsSearchModalOpen(true)}
+        onOpenCredentials={() => setIsCredsModalOpen(true)}
+        hasCredentials={hasCredentials}
       />
 
       {/* Render route views */}
@@ -303,7 +373,9 @@ export const App: React.FC = () => {
           qaStats={calculateStats()}
           qaData={qaData}
           onUpdateQAData={setQAData}
-          onOpenSearch={() => setIsSearchModalOpen(true)}
+          credentials={credentials}
+          onUpdateCredentials={handleUpdateCredentials}
+          onOpenCredentials={() => setIsCredsModalOpen(true)}
         />
       )}
       {!isGuide && !isHome && !isDashboard && !isSandbox && (
@@ -319,7 +391,9 @@ export const App: React.FC = () => {
           qaStats={calculateStats()}
           qaData={qaData}
           onUpdateQAData={setQAData}
-          onOpenSearch={() => setIsSearchModalOpen(true)}
+          credentials={credentials}
+          onUpdateCredentials={handleUpdateCredentials}
+          onOpenCredentials={() => setIsCredsModalOpen(true)}
         />
       )}
 
@@ -352,6 +426,23 @@ export const App: React.FC = () => {
         onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
       />
 
+      {/* Credentials & Multi-Tenant Tokens Modal */}
+      <CredentialManagerModal
+        isOpen={isCredsModalOpen}
+        onClose={() => setIsCredsModalOpen(false)}
+        credentials={credentials}
+        onSave={handleUpdateCredentials}
+        onClear={handleClearCredentials}
+      />
+
+      {/* Code Snippet Generator Modal (cURL, Go, Node, Python) */}
+      <CodeSnippetModal
+        isOpen={!!snippetEndpoint}
+        onClose={() => setSnippetEndpoint(null)}
+        endpointKey={snippetEndpoint || ''}
+        credentials={credentials}
+      />
+
       {/* QA Report Modal */}
       <QAReportModal
         isOpen={isReportOpen}
@@ -375,6 +466,7 @@ export const App: React.FC = () => {
         qaData={qaData}
         onSaveRecord={handleSaveInspectRecord}
         onSelectEndpoint={(ep) => setInspectEndpoint(ep)}
+        onOpenSnippetGenerator={(ep) => setSnippetEndpoint(ep)}
       />
     </div>
   );
