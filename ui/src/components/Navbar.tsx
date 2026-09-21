@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, Lock, Search, KeyRound, ShieldCheck, ChevronRight, Layers } from 'lucide-react';
+import { Menu, Lock, Search, ShieldCheck, ChevronRight } from 'lucide-react';
 import { Workspace } from './WorkspaceSwitcher';
 
 export interface NavItem {
@@ -42,8 +42,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSecurityAudit,
   onToggleMobileSidebar,
   onOpenSearch,
-  onOpenCredentials,
-  hasCredentials = false,
 }) => {
   const [fontSize, setFontSize] = useState<string>(() => {
     return localStorage.getItem('apidocs_font_size') || '100%';
@@ -90,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>{activeSvc?.title || 'Main API'}</span>
             </span>
             <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+            <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
               {getPageTitle()}
             </span>
           </div>
@@ -122,22 +120,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               <span className="hidden sm:inline">Security</span>
-            </button>
-          )}
-
-          {/* Tokens / Auth Credentials Manager trigger */}
-          {onOpenCredentials && (
-            <button
-              onClick={onOpenCredentials}
-              title="Manage API Tokens & Tenant Headers"
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                hasCredentials
-                  ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
-                  : 'bg-slate-100/90 hover:bg-slate-200/80 border-slate-200/80 text-slate-600'
-              }`}
-            >
-              <KeyRound className={`w-3.5 h-3.5 ${hasCredentials ? 'text-amber-600' : 'text-slate-500'}`} />
-              <span className="hidden sm:inline">{hasCredentials ? 'Auth 🔐' : 'Auth'}</span>
             </button>
           )}
 

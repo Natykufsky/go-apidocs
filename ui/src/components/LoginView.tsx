@@ -55,7 +55,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
       <div className="w-full max-w-md">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-3xl shadow-lg shadow-indigo-600/20 mb-4 ring-8 ring-indigo-50 text-white">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-600 text-3xl shadow-lg shadow-emerald-600/20 mb-4 ring-8 ring-emerald-50 text-white">
             {config.icon || '⚡'}
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
@@ -64,8 +64,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
           <p className="text-sm font-medium text-slate-500">
             {config.subtitle || 'Developer Reference & Swagger QA Portal'}
           </p>
-          <div className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+          <div className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             Protected Developer Access
           </div>
         </div>
@@ -96,7 +96,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
                   placeholder="admin or developer ID"
                   required
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
                 />
               </div>
             </div>
@@ -116,7 +116,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   required
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-10 pr-11 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-10 pr-11 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
                 />
                 <button
                   type="button"
@@ -132,7 +132,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-[0.99] cursor-pointer"
+              className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 text-sm transition-all transform active:scale-[0.99] cursor-pointer"
             >
               {loading ? (
                 <>

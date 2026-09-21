@@ -242,7 +242,7 @@ export const SecurityAuditModal: React.FC<SecurityAuditModalProps> = ({
               onClick={() => setActiveTab('findings')}
               className={`py-3 px-3.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                 activeTab === 'findings'
-                  ? 'border-indigo-600 text-indigo-700'
+                  ? 'border-emerald-600 text-emerald-700'
                   : 'border-transparent text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -253,7 +253,7 @@ export const SecurityAuditModal: React.FC<SecurityAuditModalProps> = ({
               onClick={() => setActiveTab('headers')}
               className={`py-3 px-3.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                 activeTab === 'headers'
-                  ? 'border-indigo-600 text-indigo-700'
+                  ? 'border-emerald-600 text-emerald-700'
                   : 'border-transparent text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -264,7 +264,7 @@ export const SecurityAuditModal: React.FC<SecurityAuditModalProps> = ({
               onClick={() => setActiveTab('fuzzing')}
               className={`py-3 px-3.5 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'fuzzing'
-                  ? 'border-indigo-600 text-indigo-700'
+                  ? 'border-emerald-600 text-emerald-700'
                   : 'border-transparent text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -289,14 +289,14 @@ export const SecurityAuditModal: React.FC<SecurityAuditModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
           {loading && (
             <div className="py-16 text-center space-y-3">
-              <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
+              <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto" />
               <div className="text-xs font-bold text-slate-700">Analyzing API Specification & Security Posture...</div>
             </div>
           )}
 
           {error && (
             <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
               <div>{error}</div>
             </div>
           )}
@@ -415,7 +415,7 @@ export const SecurityAuditModal: React.FC<SecurityAuditModalProps> = ({
                     {group.payloads.map((p) => (
                       <div
                         key={p.name}
-                        className="p-3 rounded-xl border border-slate-200 bg-white hover:border-indigo-400 transition-all space-y-1.5"
+                        className="p-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 transition-all space-y-1.5"
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-slate-900">{p.name}</span>

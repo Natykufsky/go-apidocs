@@ -104,7 +104,7 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-indigo-600/20">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-emerald-600/20">
               🧪
             </div>
             <div>
@@ -122,7 +122,7 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
                 title="Generate pre-authenticated cURL / Go / Node / Python snippet"
                 className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
               >
-                <Code2 className="w-3.5 h-3.5 text-indigo-600" />
+                <Code2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span className="hidden sm:inline">Snippets</span>
               </button>
             )}
@@ -225,7 +225,7 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
                 QA Bug Notes & Verification Comments
               </label>
               <span className="text-[11px] text-slate-400">Supports Markdown notes</span>
@@ -235,7 +235,7 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
               onChange={(e) => setComment(e.target.value)}
               placeholder="e.g. Expected 200 OK with payload { id, status }, received 500 error when sending empty phone array. Steps to reproduce..."
               rows={4}
-              className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all font-mono leading-relaxed"
+              className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono leading-relaxed"
             />
           </div>
         </div>
@@ -271,7 +271,7 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
             )}
             <button
               onClick={handleSave}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-2 transition-all cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-2 transition-all cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>Save & Sync Server</span>

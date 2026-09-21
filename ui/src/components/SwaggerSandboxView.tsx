@@ -107,7 +107,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
               : '';
 
             return `
-              <div style="display: flex; align-items: center; margin-right: 12px;" onclick="event.stopPropagation();">
+              <div class="qa-pill-inner" style="display: flex; align-items: center; margin-right: 12px; cursor: pointer;">
                 <button type="button" class="qa-pill-btn ${badgeClass}" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; border-width: 1px; border-style: solid; cursor: pointer; transition: all 0.15s ease;">
                   <span>${label}</span>
                 </button>
@@ -116,18 +116,20 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
             `;
           };
 
+          const handlePillClick = (e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (onInspectEndpoint) {
+              onInspectEndpoint(endpointKey);
+            }
+          };
+
           if (!pill) {
             pill = document.createElement('div');
-            pill.className = 'qa-pill-trigger';
+            pill.className = 'qa-pill-trigger cursor-pointer';
             pill.style.display = qaMode ? 'flex' : 'none';
             pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
-
-            pill.addEventListener('click', (e) => {
-              e.stopPropagation();
-              if (onInspectEndpoint) {
-                onInspectEndpoint(endpointKey);
-              }
-            });
+            pill.onclick = handlePillClick;
 
             const arrowBtn = summaryEl.querySelector('.opblock-summary-control');
             if (arrowBtn) {
@@ -138,6 +140,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
           } else {
             pill.style.display = qaMode ? 'flex' : 'none';
             pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
+            pill.onclick = handlePillClick;
           }
         });
       } finally {
@@ -293,7 +296,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
           className={`fixed bottom-6 right-6 z-50 text-xs font-semibold px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-2.5 backdrop-blur-md animate-in slide-in-from-bottom-5 ${
             toastType === 'warning'
               ? 'bg-amber-950/95 text-amber-100 border-amber-500/50'
-              : 'bg-slate-900/95 text-white border-indigo-500/30'
+              : 'bg-slate-900/95 text-white border-emerald-500/30'
           }`}
         >
           {toastType === 'warning' ? (
@@ -341,17 +344,17 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
               title="Inspect or map captured tokens and custom headers"
               className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
                 hasActiveCreds
-                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700 hover:bg-indigo-100 shadow-xs'
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-xs'
                   : 'bg-slate-100/80 border-slate-200 text-slate-600 hover:bg-slate-200/80'
               }`}
             >
-              <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+              <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
               <span>Tokens:</span>
-              <span className={hasActiveCreds ? 'text-indigo-700 font-black' : 'text-slate-500'}>
+              <span className={hasActiveCreds ? 'text-emerald-800 font-black' : 'text-slate-500'}>
                 {hasActiveCreds ? 'Active 🔐' : 'None'}
               </span>
               {credentials.tenantId && (
-                <span className="hidden md:inline-block px-1.5 py-0.2 rounded bg-indigo-200/60 text-[10px] text-indigo-800">
+                <span className="hidden md:inline-block px-1.5 py-0.2 rounded bg-emerald-200/60 text-[10px] text-emerald-900">
                   {credentials.tenantId}
                 </span>
               )}

@@ -317,38 +317,59 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Fetch swagger.json to extract available modules/tags and all endpoint keys
+  // Fetch swagger.json to extract available modules/tags and all endpoint keys preserving 01, 02, 03... order
   useEffect(() => {
     fetch(specUrl)
       .then((res) => res.json())
       .then((swagger: any) => {
         if (swagger) {
-          const tagsSet = new Set<string>();
-          const endpoints: string[] = [];
+          const declaredTags: string[] = Array.isArray(swagger.tags)
+            ? swagger.tags.map((t: any) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
+            : [];
 
-          if (swagger.tags && Array.isArray(swagger.tags)) {
-            swagger.tags.forEach((t: any) => {
-              if (t && t.name) tagsSet.add(t.name);
-            });
-          }
+          const tagOrderMap = new Map<string, number>();
+          declaredTags.forEach((name, idx) => tagOrderMap.set(name, idx));
+
+          const endpointsWithTag: { key: string; tag: string; path: string }[] = [];
+          const extraTagsSet = new Set<string>();
 
           if (swagger.paths && typeof swagger.paths === 'object') {
             for (const path in swagger.paths) {
               const methods = swagger.paths[path];
               for (const method in methods) {
                 if (['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(method.toLowerCase())) {
-                  endpoints.push(`${method.toUpperCase()} ${path}`);
                   const op = methods[method];
+                  const primaryTag = (op && op.tags && op.tags.length > 0) ? op.tags[0] : 'General';
                   if (op && op.tags && Array.isArray(op.tags)) {
-                    op.tags.forEach((t: string) => tagsSet.add(t));
+                    op.tags.forEach((t: string) => {
+                      if (!tagOrderMap.has(t)) {
+                        extraTagsSet.add(t);
+                      }
+                    });
                   }
+                  endpointsWithTag.push({
+                    key: `${method.toUpperCase()} ${path}`,
+                    tag: primaryTag,
+                    path: path,
+                  });
                 }
               }
             }
           }
 
-          setAvailableModules(Array.from(tagsSet));
-          setAllEndpointsList(endpoints);
+          const extraTags = Array.from(extraTagsSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+          const allModules = [...declaredTags, ...extraTags];
+          allModules.forEach((name, idx) => tagOrderMap.set(name, idx));
+
+          endpointsWithTag.sort((a, b) => {
+            const orderA = tagOrderMap.has(a.tag) ? tagOrderMap.get(a.tag)! : 9999;
+            const orderB = tagOrderMap.has(b.tag) ? tagOrderMap.get(b.tag)! : 9999;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.path.localeCompare(b.path);
+          });
+
+          setAvailableModules(allModules);
+          setAllEndpointsList(endpointsWithTag.map((e) => e.key));
         }
       })
       .catch(() => {});
@@ -569,7 +590,7 @@ export const App: React.FC = () => {
               href="https://github.com/Natykufsky/go-apidocs"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-indigo-600 hover:underline font-semibold"
+              className="text-emerald-600 hover:underline font-semibold"
             >
               go-apidocs
             </a>{' '}

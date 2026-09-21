@@ -54,12 +54,20 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
       .catch(() => setLoading(false));
   }, [specUrl]);
 
-  // Parse all endpoints from spec
+  // Parse all endpoints from spec preserving explicit tag ordering (01, 02, 03...)
   const { endpoints, tags } = useMemo(() => {
     if (!spec || !spec.paths) return { endpoints: [], tags: [] };
 
+    // 1. Extract declared tags in exact spec order (e.g. 01. Auth, 02. Multi-Tenant...)
+    const declaredTags: string[] = Array.isArray(spec.tags)
+      ? spec.tags.map((t: any) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
+      : [];
+
+    const tagOrderMap = new Map<string, number>();
+    declaredTags.forEach((name, idx) => tagOrderMap.set(name, idx));
+
     const epList: EndpointDoc[] = [];
-    const tagSet = new Set<string>();
+    const extraTagsSet = new Set<string>();
 
     for (const path in spec.paths) {
       const pathItem = spec.paths[path];
@@ -68,7 +76,11 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
         if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'].includes(upperM)) {
           const op = pathItem[method];
           const opTags: string[] = op.tags && op.tags.length > 0 ? op.tags : ['General'];
-          opTags.forEach((t) => tagSet.add(t));
+          opTags.forEach((t) => {
+            if (!tagOrderMap.has(t)) {
+              extraTagsSet.add(t);
+            }
+          });
 
           epList.push({
             method: upperM,
@@ -85,9 +97,24 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
       }
     }
 
+    // Additional tags sorted naturally
+    const extraTags = Array.from(extraTagsSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const allTags = [...declaredTags, ...extraTags];
+    allTags.forEach((name, idx) => tagOrderMap.set(name, idx));
+
+    // Sort endpoints primarily by their primary tag's index in the spec (matching 01, 02, 03... order)
+    epList.sort((a, b) => {
+      const tagA = a.tags[0] || 'General';
+      const tagB = b.tags[0] || 'General';
+      const orderA = tagOrderMap.has(tagA) ? tagOrderMap.get(tagA)! : 9999;
+      const orderB = tagOrderMap.has(tagB) ? tagOrderMap.get(tagB)! : 9999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.path.localeCompare(b.path);
+    });
+
     return {
       endpoints: epList,
-      tags: Array.from(tagSet),
+      tags: allTags,
     };
   }, [spec]);
 
@@ -207,7 +234,7 @@ func main() {
     return (
       <div className="flex-1 flex items-center justify-center py-32 bg-slate-50">
         <div className="text-center space-y-3">
-          <BookOpen className="w-8 h-8 text-indigo-600 animate-pulse mx-auto" />
+          <BookOpen className="w-8 h-8 text-emerald-600 animate-pulse mx-auto" />
           <div className="text-xs font-bold text-slate-700">Loading Native Developer Guide...</div>
         </div>
       </div>
@@ -261,7 +288,7 @@ func main() {
                   onClick={() => setActiveEndpointKey(key)}
                   className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-indigo-50 border border-indigo-200/80 text-indigo-950 font-bold shadow-2xs'
+                      ? 'bg-emerald-50 border border-emerald-200/90 text-emerald-950 font-bold shadow-2xs'
                       : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium'
                   }`}
                 >
@@ -275,7 +302,7 @@ func main() {
                     </span>
                     <span className="text-xs truncate">{ep.path}</span>
                   </div>
-                  {isSelected && <ChevronRight className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-1" />}
+                  {isSelected && <ChevronRight className="w-3.5 h-3.5 text-emerald-600 shrink-0 ml-1" />}
                 </button>
               );
             })}
@@ -336,7 +363,7 @@ func main() {
                       <tbody className="divide-y divide-slate-100 text-slate-700">
                         {activeEndpoint.parameters.map((param: any, idx: number) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
-                            <td className="p-3 font-mono font-bold text-indigo-700">{param.name}</td>
+                            <td className="p-3 font-mono font-bold text-emerald-800">{param.name}</td>
                             <td className="p-3 uppercase text-[10px] font-bold text-slate-500">{param.in}</td>
                             <td className="p-3 font-mono text-[11px] text-slate-600">{param.schema?.type || param.type || 'string'}</td>
                             <td className="p-3">
@@ -393,7 +420,7 @@ func main() {
           {/* Header & Language Selector */}
           <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-800">
             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-              <Terminal className="w-4 h-4 text-indigo-400" />
+              <Terminal className="w-4 h-4 text-emerald-400" />
               <span>Code Snippets</span>
             </div>
 
@@ -404,7 +431,7 @@ func main() {
                   type="button"
                   onClick={() => setSnippetLang(lang)}
                   className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all cursor-pointer ${
-                    snippetLang === lang ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                    snippetLang === lang ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   {lang}
@@ -414,7 +441,7 @@ func main() {
           </div>
 
           {/* Code Viewer */}
-          <div className="flex-1 relative rounded-2xl bg-slate-950 p-4 border border-slate-800/80 overflow-y-auto font-mono text-xs text-indigo-300 leading-relaxed">
+          <div className="flex-1 relative rounded-2xl bg-slate-950 p-4 border border-slate-800/80 overflow-y-auto font-mono text-xs text-emerald-300 leading-relaxed">
             <pre className="whitespace-pre-wrap break-all">{generateSnippet(activeEndpoint, snippetLang)}</pre>
           </div>
 
@@ -426,7 +453,7 @@ func main() {
             <button
               type="button"
               onClick={() => handleCopy(generateSnippet(activeEndpoint, snippetLang))}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied!' : 'Copy Code'}</span>

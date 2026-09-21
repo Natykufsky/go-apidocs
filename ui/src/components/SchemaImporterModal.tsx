@@ -209,7 +209,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-base shadow-md shadow-indigo-600/20">
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white text-base shadow-md shadow-emerald-600/20">
               📥
             </div>
             <div>
@@ -237,7 +237,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                 type="button"
                 onClick={() => setSourceType('upload')}
                 className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  sourceType === 'upload' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  sourceType === 'upload' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Upload className="w-3.5 h-3.5" />
@@ -247,7 +247,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                 type="button"
                 onClick={() => setSourceType('paste')}
                 className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  sourceType === 'paste' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  sourceType === 'paste' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <FileCode className="w-3.5 h-3.5" />
@@ -257,7 +257,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                 type="button"
                 onClick={() => setSourceType('url')}
                 className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  sourceType === 'url' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  sourceType === 'url' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <LinkIcon className="w-3.5 h-3.5" />
@@ -270,7 +270,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
           {sourceType === 'upload' && (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-indigo-50/20 transition-all group"
+              className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-emerald-50/20 transition-all group"
             >
               <input
                 ref={fileInputRef}
@@ -279,7 +279,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                 onChange={handleFileUpload}
                 className="hidden"
               />
-              <Upload className="w-8 h-8 text-slate-600 group-hover:text-indigo-600 mx-auto mb-2 transition-transform group-hover:scale-110" />
+              <Upload className="w-8 h-8 text-slate-600 group-hover:text-emerald-600 mx-auto mb-2 transition-transform group-hover:scale-110" />
               <div className="text-xs font-bold text-slate-800">
                 Click to browse or drop an OpenAPI file here
               </div>
@@ -297,7 +297,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                   setPasteInput(e.target.value);
                   parseRawSpec(e.target.value);
                 }}
-                className="w-full p-3 rounded-2xl border border-slate-200 font-mono text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full p-3 rounded-2xl border border-slate-200 font-mono text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </div>
           )}
@@ -310,7 +310,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                   placeholder="https://example.com/api/swagger.json"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
                 <button
                   type="button"
@@ -329,7 +329,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                       setLoading(false);
                     }
                   }}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer"
                 >
                   Fetch
                 </button>
@@ -353,28 +353,28 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
 
           {/* Pre-Flight Inspection Summary */}
           {preflight && (
-            <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-3">
+            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span className="text-xs font-bold text-indigo-950">Valid OpenAPI Specification Detected</span>
+                  <span className="text-xs font-bold text-emerald-950">Valid OpenAPI Specification Detected</span>
                 </div>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-indigo-200/70 text-indigo-900 rounded-md">
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-emerald-200/70 text-emerald-900 rounded-md">
                   {preflight.openapiVersion}
                 </span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-2 bg-white rounded-xl border border-indigo-100/80">
-                  <div className="text-base font-extrabold text-indigo-950">{preflight.pathCount}</div>
+                <div className="p-2 bg-white rounded-xl border border-emerald-100/80">
+                  <div className="text-base font-extrabold text-emerald-950">{preflight.pathCount}</div>
                   <div className="text-[10px] font-semibold text-slate-600 uppercase">Endpoints</div>
                 </div>
-                <div className="p-2 bg-white rounded-xl border border-indigo-100/80">
-                  <div className="text-base font-extrabold text-indigo-950">{preflight.totalOps}</div>
+                <div className="p-2 bg-white rounded-xl border border-emerald-100/80">
+                  <div className="text-base font-extrabold text-emerald-950">{preflight.totalOps}</div>
                   <div className="text-[10px] font-semibold text-slate-600 uppercase">Operations</div>
                 </div>
-                <div className="p-2 bg-white rounded-xl border border-indigo-100/80">
-                  <div className="text-base font-extrabold text-indigo-950">{preflight.tags.length}</div>
+                <div className="p-2 bg-white rounded-xl border border-emerald-100/80">
+                  <div className="text-base font-extrabold text-emerald-950">{preflight.tags.length}</div>
                   <div className="text-[10px] font-semibold text-slate-600 uppercase">Tags</div>
                 </div>
               </div>
@@ -402,7 +402,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
               <select
                 value={targetWorkspaceId}
                 onChange={(e) => setTargetWorkspaceId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               >
                 {workspaces.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -421,7 +421,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
                 value={serviceTitle}
                 onChange={(e) => setServiceTitle(e.target.value)}
                 placeholder="e.g. Invoicing API"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </div>
           </div>
@@ -448,7 +448,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
             type="button"
             disabled={!preflight || loading}
             onClick={() => handleSaveAndLaunch(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
           >
             <Zap className="w-3.5 h-3.5" />
             <span>Save & Launch Sandbox</span>

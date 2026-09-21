@@ -24,7 +24,7 @@ export const QABar: React.FC<QABarProps> = ({ stats }) => {
           <span className="font-bold text-slate-700 whitespace-nowrap">🧪 QA Coverage:</span>
           <div className="flex-1 max-w-xs h-2.5 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
             <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500"
+              className="h-full bg-gradient-to-r from-emerald-600 to-teal-500 transition-all duration-500"
               style={{ width: `${percentage}%` }}
             />
           </div>

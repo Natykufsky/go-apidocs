@@ -170,7 +170,7 @@ print(response.json())`;
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-indigo-600/20">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-emerald-600/20">
               <Code2 className="w-4 h-4" />
             </div>
             <div>
@@ -191,7 +191,7 @@ print(response.json())`;
         {/* Environment & Target Endpoint Bar */}
         <div className="px-6 py-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-black px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <span className="font-mono text-xs font-black px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
               {method}
             </span>
             <span className="font-mono text-xs font-bold text-slate-800 break-all">{path}</span>
@@ -222,7 +222,7 @@ print(response.json())`;
                 onClick={() => setSelectedLang(lang)}
                 className={`px-3 py-1.5 rounded-t-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                   selectedLang === lang
-                    ? 'bg-slate-800 text-indigo-400 border-t border-x border-slate-700'
+                    ? 'bg-slate-800 text-emerald-400 border-t border-x border-slate-700'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -234,7 +234,7 @@ print(response.json())`;
           <button
             type="button"
             onClick={handleCopy}
-            className="mb-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            className="mb-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
           >
             {copied ? (
               <>
@@ -252,7 +252,7 @@ print(response.json())`;
 
         {/* Code Content Box */}
         <div className="p-6 bg-slate-950 flex-1 overflow-auto">
-          <pre className="text-xs font-mono text-indigo-200 leading-relaxed whitespace-pre-wrap selection:bg-indigo-500 selection:text-white">
+          <pre className="text-xs font-mono text-emerald-200 leading-relaxed whitespace-pre-wrap selection:bg-emerald-500 selection:text-white">
             {currentSnippet}
           </pre>
         </div>

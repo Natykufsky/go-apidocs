@@ -75,7 +75,7 @@ export const SpotlightSearchModal: React.FC<SpotlightSearchModalProps> = ({
       title: item.label,
       subtitle: `Portal Page • ${item.url}`,
       badge: 'Page',
-      badgeColor: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+      badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
       action: () => {
         onNavigate(item.url);
         onClose();
@@ -273,7 +273,7 @@ export const SpotlightSearchModal: React.FC<SpotlightSearchModalProps> = ({
                   onMouseEnter={() => setSelectedIndex(index)}
                   className={`px-3.5 py-2.5 rounded-xl cursor-pointer flex items-center justify-between gap-3 transition-all duration-100 ${
                     isSelected
-                      ? 'bg-indigo-600/30 border border-indigo-500/40 text-white backdrop-blur-sm'
+                      ? 'bg-emerald-600/30 border border-emerald-500/40 text-white backdrop-blur-sm'
                       : 'hover:bg-white/[0.04] text-slate-300 border border-transparent'
                   }`}
                 >
@@ -292,7 +292,7 @@ export const SpotlightSearchModal: React.FC<SpotlightSearchModalProps> = ({
                         <Tag className="w-3.5 h-3.5" />
                       </div>
                     ) : (
-                      <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <div className="w-6 h-6 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                         <FileCode className="w-3.5 h-3.5" />
                       </div>
                     )}
@@ -321,7 +321,7 @@ export const SpotlightSearchModal: React.FC<SpotlightSearchModalProps> = ({
                   {/* Return Key Enter Hint on Selection */}
                   <div className="flex items-center gap-1 shrink-0">
                     {isSelected ? (
-                      <div className="flex items-center gap-1 text-[11px] font-mono text-indigo-200 bg-indigo-500/20 px-2 py-1 rounded-md border border-indigo-400/30">
+                      <div className="flex items-center gap-1 text-[11px] font-mono text-emerald-200 bg-emerald-500/20 px-2 py-1 rounded-md border border-emerald-400/30">
                         <span>Select</span>
                         <CornerDownLeft className="w-3 h-3" />
                       </div>
@@ -356,7 +356,7 @@ export const SpotlightSearchModal: React.FC<SpotlightSearchModalProps> = ({
           </div>
 
           <div className="flex items-center gap-1 text-slate-500">
-            <Sparkles className="w-3 h-3 text-indigo-400" />
+            <Sparkles className="w-3 h-3 text-emerald-400" />
             <span className="font-semibold text-slate-400">Spotlight API Search</span>
           </div>
         </div>

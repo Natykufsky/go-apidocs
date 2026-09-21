@@ -68,7 +68,7 @@ export const HealthView: React.FC = () => {
               <CheckCircle2 className="w-3.5 h-3.5" /> 99.98% Uptime
             </div>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <Server className="w-4 h-4" />
           </div>
         </div>

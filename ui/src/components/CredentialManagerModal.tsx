@@ -139,7 +139,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-indigo-600/20">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-emerald-600/20">
               <KeyRound className="w-4 h-4" />
             </div>
             <div>
@@ -164,7 +164,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
             onClick={() => setActiveTab('standard')}
             className={`pb-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'standard'
-                ? 'border-indigo-600 text-indigo-600'
+                ? 'border-emerald-600 text-emerald-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -176,14 +176,14 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
             onClick={() => setActiveTab('custom')}
             className={`pb-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'custom'
-                ? 'border-indigo-600 text-indigo-600'
+                ? 'border-emerald-600 text-emerald-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
             <span>Custom Header Mappings</span>
             {customHeaders.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-700 font-extrabold">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 text-emerald-700 font-extrabold">
                 {customHeaders.length}
               </span>
             )}
@@ -194,8 +194,8 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
         <form onSubmit={handleFormSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
           {activeTab === 'standard' ? (
             <>
-              <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-start gap-2.5 text-xs text-indigo-900">
-                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-100 flex items-start gap-2.5 text-xs text-emerald-900">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="leading-relaxed">
                   <span className="font-bold">Auto-Capture Active:</span> When you test login/token endpoints,
                   any access token or tenant ID returned is automatically saved here and injected into subsequent API calls.
@@ -206,14 +206,14 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+                    <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
                     Access Token / Bearer Token (`Authorization`)
                   </label>
                   {accessToken && (
                     <button
                       type="button"
                       onClick={() => handleCopy(accessToken, 'access')}
-                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
                     >
                       {copiedKey === 'access' ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                       <span>{copiedKey === 'access' ? 'Copied' : 'Copy'}</span>
@@ -225,7 +225,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                   onChange={(e) => setAccessToken(e.target.value)}
                   placeholder="eyJh... (Auto-injected into Authorization: Bearer <token>)"
                   rows={2}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none"
                 />
               </div>
 
@@ -252,7 +252,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                   value={refreshToken}
                   onChange={(e) => setRefreshToken(e.target.value)}
                   placeholder="e.g. refresh_token_xyz..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
               </div>
 
@@ -268,7 +268,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                     value={tenantId}
                     onChange={(e) => setTenantId(e.target.value)}
                     placeholder="e.g. tenant_98765"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   />
                 </div>
 
@@ -282,7 +282,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                     value={entityId}
                     onChange={(e) => setEntityId(e.target.value)}
                     placeholder="e.g. ent_12345"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 font-mono focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   />
                 </div>
               </div>
@@ -299,7 +299,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAddCustomHeader}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1 border border-indigo-200 transition-all cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center gap-1 border border-emerald-200 transition-all cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Header</span>
@@ -312,7 +312,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                   <button
                     type="button"
                     onClick={handleAddCustomHeader}
-                    className="mt-2 text-xs text-indigo-600 font-bold hover:underline"
+                    className="mt-2 text-xs text-emerald-600 font-bold hover:underline"
                   >
                     + Add your first custom header
                   </button>
@@ -326,7 +326,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                         placeholder="Header Name (e.g. X-Org-ID)"
                         value={item.key}
                         onChange={(e) => handleCustomHeaderChange(index, 'key', e.target.value)}
-                        className="w-1/2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-indigo-600"
+                        className="w-1/2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-600"
                       />
                       <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <input
@@ -334,7 +334,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                         placeholder="Value (e.g. org_456)"
                         value={item.value}
                         onChange={(e) => handleCustomHeaderChange(index, 'value', e.target.value)}
-                        className="w-1/2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-indigo-600"
+                        className="w-1/2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-600"
                       />
                       <button
                         type="button"
@@ -387,7 +387,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer flex items-center gap-1.5"
               >
                 {justSaved ? (
                   <>

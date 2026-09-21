@@ -89,18 +89,33 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
 
       {/* Dropdown Menu */}
       {open && (
-        <div className="absolute left-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-2xl z-50 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
+        <div className="absolute left-0 mt-2 w-72 sm:w-84 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-2xl z-[100] overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
           {/* Header & Search */}
-          <div className="p-3 border-b border-slate-100 bg-slate-50/50">
-            <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">
-              Select Workspace & API
+          <div className="p-3 border-b border-slate-100 bg-slate-50/70">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                Workspaces & APIs
+              </span>
+              {onOpenImporter && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenImporter();
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>New Workspace</span>
+                </button>
+              )}
             </div>
             <input
               type="text"
-              placeholder="Filter services..."
+              placeholder="Search workspaces & services..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
             />
           </div>
 
@@ -125,7 +140,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                         }}
                         className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-indigo-50/90 text-indigo-900 font-bold border border-indigo-200/60'
+                            ? 'bg-emerald-50/90 text-emerald-950 font-bold border border-emerald-200/80 shadow-2xs'
                             : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900 font-medium'
                         }`}
                       >
@@ -134,13 +149,13 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                           <div className="truncate">
                             <div className="truncate">{svc.title}</div>
                             {svc.version && (
-                              <span className="text-[10px] text-slate-600 font-normal">
+                              <span className="text-[10px] text-slate-500 font-normal">
                                 v{svc.version}
                               </span>
                             )}
                           </div>
                         </div>
-                        {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0 ml-2" />}
+                        {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0 ml-2" />}
                       </button>
                     );
                   })}
@@ -149,23 +164,23 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
             ))}
 
             {filteredWorkspaces.length === 0 && (
-              <div className="p-4 text-center text-xs text-slate-600">No matching services found</div>
+              <div className="p-4 text-center text-xs text-slate-500">No matching services found</div>
             )}
           </div>
 
           {/* Action Footer */}
-          <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex items-center gap-1.5">
-            {writesEnabled && onOpenImporter && (
+          <div className="p-2.5 border-t border-slate-100 bg-slate-50/70 flex items-center gap-2">
+            {onOpenImporter && (
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false);
                   onOpenImporter();
                 }}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Import Spec</span>
+                <span>Add Workspace / Import</span>
               </button>
             )}
             {onOpenSecurityAudit && (
@@ -175,7 +190,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                   setOpen(false);
                   onOpenSecurityAudit();
                 }}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-bold transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
                 title="Run Security Audit"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
