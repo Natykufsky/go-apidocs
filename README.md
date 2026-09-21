@@ -2,7 +2,7 @@
 
 # 📚 go-apidocs
 
-### The All-In-One Swagger UI, Security Gate & Real-Time QA Testing Portal for Go
+### The All-In-One Swagger UI, Security Gate, Real-Time QA Suite & Developer Portal for Go
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/Natykufsky/go-apidocs.svg)](https://pkg.go.dev/github.com/Natykufsky/go-apidocs)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Natykufsky/go-apidocs)](https://goreportcard.com/report/github.com/Natykufsky/go-apidocs)
@@ -11,7 +11,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/Natykufsky/go-apidocs/graphs/commit-activity)
 
 <p align="center">
-  <strong>Drop-in OpenAPI 3.0 Documentation • Password Access Gate • ReadMe-Style Developer Guide • Real-Time Endpoint Stats & README Reader • Team-Wide QA Checklist • Instant Markdown Audit Reports • Zero Deployment Dependencies</strong>
+  <strong>Drop-in OpenAPI 3.0 Documentation • Automatic Token & Multi-Tenant Capture • Password Access Gate • ReadMe-Style Developer Guide • Real-Time Endpoint Stats & GitHub README Reader with Secret Masking • Multi-Language Code Snippet Generator • Team-Wide QA Checklist • Instant Excel & Markdown Audit Reports • Zero Deployment Dependencies</strong>
 </p>
 
 </div>
@@ -22,17 +22,20 @@
 
 Standard Swagger UI solutions only display static API contracts. **`go-apidocs`** turns your API documentation into a complete **Developer Portal & QA Collaboration Hub**:
 
-1. **🏠 Interactive Developer Hub (`/`)**: Automatically reads and renders your project's `README.md` with rich typography and calculates **real-time live endpoint statistics**, HTTP method breakdowns, and engine domain explorers.
-2. **📖 ReadMe-Style Developer Guide (`/guide`)**: Interactive multi-column developer reference powered by Scalar with full support for hash anchors (e.g. `/guide#description/introduction`), search, and multi-language code snippets.
-3. **⚡ Swagger UI Sandbox (`/docs`)**: Interactive API playground with "Try It Out", token persistence, live global search (Ctrl+K), and dynamic scope filtering.
-4. **🔒 Password Security Gate (`/docs/login`)**: Protect staging, offline, and production API specs from unauthorized eyes with cryptographic HMAC-signed session cookies and zero external auth dependencies.
-5. **🔤 Portal Font Size Manager**: Accessible font scaling (`90% Compact`, `100% Default`, `110% Medium`, `125% Large`) directly in the header with `localStorage` persistence.
-6. **🧪 Interactive QA Endpoint Inspector**: Step through endpoints sequentially (`Previous` / `Next`), toggle verification results (`🟢 Passed`, `🟡 Needs Retest`, `🔴 Failed / Bug Found`), and record Markdown reproduction steps.
-7. **💾 Real-Time Team Synchronization**: All QA statuses and comments automatically sync to the backend server (`/docs/qa/*`) so the entire engineering team sees the exact same test progress.
-8. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown reports of all tested endpoints with bug notes ready to download or copy into GitHub Issues, Jira, or Slack.
-9. **📊 Operations Health Dashboard (`/dashboard`)**: Live service metrics, connection statuses, and interactive diagnostic log console.
-10. **📱 Unified Mobile-First Top Header**: Consistent, responsive top navigation bar across all views with mobile drawer support.
-11. **📦 100% Self-Contained (`//go:embed`)**: All React UI assets, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel/Air-gapped offline networks.
+1. **🏠 Interactive Developer Hub (`/`)**: Automatically reads and renders your project's `README.md` with authentic GitHub typography, line counts, **Secret Masking Safe Mode** (redacts passwords, JWTs, DB strings), and calculates **real-time live endpoint statistics**, HTTP method breakdowns, and engine domain explorers.
+2. **🔐 Automatic Token & Multi-Tenant Credential Interceptor**: Testing a login/token endpoint automatically captures `access_token`, `refresh_token`, `tenant_id`, and `entity_id` and saves them in browser storage, immediately attaching them to all subsequent requests.
+3. **🛠️ Custom Header & Credential Mapper Modal**: Map arbitrary custom headers (`X-Org-ID`, `X-App-Client`, etc.) with one-click copy and reset controls.
+4. **💻 Multi-Language Code Snippet Generator**: 1-click generation of production-ready **cURL**, **Go**, **Node.js (`fetch`)**, and **Python (`requests`)** code snippets pre-populated with active authorization tokens across Local, Staging, and Production environments.
+5. **📖 ReadMe-Style Developer Guide (`/guide`)**: Interactive multi-column developer reference powered by Scalar with full support for hash anchors (e.g. `/guide#description/introduction`), search, and multi-language code snippets.
+6. **⚡ Swagger UI Sandbox (`/docs`)**: Interactive API playground with "Try It Out", token persistence, clean in-endpoint QA badges with comment previews, and dynamic scope filtering.
+7. **🔒 Password Security Gate (`/docs/login`)**: Protect staging, offline, and production API specs from unauthorized eyes with cryptographic HMAC-signed session cookies and zero external auth dependencies.
+8. **🔤 Portal Font Size Manager**: Accessible font scaling (`90% Compact`, `100% Default`, `110% Medium`, `125% Large`) directly in the header with `localStorage` persistence.
+9. **🧪 Interactive QA Endpoint Inspector**: Step through endpoints sequentially (`Previous` / `Next`), toggle verification results (`🟢 Passed`, `🟡 Needs Retest`, `🔴 Failed / Bug Found`), view pre-authenticated snippets, and record Markdown bug notes.
+10. **💾 Real-Time Team Synchronization**: All QA statuses and comments automatically sync to the backend server (`/docs/qa/*`) so the entire engineering team sees the exact same test progress.
+11. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown and RFC 4180 Excel (`.csv`) reports of all tested endpoints with bug notes ready to download or copy into GitHub Issues, Jira, or Slack.
+12. **📊 Operations Health Dashboard (`/dashboard`)**: Live service metrics, connection statuses, and interactive diagnostic log console.
+13. **📱 Unified Mobile-First Top Header**: Consistent, responsive top navigation bar across all views with Spotlight Search (`⌘K` / `/`) and mobile drawer support.
+14. **📦 100% Self-Contained (`//go:embed`)**: All React UI assets, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel/Air-gapped offline networks.
 
 ---
 
@@ -68,7 +71,7 @@ func main() {
 	// 🚀 Register all docs, auth gate, QA tracking & portals on Chi router
 	chiadapter.Mount(r, apidocs.Config{
 		SpecFilePath: "./docs/swagger.json",
-		Title:        "HarvestPad Platform API",
+		Title:        "Platform API Portal",
 		AuthUser:     "admin",
 		AuthPassword: "SecretPassword",
 	})
@@ -97,7 +100,7 @@ func main() {
 	// 🚀 Register all docs, auth gate, QA tracking & portals on Gin router
 	ginadapter.Mount(r, apidocs.Config{
 		SpecFilePath: "./docs/swagger.json",
-		Title:        "HarvestPad Platform API",
+		Title:        "Platform API Portal",
 		AuthUser:     "admin",
 		AuthPassword: "SecretPassword",
 	})
@@ -125,7 +128,7 @@ func main() {
 	// 🚀 Mount the entire docs, security gate, QA tracker & portals on Fiber
 	apidocs.Mount(app, apidocs.Config{
 		SpecFilePath: "./docs/swagger.json",
-		Title:        "HarvestPad Platform API",
+		Title:        "Platform API Portal",
 		AuthUser:     "admin",
 		AuthPassword: "SecretPassword",
 	})
@@ -142,9 +145,36 @@ Now open **`http://localhost:8080/docs`** (or **`http://localhost:8080/`**) in y
 
 ---
 
+## 🔑 Automatic Token, Multi-Tenant & Custom Header Interception
+
+`go-apidocs` features smart request and response interceptors built directly into the Swagger sandbox:
+
+### 1. Automatic Login Capture
+When you test any authentication endpoint (such as `POST /api/auth/login` or `POST /api/token`), `go-apidocs` automatically detects JSON response keys:
+* **Access Tokens**: `token`, `access_token`, `accessToken`, `jwt`, `bearer_token`
+* **Refresh Tokens**: `refresh_token`, `refreshToken`
+* **Tenant IDs**: `tenant_id`, `tenantId`, `tenant`
+* **Entity IDs**: `entity_id`, `entityId`, `entity`
+
+Values are immediately stored in browser `localStorage` and a toast notification confirms auto-synchronization.
+
+### 2. Automatic Header Injection
+All subsequent API Sandbox calls automatically attach:
+* `Authorization: Bearer <stored_token>`
+* `X-Tenant-ID: <stored_tenant_id>`
+* `X-Entity-ID: <stored_entity_id>`
+* `X-Refresh-Token: <stored_refresh_token>`
+* Any user-defined custom headers (e.g. `X-Account-Key`, `X-App-Client`).
+
+### 3. Credential Manager & Code Snippet Generator
+* Click **Tokens / Credentials (🔐)** in the navbar or subheader to inspect, edit, copy, or clear stored credentials.
+* Open the **Snippets** generator on any endpoint to view ready-to-run **cURL**, **Go**, **Node.js**, or **Python** code pre-populated with your captured tokens.
+
+---
+
 ## 📥 How Developers Can Import Their OpenAPI Spec
 
-`go-apidocs` gives developers **3 flexible ways** to import their OpenAPI specs:
+`go-apidocs` gives developers **4 flexible ways** to import their OpenAPI specs:
 
 ### Option 1: Single Monolithic `swagger.json` / `openapi.json`
 Point `SpecFilePath` directly to your generated OpenAPI file (from tools like `swag`, `oapi-codegen`, `go-swagger`, or Postman exports):
@@ -248,11 +278,6 @@ apidocs.Mount(app, apidocs.Config{
 })
 ```
 
-### 3. Offline / Air-Gapped Operation
-- **Zero Internet Requirement**: All assets (Vite React bundle, Swagger UI, Scalar engine, Lucide icons, and Tailwind styles) are embedded (`//go:embed`).
-- **No External OAuth / Auth0 Needed**: The built-in HMAC token system authenticates offline users on private VPCs and on-premise servers.
-- **Session Expiry & Invalidation**: Sessions expire after 24 hours or immediately when clicking the **Lock Session** (`/docs/logout`) button in the navbar.
-
 ---
 
 ## 🛠️ Configuration Reference
@@ -327,9 +352,9 @@ apidocs.MountNetHTTP(mux, cfg)
 
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| **`/`** | `GET` | Developer Landing Hub with README.md markdown reader and live endpoint statistics. |
+| **`/`** | `GET` | Developer Landing Hub with README.md markdown reader, Safe Mode secret redactor, and live endpoint stats. |
 | **`/guide`** | `GET` | ReadMe-style interactive Developer Reference powered by Scalar (supports deep links like `#description/introduction`). |
-| **`/docs`** | `GET` | Interactive Swagger UI Sandbox with QA checklist overlay, scope filters, and global search. |
+| **`/docs`** | `GET` | Interactive Swagger UI Sandbox with QA checklist overlay, scope filters, and auto token/tenant interceptor. |
 | **`/docs/nav`** | `GET` | JSON endpoint delivering unified navigation links, brand titles, and menu structure. |
 | **`/docs/readme`** | `GET` | Returns the raw project `README.md` markdown content. |
 | **`/docs/login`** | `GET/POST` | Password login gate with HMAC session cookie authentication. |
@@ -337,7 +362,7 @@ apidocs.MountNetHTTP(mux, cfg)
 | **`/docs/swagger.json`** | `GET` | Dynamic OpenAPI JSON spec (supports `?module=...` and `?tag=...`). |
 | **`/docs/qa/data`** | `GET` | Returns all recorded QA test statuses and comments across the team. |
 | **`/docs/qa/record`** | `POST` | Upserts a test status (`passed`, `failed`, `retest`, `untested`) and comment. |
-| **`/docs/qa/report`** | `GET` | Live formatted Markdown QA report table (`?format=json` supported). |
+| **`/docs/qa/report`** | `GET` | Live formatted Markdown and Excel (`.csv`) QA report table. |
 | **`/docs/qa/reset`** | `POST` | Clears all QA test data on the server to start a fresh sprint. |
 | **`/dashboard`** | `GET` | System health and API status overview dashboard. |
 
@@ -347,13 +372,13 @@ apidocs.MountNetHTTP(mux, cfg)
 
 The built-in QA Suite allows engineering and QA teams to review APIs collaboratively:
 
-1. **In-Line Status Badges & Comments**: Enable **QA Mode** in the sandbox header to interact directly with endpoints.
+1. **In-Endpoint Status Badges & Comment Previews**: Clean status pill next to each endpoint method with note snippet tooltips.
 2. **Dedicated QA Sprint Report Modal**: Click **QA Report** to view testing completion metrics, filter endpoints by status, and search test comments.
 3. **📊 1-Click Excel (.csv) & Markdown Audit Reports**:
    - **Export to Excel (`.csv`)**: One-click download formatted with UTF-8 BOM and RFC 4180 escaping for instant spreadsheet opening in Microsoft Excel or Google Sheets.
    - **Download Markdown (`.md`)**: Formatted Markdown audit table ready to paste into GitHub Issues, PRs, or Jira.
    - **REST API Automation**: Download reports programmatically via `GET /docs/qa/report?format=csv` or `GET /docs/qa/report?format=excel`.
-4. **Endpoint Inspector Modal**: Click **Inspect** to review endpoint details, toggle statuses (`Passed`, `Needs Retest`, `Failed / Bug Found`, `Untested`), document bug reproduction steps, and navigate sequentially across endpoints using **Previous** / **Next** controls.
+4. **Endpoint Inspector Modal**: Click **QA** on any endpoint to review details, toggle statuses (`Passed`, `Needs Retest`, `Failed / Bug Found`, `Untested`), view code snippets, document bug reproduction steps, and navigate sequentially across endpoints using **Previous** / **Next** controls.
 
 ---
 
@@ -389,8 +414,6 @@ Download the precompiled single binary release and run:
 
 ## 📁 Recommended Project Layout & Modular OpenAPI Paths
 
-To keep your backend codebase organized and maintainable as your API grows to hundreds of endpoints, we recommend structuring your documentation folder like this:
-
 ```text
 your-project/
 ├── cmd/api/main.go
@@ -405,93 +428,6 @@ your-project/
 │       ├── billing.json      # Invoices & wallet payment routes
 │       └── messaging.json    # Core business API routes
 ```
-
-### 💡 Why Split into `docs/paths/*.json`?
-1. **Zero Merge Conflicts**: When multiple developers or teams add new endpoints in the same sprint, they edit separate files under `paths/` instead of conflicting on a 10,000-line `swagger.json`.
-2. **Modular Tag Mapping**: Easily map `paths/` domains to shorthand query filters in `apidocs.Mount()` (e.g. `?module=billing` or `?tag=Messaging`).
-3. **Automated Merging**: `go-apidocs` automatically resolves and merges modular schemas and paths during runtime filtering!
-
----
-
-## 🤝 Collaboration & Contributor Roadmap
-
-We believe API documentation shouldn't just be static HTML—it should be a **collaborative workspace** connecting backend engineers, frontend developers, QA testers, and product managers.
-
-Whether you want to contribute in **Go**, **TypeScript / React**, **UI/UX Design**, or **Documentation**, here is where we're headed and where we need your help:
-
-### 🗺️ High-Impact Contribution Areas:
-
-#### 1. 🌐 Multi-Router Ecosystem Adapters
-Expand framework coverage beyond Fiber, Chi, and Gin:
-- [x] **Gin Adapter** (`github.com/Natykufsky/go-apidocs/gin` & `apidocs.MountGin(r, cfg)`)
-- [x] **Chi / net/http Adapter** (`github.com/Natykufsky/go-apidocs/chi` & `apidocs.MountChi(r, cfg)`)
-- [ ] **Echo Adapter** (`github.com/Natykufsky/go-apidocs/echo` -> `apidocs.MountEcho(e, cfg)`)
-
-#### 2. 💾 Multi-Tenant QA Persistence Backends
-Enable distributed teams to sync test results without relying only on local JSON:
-- [ ] **PostgreSQL / MySQL Driver** (stores QA test runs directly in your database via `gorm` or `sqlx`)
-- [ ] **SQLite Embedded Driver** (lightweight zero-config persistence for local containers)
-- [ ] **Redis Streams Driver** (pub/sub live test notifications across the engineering team)
-
-#### 3. 🎨 Next-Gen React UI (`/ui`)
-Extend the React 18 + TypeScript + Tailwind portal with rich tooling:
-- [x] **Scalar Developer Guide Reference** with deep linking (`/guide#description/introduction`)
-- [x] **Real-time Live Endpoint Statistics** & HTTP method distribution
-- [x] **Integrated README.md Markdown Reader** on Landing portal
-- [x] **Unified Mobile-First Navigation Header with Font Size Manager**
-- [x] **Interactive QA Endpoint Inspector & Sprint Report Modals**
-- [ ] **Interactive Webhook Simulator** (trigger test delivery payloads and inspect HMAC signatures in real time)
-- [ ] **Mock Server Simulator** (generate instant mock JSON responses directly in browser without a live backend)
-- [ ] **1-Click Postman & Insomnia Collection Exporter**
-
-#### 4. 📢 Team Notifications & CI/CD Integrations
-- [ ] **Slack & Discord Webhook Alerts** (automatically notify your dev channel when QA marks an endpoint as `🔴 FAILED / BUG`)
-- [ ] **GitHub Actions / GitLab CI Runner** (fail automated builds if untested or broken endpoints exist)
-
----
-
-### 🎨 Frontend React UI Development (`/ui`):
-The UI is built with **React 18 + Vite + TypeScript + Tailwind CSS**:
-```bash
-cd ui
-npm install
-npm run dev    # Starts hot-reloading dev server on http://localhost:3000
-npm run build  # Compiles production bundle directly into ../assets/dist/
-```
-
-### 🛠️ Step-by-Step Contribution Workflow:
-1. **Fork the Repository**: Click the `Fork` button on [GitHub](https://github.com/Natykufsky/go-apidocs).
-2. **Clone your fork**:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/go-apidocs.git
-   cd go-apidocs
-   ```
-3. **Create a Feature Branch**:
-   ```bash
-   git checkout -b feat/my-new-feature
-   ```
-4. **Commit & Push**:
-   ```bash
-   git commit -m "feat: describe your change"
-   git push origin feat/my-new-feature
-   ```
-5. **Open a Pull Request**: Submit your PR with a clear description and tests. We review and merge active PRs quickly!
-
----
-
-## 🙏 Acknowledgements & Third-Party Credits
-
-`go-apidocs` is built on top of incredible open-source tools, libraries, and frameworks. Huge thanks to their authors and maintainers:
-
-- **[Swagger UI](https://swagger.io/tools/swagger-ui/)** (`swagger-ui-react`): The industry standard interactive OpenAPI API exploration and testing sandbox.
-- **[Scalar](https://scalar.com)** (`@scalar/api-reference-react`): Beautiful, modern, multi-column interactive API reference and documentation renderer.
-- **[Fiber](https://gofiber.io/)**: Express-inspired, ultra-fast web framework built on top of Fasthttp.
-- **[Chi](https://github.com/go-chi/chi)**: Lightweight, idiomatic, and composable router for Go HTTP services.
-- **[Gin](https://gin-gonic.com/)**: Fast HTTP web framework with martini-like API for Go.
-- **[React 18](https://react.dev/) & [Vite](https://vitejs.dev/)**: Next-generation frontend framework and lightning-fast build tooling.
-- **[Tailwind CSS](https://tailwindcss.com/)**: Utility-first CSS framework for clean, responsive UI styling.
-- **[Lucide Icons](https://lucide.dev/)**: Crisp, consistent, and beautiful icon set for modern web applications.
-- **[marked](https://marked.js.org/)**: Fast, lightweight markdown parser and compiler for project `README.md` rendering.
 
 ---
 
