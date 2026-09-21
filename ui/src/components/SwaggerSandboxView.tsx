@@ -21,6 +21,7 @@ interface SwaggerSandboxViewProps {
   credentials: StoredCredentials;
   onUpdateCredentials: (creds: StoredCredentials) => void;
   onOpenCredentials: () => void;
+  maskPII?: boolean;
 }
 
 export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
@@ -38,6 +39,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
   credentials,
   onUpdateCredentials,
   onOpenCredentials,
+  maskPII = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);

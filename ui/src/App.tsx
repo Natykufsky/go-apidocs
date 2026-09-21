@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Navbar, NavConfig } from './components/Navbar';
+import { Sidebar } from './components/Sidebar';
 import { QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
 import { QAInspectModal } from './components/QAInspectModal';
@@ -85,6 +86,34 @@ export const App: React.FC = () => {
   const [snippetEndpoint, setSnippetEndpoint] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
   const [allEndpointsList, setAllEndpointsList] = useState<string[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('apidocs_sidebar_collapsed') === 'true';
+  });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+  const [activeEnv, setActiveEnv] = useState<string>('default');
+  const [maskPII, setMaskPII] = useState<boolean>(() => {
+    return localStorage.getItem('apidocs_mask_pii') === 'true';
+  });
+
+  const toggleMaskPII = () => {
+    setMaskPII((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('apidocs_mask_pii', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('apidocs_sidebar_collapsed', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // Stored Credentials state synced with localStorage
   const [credentials, setCredentials] = useState<StoredCredentials>(() => {
@@ -427,9 +456,9 @@ export const App: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Top Navbar with Workspace Switcher & Audit Button */}
-      <Navbar
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans">
+      {/* Collapsible Left Sidebar Navigation Hub */}
+      <Sidebar
         config={navConfig}
         currentPath={currentPath}
         workspaces={workspaces}
@@ -437,6 +466,10 @@ export const App: React.FC = () => {
         activeServiceId={activeServiceId}
         writesEnabled={capabilities.workspace_writes_enabled}
         securityAuditEnabled={capabilities.security_audit_enabled}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
         onSelectService={handleSelectService}
         onOpenImporter={() => setIsImporterModalOpen(true)}
         onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
@@ -444,77 +477,106 @@ export const App: React.FC = () => {
         onOpenSearch={() => setIsSearchModalOpen(true)}
         onOpenCredentials={() => setIsCredsModalOpen(true)}
         hasCredentials={hasCredentials}
+        activeModule={activeModule}
+        availableModules={availableModules}
+        onSelectModule={handleModuleChange}
+        activeEnv={activeEnv}
+        onSelectEnv={(env) => setActiveEnv(env)}
+        maskPII={maskPII}
+        onToggleMaskPII={toggleMaskPII}
       />
 
-      {/* Render route views */}
-      {isGuide && <GuideView specUrl={specUrl} title={navConfig.title} credentials={credentials} />}
-      {isHome && (
-        <LandingView
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+        {/* Sleek Minimal Top Navbar */}
+        <Navbar
           config={navConfig}
+          currentPath={currentPath}
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           activeServiceId={activeServiceId}
-          writesEnabled={capabilities.workspace_writes_enabled}
           securityAuditEnabled={capabilities.security_audit_enabled}
-          onSelectService={handleSelectService}
-          onOpenImporter={() => setIsImporterModalOpen(true)}
           onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
-          onNavigate={handleNavigate}
-        />
-      )}
-      {isDashboard && <HealthView />}
-      {isSandbox && (
-        <SwaggerSandboxView
-          specUrl={specUrl}
-          activeModule={activeModule}
-          onModuleChange={handleModuleChange}
-          availableModules={availableModules}
-          qaMode={qaMode}
-          onToggleQAMode={() => setQAMode(!qaMode)}
-          onOpenQAReport={() => setIsReportOpen(true)}
-          onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
-          qaStats={calculateStats()}
-          qaData={qaData}
-          onUpdateQAData={setQAData}
-          credentials={credentials}
-          onUpdateCredentials={handleUpdateCredentials}
+          onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+          onOpenSearch={() => setIsSearchModalOpen(true)}
           onOpenCredentials={() => setIsCredsModalOpen(true)}
+          hasCredentials={hasCredentials}
         />
-      )}
-      {!isGuide && !isHome && !isDashboard && !isSandbox && (
-        <SwaggerSandboxView
-          specUrl={specUrl}
-          activeModule={activeModule}
-          onModuleChange={handleModuleChange}
-          availableModules={availableModules}
-          qaMode={qaMode}
-          onToggleQAMode={() => setQAMode(!qaMode)}
-          onOpenQAReport={() => setIsReportOpen(true)}
-          onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
-          qaStats={calculateStats()}
-          qaData={qaData}
-          onUpdateQAData={setQAData}
-          credentials={credentials}
-          onUpdateCredentials={handleUpdateCredentials}
-          onOpenCredentials={() => setIsCredsModalOpen(true)}
-        />
-      )}
 
-      {/* Unified Footer */}
-      <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 bg-white">
-        <p>
-          &copy; {new Date().getFullYear()} {navConfig.title} &bull; Powered by{' '}
-          <a
-            href="https://github.com/Natykufsky/go-apidocs"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-indigo-600 hover:underline font-semibold"
-          >
-            go-apidocs
-          </a>{' '}
-          &bull; Eng. Kufre N. Moses
-        </p>
-      </footer>
+        {/* View Router */}
+        <div className="flex-1 flex flex-col">
+          {isGuide && <GuideView specUrl={specUrl} title={navConfig.title} credentials={credentials} />}
+          {isHome && (
+            <LandingView
+              config={navConfig}
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              activeServiceId={activeServiceId}
+              writesEnabled={capabilities.workspace_writes_enabled}
+              securityAuditEnabled={capabilities.security_audit_enabled}
+              onSelectService={handleSelectService}
+              onOpenImporter={() => setIsImporterModalOpen(true)}
+              onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
+              onNavigate={handleNavigate}
+            />
+          )}
+          {isDashboard && <HealthView />}
+          {isSandbox && (
+            <SwaggerSandboxView
+              specUrl={specUrl}
+              activeModule={activeModule}
+              onModuleChange={handleModuleChange}
+              availableModules={availableModules}
+              qaMode={qaMode}
+              onToggleQAMode={() => setQAMode(!qaMode)}
+              onOpenQAReport={() => setIsReportOpen(true)}
+              onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
+              qaStats={calculateStats()}
+              qaData={qaData}
+              onUpdateQAData={setQAData}
+              credentials={credentials}
+              onUpdateCredentials={handleUpdateCredentials}
+              onOpenCredentials={() => setIsCredsModalOpen(true)}
+              maskPII={maskPII}
+            />
+          )}
+          {!isGuide && !isHome && !isDashboard && !isSandbox && (
+            <SwaggerSandboxView
+              specUrl={specUrl}
+              activeModule={activeModule}
+              onModuleChange={handleModuleChange}
+              availableModules={availableModules}
+              qaMode={qaMode}
+              onToggleQAMode={() => setQAMode(!qaMode)}
+              onOpenQAReport={() => setIsReportOpen(true)}
+              onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
+              qaStats={calculateStats()}
+              qaData={qaData}
+              onUpdateQAData={setQAData}
+              credentials={credentials}
+              onUpdateCredentials={handleUpdateCredentials}
+              onOpenCredentials={() => setIsCredsModalOpen(true)}
+              maskPII={maskPII}
+            />
+          )}
+        </div>
+
+        {/* Unified Footer */}
+        <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 bg-white mt-auto">
+          <p>
+            &copy; {new Date().getFullYear()} {navConfig.title} &bull; Powered by{' '}
+            <a
+              href="https://github.com/Natykufsky/go-apidocs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-600 hover:underline font-semibold"
+            >
+              go-apidocs
+            </a>{' '}
+            &bull; Eng. Kufre N. Moses
+          </p>
+        </footer>
+      </div>
 
       {/* Mac Glassmorphic Spotlight Search Modal */}
       <SpotlightSearchModal
