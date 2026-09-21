@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/gofiber/fiber/v2 v2.52.15
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

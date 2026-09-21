@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Navbar, NavConfig } from './components/Navbar';
 import { QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
@@ -6,11 +6,22 @@ import { QAInspectModal } from './components/QAInspectModal';
 import { SpotlightSearchModal } from './components/SpotlightSearchModal';
 import { CredentialManagerModal, StoredCredentials } from './components/CredentialManagerModal';
 import { CodeSnippetModal } from './components/CodeSnippetModal';
+import { SchemaImporterModal } from './components/SchemaImporterModal';
+import { SecurityAuditModal } from './components/SecurityAuditModal';
+import { Workspace } from './components/WorkspaceSwitcher';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
 import { LandingView } from './components/LandingView';
 import { HealthView } from './components/HealthView';
 import { SwaggerSandboxView } from './components/SwaggerSandboxView';
+
+interface Capabilities {
+  workspaces_enabled: boolean;
+  workspace_writes_enabled: boolean;
+  security_audit_enabled: boolean;
+  remote_fetch_enabled: boolean;
+  max_spec_bytes: number;
+}
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname || '/');
@@ -27,6 +38,40 @@ export const App: React.FC = () => {
     ],
   });
 
+  const [capabilities, setCapabilities] = useState<Capabilities>({
+    workspaces_enabled: true,
+    workspace_writes_enabled: false,
+    security_audit_enabled: false,
+    remote_fetch_enabled: false,
+    max_spec_bytes: 5 * 1024 * 1024,
+  });
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([
+    {
+      id: 'default',
+      name: 'Default Workspace',
+      icon: '📁',
+      services: [
+        {
+          id: 'default',
+          title: 'Main API',
+          version: '1.0.0',
+          icon: '⚡',
+        },
+      ],
+    },
+  ]);
+
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('ws') || localStorage.getItem('apidocs_active_ws') || 'default';
+  });
+
+  const [activeServiceId, setActiveServiceId] = useState<string>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('svc') || localStorage.getItem('apidocs_active_svc') || 'default';
+  });
+
   const [activeModule, setActiveModule] = useState<string>('all');
   const [availableModules, setAvailableModules] = useState<string[]>([]);
   const [qaMode, setQAMode] = useState<boolean>(true);
@@ -34,6 +79,8 @@ export const App: React.FC = () => {
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
   const [isCredsModalOpen, setIsCredsModalOpen] = useState<boolean>(false);
+  const [isImporterModalOpen, setIsImporterModalOpen] = useState<boolean>(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [snippetEndpoint, setSnippetEndpoint] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
@@ -100,38 +147,83 @@ export const App: React.FC = () => {
     } catch (e) {}
   };
 
-  // Handle initial search params (?module=... or ?tag=...)
+  // Fetch capabilities from backend
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const mod = urlParams.get('module') || urlParams.get('tag');
-    if (mod) {
-      setActiveModule(mod);
-      setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
-    }
-
-    const handleImportEvent = (e: any) => {
-      if (e.detail) {
-        setSpecUrl(e.detail);
-        setActiveModule('imported');
-      }
-    };
-    window.addEventListener('apidocs:import_spec', handleImportEvent);
-    return () => window.removeEventListener('apidocs:import_spec', handleImportEvent);
+    fetch('/docs/capabilities')
+      .then((res) => res.json())
+      .then((data: Capabilities) => {
+        if (data) setCapabilities(data);
+      })
+      .catch(() => {});
   }, []);
 
-  // Handle browser navigation history (back/forward)
+  // Fetch workspaces list from backend
+  const refreshWorkspaces = useCallback(() => {
+    fetch('/docs/workspaces')
+      .then((res) => res.json())
+      .then((data: Workspace[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setWorkspaces(data);
+          // Auto-select if active is missing
+          const wsExists = data.some((w) => w.id === activeWorkspaceId);
+          if (!wsExists && data[0]) {
+            setActiveWorkspaceId(data[0].id);
+            if (data[0].services[0]) {
+              setActiveServiceId(data[0].services[0].id);
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    refreshWorkspaces();
+  }, [refreshWorkspaces]);
+
+  // Compute Spec URL based on active workspace and service
+  const updateSpecUrl = useCallback((ws: string, svc: string, mod: string) => {
+    let url = `/docs/swagger.json?ws=${encodeURIComponent(ws)}&svc=${encodeURIComponent(svc)}`;
+    if (mod && mod !== 'all' && mod !== 'imported') {
+      url += `&module=${encodeURIComponent(mod)}`;
+    }
+    setSpecUrl(url);
+  }, []);
+
+  // Handle Workspace & Service Selection
+  const handleSelectService = (wsId: string, svcId: string) => {
+    setActiveWorkspaceId(wsId);
+    setActiveServiceId(svcId);
+    try {
+      localStorage.setItem('apidocs_active_ws', wsId);
+      localStorage.setItem('apidocs_active_svc', svcId);
+    } catch (e) {}
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('ws', wsId);
+    url.searchParams.set('svc', svcId);
+    window.history.pushState(null, '', url.toString());
+
+    updateSpecUrl(wsId, svcId, activeModule);
+  };
+
+  // Sync Spec URL when workspace or service changes
+  useEffect(() => {
+    updateSpecUrl(activeWorkspaceId, activeServiceId, activeModule);
+  }, [activeWorkspaceId, activeServiceId, activeModule, updateSpecUrl]);
+
+  // Handle browser popstate
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname || '/');
       const urlParams = new URLSearchParams(window.location.search);
+      const ws = urlParams.get('ws');
+      const svc = urlParams.get('svc');
       const mod = urlParams.get('module') || urlParams.get('tag');
-      if (mod) {
-        setActiveModule(mod);
-        setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
-      } else if (window.location.pathname.startsWith('/docs')) {
-        setActiveModule('all');
-        setSpecUrl('/docs/swagger.json');
-      }
+
+      if (ws) setActiveWorkspaceId(ws);
+      if (svc) setActiveServiceId(svc);
+      if (mod) setActiveModule(mod);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -163,15 +255,15 @@ export const App: React.FC = () => {
       const targetModule = dummy.searchParams.get('module') || dummy.searchParams.get('tag');
 
       if (window.location.pathname !== targetPath || (targetModule && targetModule !== activeModule)) {
-        window.history.pushState(null, '', path);
+        dummy.searchParams.set('ws', activeWorkspaceId);
+        dummy.searchParams.set('svc', activeServiceId);
+        window.history.pushState(null, '', dummy.pathname + dummy.search);
         setCurrentPath(targetPath);
 
         if (targetModule) {
           setActiveModule(targetModule);
-          setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(targetModule)}`);
         } else if (targetPath.startsWith('/docs')) {
           setActiveModule('all');
-          setSpecUrl('/docs/swagger.json');
         }
       }
     } catch (e) {
@@ -182,7 +274,7 @@ export const App: React.FC = () => {
 
   // Fetch nav config from backend
   useEffect(() => {
-    fetch('/docs/nav.json')
+    fetch('/docs/nav')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load nav config');
         return res.json();
@@ -198,7 +290,7 @@ export const App: React.FC = () => {
 
   // Fetch swagger.json to extract available modules/tags and all endpoint keys
   useEffect(() => {
-    fetch('/docs/swagger.json')
+    fetch(specUrl)
       .then((res) => res.json())
       .then((swagger: any) => {
         if (swagger) {
@@ -231,11 +323,11 @@ export const App: React.FC = () => {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [specUrl]);
 
   // Fetch persisted QA test records from server
   useEffect(() => {
-    fetch('/docs/qa/data')
+    fetch(`/docs/qa/data?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data && typeof data === 'object') {
@@ -243,24 +335,12 @@ export const App: React.FC = () => {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [activeWorkspaceId, activeServiceId]);
 
   // Module filter handler
   const handleModuleChange = (mod: string) => {
     setActiveModule(mod);
-    if (mod === 'all') {
-      setSpecUrl('/docs/swagger.json');
-      if (window.location.pathname.startsWith('/docs')) {
-        window.history.replaceState(null, '', '/docs');
-      }
-    } else if (mod === 'imported') {
-      // Keep specUrl untouched
-    } else {
-      setSpecUrl(`/docs/swagger.json?module=${encodeURIComponent(mod)}`);
-      if (window.location.pathname.startsWith('/docs')) {
-        window.history.replaceState(null, '', `/docs?module=${encodeURIComponent(mod)}`);
-      }
-    }
+    updateSpecUrl(activeWorkspaceId, activeServiceId, mod);
   };
 
   // Calculate QA stats
@@ -291,7 +371,9 @@ export const App: React.FC = () => {
 
   const handleResetQA = async () => {
     try {
-      await fetch('/docs/qa/reset', { method: 'POST' });
+      await fetch(`/docs/qa/reset?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`, {
+        method: 'POST',
+      });
       setQAData({});
       setIsReportOpen(false);
     } catch (e) {}
@@ -314,7 +396,7 @@ export const App: React.FC = () => {
     setQAData(updated);
 
     try {
-      await fetch('/docs/qa/record', {
+      await fetch(`/docs/qa/record?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -346,10 +428,18 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Single, consistent, mobile-first unified header across all routes */}
+      {/* Top Navbar with Workspace Switcher & Audit Button */}
       <Navbar
         config={navConfig}
         currentPath={currentPath}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        activeServiceId={activeServiceId}
+        writesEnabled={capabilities.workspace_writes_enabled}
+        securityAuditEnabled={capabilities.security_audit_enabled}
+        onSelectService={handleSelectService}
+        onOpenImporter={() => setIsImporterModalOpen(true)}
+        onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
         onNavigate={handleNavigate}
         onOpenSearch={() => setIsSearchModalOpen(true)}
         onOpenCredentials={() => setIsCredsModalOpen(true)}
@@ -357,8 +447,21 @@ export const App: React.FC = () => {
       />
 
       {/* Render route views */}
-      {isGuide && <GuideView specUrl={specUrl} title={navConfig.title} />}
-      {isHome && <LandingView config={navConfig} onNavigate={handleNavigate} />}
+      {isGuide && <GuideView specUrl={specUrl} title={navConfig.title} credentials={credentials} />}
+      {isHome && (
+        <LandingView
+          config={navConfig}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          activeServiceId={activeServiceId}
+          writesEnabled={capabilities.workspace_writes_enabled}
+          securityAuditEnabled={capabilities.security_audit_enabled}
+          onSelectService={handleSelectService}
+          onOpenImporter={() => setIsImporterModalOpen(true)}
+          onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
+          onNavigate={handleNavigate}
+        />
+      )}
       {isDashboard && <HealthView />}
       {isSandbox && (
         <SwaggerSandboxView
@@ -435,13 +538,39 @@ export const App: React.FC = () => {
         onClear={handleClearCredentials}
       />
 
-      {/* Code Snippet Generator Modal (cURL, Go, Node, Python) */}
+      {/* Code Snippet Generator Modal */}
       <CodeSnippetModal
         isOpen={!!snippetEndpoint}
         onClose={() => setSnippetEndpoint(null)}
         endpointKey={snippetEndpoint || ''}
         credentials={credentials}
       />
+
+      {/* Pre-Flight Schema Importer Modal */}
+      {isImporterModalOpen && (
+        <SchemaImporterModal
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          maxSpecBytes={capabilities.max_spec_bytes}
+          remoteFetchEnabled={capabilities.remote_fetch_enabled}
+          onClose={() => setIsImporterModalOpen(false)}
+          onImportSuccess={(wsId, svcId) => {
+            setIsImporterModalOpen(false);
+            refreshWorkspaces();
+            handleSelectService(wsId, svcId);
+            handleNavigate('/docs');
+          }}
+        />
+      )}
+
+      {/* Cybersecurity & Compliance Audit Modal */}
+      {isSecurityModalOpen && (
+        <SecurityAuditModal
+          activeWorkspaceId={activeWorkspaceId}
+          activeServiceId={activeServiceId}
+          onClose={() => setIsSecurityModalOpen(false)}
+        />
+      )}
 
       {/* QA Report Modal */}
       <QAReportModal

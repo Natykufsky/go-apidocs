@@ -14,15 +14,28 @@ import {
   Sparkles,
   ExternalLink,
   ShieldAlert,
+  ShieldCheck,
+  Plus,
+  Zap,
   Eye,
   EyeOff,
   Copy,
+  ChevronRight,
 } from 'lucide-react';
 import { marked } from 'marked';
 import { NavConfig } from './Navbar';
+import { Workspace, APIService } from './WorkspaceSwitcher';
 
 interface LandingViewProps {
   config: NavConfig;
+  workspaces?: Workspace[];
+  activeWorkspaceId?: string;
+  activeServiceId?: string;
+  writesEnabled?: boolean;
+  securityAuditEnabled?: boolean;
+  onSelectService?: (workspaceId: string, serviceId: string) => void;
+  onOpenImporter?: () => void;
+  onOpenSecurityAudit?: () => void;
   onNavigate: (path: string) => void;
 }
 
@@ -44,8 +57,19 @@ interface SpecStats {
   version?: string;
 }
 
-export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'readme' | 'endpoints'>('readme');
+export const LandingView: React.FC<LandingViewProps> = ({
+  config,
+  workspaces = [],
+  activeWorkspaceId = 'default',
+  activeServiceId = 'default',
+  writesEnabled = false,
+  securityAuditEnabled = false,
+  onSelectService,
+  onOpenImporter,
+  onOpenSecurityAudit,
+  onNavigate,
+}) => {
+  const [activeTab, setActiveTab] = useState<'services' | 'readme' | 'endpoints'>('services');
   const [readmeContent, setReadmeContent] = useState<string>('');
   const [readmeLoading, setReadmeLoading] = useState<boolean>(true);
   const [spec, setSpec] = useState<any>(null);
@@ -53,10 +77,13 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
   const [maskConfidential, setMaskConfidential] = useState<boolean>(true);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
+  const activeWs = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0];
+
   // Fetch README.md from /docs/readme
   useEffect(() => {
     setReadmeLoading(true);
-    fetch('/docs/readme')
+    let url = `/docs/readme?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`;
+    fetch(url)
       .then((res) => {
         if (res.ok) return res.text();
         throw new Error('No readme found');
@@ -69,15 +96,16 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
         setReadmeContent('# ' + config.title + '\n\nWelcome to the developer documentation portal.');
         setReadmeLoading(false);
       });
-  }, [config.title]);
+  }, [config.title, activeWorkspaceId, activeServiceId]);
 
   // Fetch Swagger Spec for Realtime Statistics
   useEffect(() => {
-    fetch('/docs/swagger.json')
+    let url = `/docs/swagger.json?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`;
+    fetch(url)
       .then((res) => res.json())
       .then((data) => setSpec(data))
       .catch(() => {});
-  }, []);
+  }, [activeWorkspaceId, activeServiceId]);
 
   // Compute Real-time Statistics from Swagger Spec
   const stats: SpecStats = useMemo(() => {
@@ -101,7 +129,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
     let totalEndpoints = 0;
     const tagMap: Record<string, { description?: string; count: number; methods: Record<string, number> }> = {};
 
-    // Populate explicit tags from spec
     if (Array.isArray(spec.tags)) {
       spec.tags.forEach((t: any) => {
         if (t && t.name) {
@@ -114,30 +141,35 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
       });
     }
 
-    // Traverse all OpenAPI paths and operations
     for (const path in spec.paths) {
       const pathItem = spec.paths[path];
       for (const method in pathItem) {
-        const upperMethod = method.toUpperCase();
-        if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(upperMethod)) {
+        const upperM = method.toUpperCase();
+        if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'].includes(upperM)) {
           totalEndpoints++;
-          methods[upperMethod] = (methods[upperMethod] || 0) + 1;
+          methods[upperM] = (methods[upperM] || 0) + 1;
 
           const op = pathItem[method];
-          const tags: string[] = op.tags && op.tags.length > 0 ? op.tags : ['General'];
-
-          tags.forEach((tag) => {
-            if (!tagMap[tag]) {
-              tagMap[tag] = {
+          const opTags: string[] = op.tags && op.tags.length > 0 ? op.tags : ['General'];
+          opTags.forEach((tagName) => {
+            if (!tagMap[tagName]) {
+              tagMap[tagName] = {
                 count: 0,
                 methods: { GET: 0, POST: 0, PUT: 0, DELETE: 0, PATCH: 0 },
               };
             }
-            tagMap[tag].count++;
-            tagMap[tag].methods[upperMethod] = (tagMap[tag].methods[upperMethod] || 0) + 1;
+            tagMap[tagName].count++;
+            tagMap[tagName].methods[upperM] = (tagMap[tagName].methods[upperM] || 0) + 1;
           });
         }
       }
+    }
+
+    let schemaCount = 0;
+    if (spec.components && spec.components.schemas) {
+      schemaCount = Object.keys(spec.components.schemas).length;
+    } else if (spec.definitions) {
+      schemaCount = Object.keys(spec.definitions).length;
     }
 
     const tagStats: TagStat[] = Object.keys(tagMap).map((name) => ({
@@ -147,377 +179,349 @@ export const LandingView: React.FC<LandingViewProps> = ({ config, onNavigate }) 
       methods: tagMap[name].methods,
     }));
 
-    tagStats.sort((a, b) => b.count - a.count);
-
-    const schemasCount =
-      Object.keys(spec.components?.schemas || spec.definitions || {}).length;
-
     return {
       totalEndpoints,
       methods,
       totalTags: tagStats.length,
-      totalSchemas: schemasCount,
-      tagStats,
+      totalSchemas: schemaCount,
+      tagStats: tagStats.sort((a, b) => b.count - a.count),
       infoTitle: spec.info?.title,
       infoDescription: spec.info?.description,
-      version: spec.info?.version || '3.0.3',
+      version: spec.info?.version,
     };
   }, [spec]);
 
-  // Sanitize & redact confidential details from README text
-  const sanitizedReadmeText = useMemo(() => {
+  // Mask confidential strings in markdown
+  const processedReadmeHtml = useMemo(() => {
     if (!readmeContent) return '';
-    if (!maskConfidential) return readmeContent;
-
-    let text = readmeContent;
-
-    // Redact JWT secret keys, passwords, bearer tokens, AWS keys, database connection strings
-    text = text.replace(/JWT_SECRET\s*=\s*["']?[^\s"'\n]+["']?/gi, 'JWT_SECRET="********************************"');
-    text = text.replace(/DOCS_AUTH_PASS\s*=\s*["']?[^\s"'\n]+["']?/gi, 'DOCS_AUTH_PASS="****************"');
-    text = text.replace(/(password|passwd|secret|token|api_key|apikey|client_secret)\s*[:=]\s*["']?[^\s"',\n]+["']?/gi, '$1: "********"');
-    text = text.replace(/Bearer\s+ey[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g, 'Bearer eyJhbGciOi...[REDACTED_JWT]');
-    text = text.replace(/(postgres|mysql|mongodb|redis):\/\/[^:\s]+:[^@\s]+@[^\s/]+/gi, '$1://user:********@host:port');
-
-    return text;
+    let processed = readmeContent;
+    if (maskConfidential) {
+      processed = processed
+        .replace(/DOCS_AUTH_USER=[^\s\n]+/g, 'DOCS_AUTH_USER=••••••••')
+        .replace(/DOCS_AUTH_PASS=[^\s\n]+/g, 'DOCS_AUTH_PASS=••••••••')
+        .replace(/JWT_SECRET=[^\s\n]+/g, 'JWT_SECRET=••••••••')
+        .replace(/Bearer\s+ey[A-Za-z0-9-_=]+/g, 'Bearer ey••••••••')
+        .replace(/AKIA[0-9A-Z]{16}/g, 'AKIA••••••••••••••••');
+    }
+    return marked.parse(processed) as string;
   }, [readmeContent, maskConfidential]);
 
-  // Convert README Markdown to GitHub-style HTML
-  const parsedReadmeHtml = useMemo(() => {
-    if (!sanitizedReadmeText) return '';
-    try {
-      return marked.parse(sanitizedReadmeText) as string;
-    } catch (e) {
-      return `<pre class="p-4 bg-slate-900 text-white rounded-xl overflow-x-auto">${sanitizedReadmeText}</pre>`;
-    }
-  }, [sanitizedReadmeText]);
-
-  // Filtered tags for exploration
-  const filteredTags = stats.tagStats.filter((t) =>
-    t.name.toLowerCase().includes(tagFilter.toLowerCase()) ||
-    (t.description && t.description.toLowerCase().includes(tagFilter.toLowerCase()))
-  );
-
   return (
-    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8">
-      {/* Hero Header & Quick Actions */}
-      <section className="bg-gradient-to-br from-indigo-50/70 via-white to-slate-50/80 border border-slate-200/80 rounded-3xl p-6 sm:p-10 shadow-xs relative overflow-hidden">
-        <div className="max-w-4xl">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-4">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            Live Developer Portal & Documentation
-          </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-indigo-950 via-slate-900 to-slate-900 text-white pt-14 pb-16 px-4 sm:px-6 lg:px-8 border-b border-slate-800">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/15 via-transparent to-transparent pointer-events-none" />
 
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-slate-950 tracking-tight leading-tight">
-            {stats.infoTitle || config.title}
-          </h1>
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+            <div className="space-y-4 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+                <span>{activeWs?.icon || '📁'}</span>
+                <span>Workspace: {activeWs?.name || 'Default Workspace'}</span>
+                {stats.version && <span className="text-indigo-400 font-mono">v{stats.version}</span>}
+              </div>
 
-          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl">
-            {stats.infoDescription || config.subtitle || 'Explore our complete API specifications, modular guides, interactive testing sandbox, and real-time operations.'}
-          </p>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
+                {stats.infoTitle || config.title || 'API Documentation Hub'}
+              </h1>
 
-          {/* Quick Launch Buttons */}
-          <div className="flex flex-wrap items-center gap-3 mt-6">
-            <button
-              onClick={() => onNavigate('/guide')}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 flex items-center gap-2 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-            >
-              <BookOpen className="w-4 h-4" />
-              <span>Explore Developer Guide</span>
-            </button>
+              <p className="text-sm sm:text-base text-slate-300 font-normal leading-relaxed">
+                {stats.infoDescription ||
+                  config.subtitle ||
+                  'Unified microservices portal, interactive Swagger testing sandbox, and automated OWASP cybersecurity verification.'}
+              </p>
 
-            <button
-              onClick={() => onNavigate('/docs')}
-              className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs shadow-xs flex items-center gap-2 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-            >
-              <Terminal className="w-4 h-4 text-indigo-600" />
-              <span>Swagger UI Sandbox</span>
-            </button>
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/docs')}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Launch API Sandbox</span>
+                </button>
 
-            <button
-              onClick={() => onNavigate('/dashboard')}
-              className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs shadow-xs flex items-center gap-2 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-            >
-              <Activity className="w-4 h-4 text-emerald-600" />
-              <span>System Health</span>
-            </button>
+                {securityAuditEnabled && onOpenSecurityAudit && (
+                  <button
+                    type="button"
+                    onClick={onOpenSecurityAudit}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>Run Security Audit</span>
+                  </button>
+                )}
 
-            <a
-              href="/docs/swagger.json"
-              download="swagger.json"
-              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs flex items-center gap-2 transition-all transform hover:-translate-y-0.5"
-            >
-              <FileCode className="w-4 h-4 text-amber-400" />
-              <span>OpenAPI Spec</span>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* Real-Time Live Statistics Counters */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">REST Endpoints</span>
-            <Box className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-3xl font-black text-slate-900 font-mono">
-              {stats.totalEndpoints || 0}
+                {writesEnabled && onOpenImporter && (
+                  <button
+                    type="button"
+                    onClick={onOpenImporter}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 text-indigo-400" />
+                    <span>Import API Spec</span>
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="text-xs text-slate-500 font-medium mt-1">Live defined operations</div>
-          </div>
-        </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Engine Domains</span>
-            <Layers className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-3xl font-black text-emerald-600 font-mono">
-              {stats.totalTags || 0}
+            {/* Quick Metrics Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto shrink-0">
+              <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md">
+                <div className="text-2xl font-black text-white">{activeWs?.services?.length || 1}</div>
+                <div className="text-xs font-semibold text-slate-400 uppercase mt-0.5">Services</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md">
+                <div className="text-2xl font-black text-indigo-400">{stats.totalEndpoints}</div>
+                <div className="text-xs font-semibold text-slate-400 uppercase mt-0.5">Endpoints</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md">
+                <div className="text-2xl font-black text-emerald-400">{stats.totalTags}</div>
+                <div className="text-xs font-semibold text-slate-400 uppercase mt-0.5">Modules</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md">
+                <div className="text-2xl font-black text-amber-400">{stats.totalSchemas}</div>
+                <div className="text-xs font-semibold text-slate-400 uppercase mt-0.5">Schemas</div>
+              </div>
             </div>
-            <div className="text-xs text-slate-500 font-medium mt-1">Categorized services</div>
           </div>
         </div>
+      </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Data Models</span>
-            <FileText className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-3xl font-black text-amber-600 font-mono">
-              {stats.totalSchemas || 0}
-            </div>
-            <div className="text-xs text-slate-500 font-medium mt-1">JSON Schema structures</div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">OpenAPI Version</span>
-            <CheckCircle2 className="w-4 h-4 text-sky-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-3xl font-black text-sky-600 font-mono">
-              {stats.version || '3.0.3'}
-            </div>
-            <div className="text-xs text-slate-500 font-medium mt-1">Standard OAS specification</div>
-          </div>
-        </div>
-      </section>
-
-      {/* HTTP Method Breakdown Strip */}
-      {stats.totalEndpoints > 0 && (
-        <section className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
-          <div className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-            <Hash className="w-3.5 h-3.5 text-indigo-500" />
-            HTTP Methods Breakdown:
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {stats.methods.GET > 0 && (
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                GET: {stats.methods.GET}
-              </span>
-            )}
-            {stats.methods.POST > 0 && (
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                POST: {stats.methods.POST}
-              </span>
-            )}
-            {stats.methods.PUT > 0 && (
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                PUT: {stats.methods.PUT}
-              </span>
-            )}
-            {stats.methods.DELETE > 0 && (
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                DELETE: {stats.methods.DELETE}
-              </span>
-            )}
-            {stats.methods.PATCH > 0 && (
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                PATCH: {stats.methods.PATCH}
-              </span>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* View Switcher Tabs (README.md vs Live Domain Explorer) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('readme')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'readme'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Project README.md</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('endpoints')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'endpoints'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Realtime Domain & Endpoint Explorer ({stats.totalTags})</span>
-          </button>
-        </div>
-
-        {/* Confidential Redaction Toggle in README View */}
-        {activeTab === 'readme' && (
-          <div className="flex items-center gap-2">
+      {/* Main Content Area */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-20">
+        {/* Navigation Tabs */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200/90 p-1.5 flex items-center justify-between gap-2 mb-8">
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => setMaskConfidential(!maskConfidential)}
-              title="Toggle Masking of API Secrets, JWT Tokens, and Passwords in README"
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
-                maskConfidential
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 shadow-2xs'
-                  : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+              type="button"
+              onClick={() => setActiveTab('services')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'services'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              {maskConfidential ? (
-                <>
-                  <ShieldAlert className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Secrets Masked (Safe Mode)</span>
-                  <EyeOff className="w-3 h-3 text-emerald-600 ml-1" />
-                </>
-              ) : (
-                <>
-                  <Eye className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Showing Raw Secrets</span>
-                </>
-              )}
+              <Layers className="w-3.5 h-3.5" />
+              <span>Workspace Services ({activeWs?.services?.length || 1})</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('readme')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'readme'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Developer Guide</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('endpoints')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'endpoints'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Endpoints ({stats.totalEndpoints})</span>
+            </button>
+          </div>
+
+          {activeTab === 'readme' && (
+            <button
+              type="button"
+              onClick={() => setMaskConfidential(!maskConfidential)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors mr-1 cursor-pointer"
+              title="Toggle Masking Sensitive Secrets"
+            >
+              {maskConfidential ? <EyeOff className="w-3.5 h-3.5 text-indigo-600" /> : <Eye className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{maskConfidential ? 'Secrets Masked' : 'Unmasked'}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Tab 1: Workspace Services Grid */}
+        {activeTab === 'services' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900">
+                  {activeWs?.name || 'Workspace'} Microservices
+                </h2>
+                <p className="text-xs text-slate-600">
+                  Select an API to inspect endpoints, run tests in the sandbox, or execute security audits.
+                </p>
+              </div>
+
+              {writesEnabled && onOpenImporter && (
+                <button
+                  type="button"
+                  onClick={onOpenImporter}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Import Spec</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeWs?.services?.map((svc) => {
+                const isSelected = svc.id === activeServiceId;
+                return (
+                  <div
+                    key={svc.id}
+                    className={`rounded-2xl p-5 border transition-all flex flex-col justify-between space-y-4 ${
+                      isSelected
+                        ? 'bg-white border-indigo-500 shadow-md ring-2 ring-indigo-500/10'
+                        : 'bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-lg">
+                            {svc.icon || '⚡'}
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900 leading-tight">{svc.title}</h3>
+                            <span className="text-[10px] text-slate-600 font-mono">
+                              v{svc.version || '1.0.0'} • {svc.id}
+                            </span>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-bold uppercase">
+                            Active
+                          </span>
+                        )}
+                      </div>
+
+                      {svc.description && (
+                        <p className="text-xs text-slate-600 line-clamp-2">{svc.description}</p>
+                      )}
+                    </div>
+
+                    {/* Service Launch Actions */}
+                    <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onSelectService) onSelectService(activeWs.id, svc.id);
+                          onNavigate('/docs');
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Sandbox</span>
+                      </button>
+
+                      {securityAuditEnabled && onOpenSecurityAudit && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onSelectService) onSelectService(activeWs.id, svc.id);
+                            onOpenSecurityAudit();
+                          }}
+                          className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+                          title="Run Security Audit"
+                        >
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onSelectService) onSelectService(activeWs.id, svc.id);
+                          setActiveTab('readme');
+                        }}
+                        className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+                        title="View Documentation"
+                      >
+                        <BookOpen className="w-4 h-4 text-slate-600" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Add New API Card */}
+              {writesEnabled && onOpenImporter && (
+                <div
+                  onClick={onOpenImporter}
+                  className="rounded-2xl p-6 border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/30 transition-all flex flex-col items-center justify-center text-center cursor-pointer group min-h-[160px]"
+                >
+                  <Plus className="w-8 h-8 text-slate-600 group-hover:text-indigo-600 mb-2 transition-transform group-hover:scale-110" />
+                  <div className="text-xs font-bold text-slate-800">Register Another API Spec</div>
+                  <div className="text-[11px] text-slate-600 mt-0.5">Upload JSON/YAML or fetch URL</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Developer Guide Markdown */}
+        {activeTab === 'readme' && (
+          <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/90 shadow-sm">
+            {readmeLoading ? (
+              <div className="py-20 text-center text-xs font-bold text-slate-600">Loading documentation guide...</div>
+            ) : (
+              <div
+                className="prose prose-slate max-w-none prose-headings:font-bold prose-a:text-indigo-600"
+                dangerouslySetInnerHTML={{ __html: processedReadmeHtml }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Endpoints Breakdown */}
+        {activeTab === 'endpoints' && (
+          <div className="space-y-4">
+            <div className="p-4 bg-white rounded-2xl border border-slate-200/90 flex items-center gap-3">
+              <Search className="w-4 h-4 text-slate-600" />
+              <input
+                type="text"
+                placeholder="Filter endpoints by tag or path..."
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="w-full text-xs text-slate-900 placeholder-slate-600 outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {stats.tagStats
+                .filter((t) => t.name.toLowerCase().includes(tagFilter.toLowerCase()))
+                .map((tag) => (
+                  <div key={tag.name} className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">{tag.name}</span>
+                      <span className="px-2 py-0.5 bg-slate-100 rounded-md text-[10px] font-bold text-slate-700">
+                        {tag.count} operations
+                      </span>
+                    </div>
+                    {tag.description && <p className="text-[11px] text-slate-600">{tag.description}</p>}
+                    <div className="flex gap-1 pt-1">
+                      {Object.entries(tag.methods).map(([m, count]) => (
+                        <span key={m} className="px-1.5 py-0.5 rounded bg-slate-100 text-[9px] font-bold text-slate-700">
+                          {m}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
         )}
       </div>
-
-      {/* TAB 1: Render GitHub-Style README.md Container */}
-      {activeTab === 'readme' && (
-        <section className="bg-white border border-slate-200/80 rounded-3xl shadow-xs overflow-hidden">
-          {/* GitHub-Style File Header */}
-          <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2.5">
-              <FileText className="w-4 h-4 text-slate-500" />
-              <span className="font-mono text-xs font-bold text-slate-800">README.md</span>
-              <span className="text-[11px] text-slate-400 font-mono">
-                {readmeContent ? `${readmeContent.split('\n').length} lines` : ''}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(sanitizedReadmeText);
-                  setCopiedCode(true);
-                  setTimeout(() => setCopiedCode(false), 2000);
-                }}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              >
-                <Copy className="w-3.5 h-3.5 text-slate-500" />
-                <span>{copiedCode ? 'Copied Markdown!' : 'Copy Raw'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Markdown Body */}
-          <div className="p-6 sm:p-10">
-            {readmeLoading ? (
-              <div className="py-12 text-center text-slate-400 text-xs font-medium animate-pulse">
-                Loading documentation from README.md...
-              </div>
-            ) : (
-              <article
-                className="markdown-body"
-                dangerouslySetInnerHTML={{ __html: parsedReadmeHtml }}
-              />
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* TAB 2: Realtime Domain & Endpoint Explorer */}
-      {activeTab === 'endpoints' && (
-        <section className="flex flex-col gap-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-indigo-600" />
-              <span className="text-xs font-bold text-slate-800">
-                Select an engine domain to jump into Sandbox:
-              </span>
-            </div>
-
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Filter services..."
-                value={tagFilter}
-                onChange={(e) => setTagFilter(e.target.value)}
-                className="w-full sm:w-64 bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-indigo-600 transition-all font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTags.map((tag) => (
-              <div
-                key={tag.name}
-                onClick={() => onNavigate(`/docs?module=${encodeURIComponent(tag.name)}`)}
-                className="bg-white border border-slate-200/80 hover:border-indigo-500 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors text-sm">
-                      {tag.name}
-                    </h3>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700">
-                      {tag.count} endpoints
-                    </span>
-                  </div>
-
-                  {tag.description && (
-                    <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
-                      {tag.description}
-                    </p>
-                  )}
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    {Object.entries(tag.methods)
-                      .filter(([_, count]) => count > 0)
-                      .map(([method, count]) => (
-                        <span
-                          key={method}
-                          className="px-1.5 py-0.5 rounded text-[10px] font-black font-mono bg-slate-100 text-slate-700"
-                        >
-                          {method} ({count})
-                        </span>
-                      ))}
-                  </div>
-
-                  <div className="flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
-                    <span>Inspect</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 };

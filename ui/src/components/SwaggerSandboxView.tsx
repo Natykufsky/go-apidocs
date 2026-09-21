@@ -4,7 +4,7 @@ import 'swagger-ui-react/swagger-ui.css';
 import { QABar, QAStats } from './QABar';
 import { QARecord } from './QAReportModal';
 import { StoredCredentials } from './CredentialManagerModal';
-import { Filter, FlaskConical, FileSpreadsheet, KeyRound, CheckCircle2, X } from 'lucide-react';
+import { Filter, FlaskConical, FileSpreadsheet, KeyRound, CheckCircle2, X, ShieldAlert, Flame } from 'lucide-react';
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
@@ -41,13 +41,15 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'success' | 'warning'>('success');
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, type: 'success' | 'warning' = 'success') => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setToastType(type);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Sleek in-endpoint QA Button & Note Snippet Injection
+  // In-endpoint QA Button & Note Snippet Injection
   useEffect(() => {
     const injectQAPills = () => {
       const swaggerRoot = containerRef.current;
@@ -70,7 +72,6 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
           tested_at: '',
         };
 
-        // Check if pill already exists
         const existingPills = summaryEl.querySelectorAll('.qa-pill-trigger');
         if (existingPills.length > 1) {
           for (let i = 1; i < existingPills.length; i++) {
@@ -115,7 +116,6 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
           pill.style.display = qaMode ? 'flex' : 'none';
           pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
 
-          // Click handler to open QA Inspect Modal
           pill.addEventListener('click', (e) => {
             e.stopPropagation();
             if (onInspectEndpoint) {
@@ -123,7 +123,6 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
             }
           });
 
-          // Insert right before the expand arrow button in swagger summary
           const arrowBtn = summaryEl.querySelector('.opblock-summary-control');
           if (arrowBtn) {
             summaryEl.insertBefore(pill, arrowBtn);
@@ -131,7 +130,6 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
             summaryEl.appendChild(pill);
           }
         } else {
-          // Update pill visibility and content
           pill.style.display = qaMode ? 'flex' : 'none';
           pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
         }
@@ -153,7 +151,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
     };
   }, [qaMode, qaData, specUrl, onInspectEndpoint]);
 
-  // Request Interceptor: Attach stored tokens, tenant ID, entity ID & custom headers
+  // Request Interceptor
   const handleRequestInterceptor = (req: any) => {
     if (!req.headers) {
       req.headers = {};
@@ -161,27 +159,18 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
 
     const { accessToken, refreshToken, tenantId, entityId, customHeaders } = credentials;
 
-    // Attach Access Token as Bearer if not already set
     if (accessToken && !req.headers['Authorization'] && !req.headers['authorization']) {
       req.headers['Authorization'] = `Bearer ${accessToken}`;
     }
-
-    // Attach Tenant ID header
     if (tenantId && !req.headers['X-Tenant-ID'] && !req.headers['x-tenant-id']) {
       req.headers['X-Tenant-ID'] = tenantId;
     }
-
-    // Attach Entity ID header
     if (entityId && !req.headers['X-Entity-ID'] && !req.headers['x-entity-id']) {
       req.headers['X-Entity-ID'] = entityId;
     }
-
-    // Attach Refresh Token header
     if (refreshToken && !req.headers['X-Refresh-Token'] && !req.headers['x-refresh-token']) {
       req.headers['X-Refresh-Token'] = refreshToken;
     }
-
-    // Attach any user-defined Custom Headers
     if (customHeaders) {
       Object.entries(customHeaders).forEach(([k, v]) => {
         if (k && v && !req.headers[k]) {
@@ -193,54 +182,68 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
     return req;
   };
 
-  // Response Interceptor: Automatically detect & extract login tokens / tenant credentials
+  // Response Interceptor: Auto-capture tokens & detect PII / sensitive data leaks
   const handleResponseInterceptor = (res: any) => {
-    if (res && (res.status === 200 || res.status === 201) && res.data) {
+    if (res && res.data) {
       try {
-        const body = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-        if (body && typeof body === 'object') {
-          const candidate = body.data || body.payload || body.result || body;
+        const rawStr = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
 
-          const detectedAccessToken =
-            candidate.access_token ||
-            candidate.accessToken ||
-            candidate.token ||
-            candidate.jwt ||
-            candidate.bearer_token;
+        // Security / PII Leak checks
+        if (/AKIA[0-9A-Z]{16}/.test(rawStr)) {
+          showToast('⚠️ Security Alert: Potential AWS Access Key leaked in response payload!', 'warning');
+        } else if (/-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----/.test(rawStr)) {
+          showToast('🚨 Critical Security Alert: Private Key detected in response payload!', 'warning');
+        } else if (/(sql:\s*no\s*rows|pq:\s*relation|syntax\s*error\s*at\s*or\s*near)/i.test(rawStr)) {
+          showToast('⚠️ Debug Info Leak: Database query error/stack trace exposed in response.', 'warning');
+        }
 
-          const detectedRefreshToken =
-            candidate.refresh_token ||
-            candidate.refreshToken;
+        // Auto token and credential capture
+        if (res.status === 200 || res.status === 201) {
+          const body = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          if (body && typeof body === 'object') {
+            const candidate = body.data || body.payload || body.result || body;
 
-          const detectedTenantId =
-            candidate.tenant_id ||
-            candidate.tenantId ||
-            candidate.tenant;
+            const detectedAccessToken =
+              candidate.access_token ||
+              candidate.accessToken ||
+              candidate.token ||
+              candidate.jwt ||
+              candidate.bearer_token;
 
-          const detectedEntityId =
-            candidate.entity_id ||
-            candidate.entityId ||
-            candidate.entity;
+            const detectedRefreshToken =
+              candidate.refresh_token ||
+              candidate.refreshToken;
 
-          if (detectedAccessToken || detectedRefreshToken || detectedTenantId || detectedEntityId) {
-            const updated: StoredCredentials = {
-              ...credentials,
-              accessToken: detectedAccessToken || credentials.accessToken,
-              refreshToken: detectedRefreshToken || credentials.refreshToken,
-              tenantId: detectedTenantId ? String(detectedTenantId) : credentials.tenantId,
-              entityId: detectedEntityId ? String(detectedEntityId) : credentials.entityId,
-              updatedAt: new Date().toLocaleTimeString(),
-            };
+            const detectedTenantId =
+              candidate.tenant_id ||
+              candidate.tenantId ||
+              candidate.tenant;
 
-            onUpdateCredentials(updated);
+            const detectedEntityId =
+              candidate.entity_id ||
+              candidate.entityId ||
+              candidate.entity;
 
-            const capturedList: string[] = [];
-            if (detectedAccessToken) capturedList.push('Access Token');
-            if (detectedRefreshToken) capturedList.push('Refresh Token');
-            if (detectedTenantId) capturedList.push(`Tenant (${detectedTenantId})`);
-            if (detectedEntityId) capturedList.push(`Entity (${detectedEntityId})`);
+            if (detectedAccessToken || detectedRefreshToken || detectedTenantId || detectedEntityId) {
+              const updated: StoredCredentials = {
+                ...credentials,
+                accessToken: detectedAccessToken || credentials.accessToken,
+                refreshToken: detectedRefreshToken || credentials.refreshToken,
+                tenantId: detectedTenantId ? String(detectedTenantId) : credentials.tenantId,
+                entityId: detectedEntityId ? String(detectedEntityId) : credentials.entityId,
+                updatedAt: new Date().toLocaleTimeString(),
+              };
 
-            showToast(`🔐 Auto-Captured & Synced: ${capturedList.join(', ')}`);
+              onUpdateCredentials(updated);
+
+              const capturedList: string[] = [];
+              if (detectedAccessToken) capturedList.push('Access Token');
+              if (detectedRefreshToken) capturedList.push('Refresh Token');
+              if (detectedTenantId) capturedList.push(`Tenant (${detectedTenantId})`);
+              if (detectedEntityId) capturedList.push(`Entity (${detectedEntityId})`);
+
+              showToast(`🔐 Auto-Captured & Synced: ${capturedList.join(', ')}`, 'success');
+            }
           }
         }
       } catch (e) {}
@@ -257,10 +260,20 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col" ref={containerRef}>
-      {/* Toast notification for auto-captured credentials */}
+      {/* Toast notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-2xl border border-indigo-500/30 flex items-center gap-2.5 backdrop-blur-md animate-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div
+          className={`fixed bottom-6 right-6 z-50 text-xs font-semibold px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-2.5 backdrop-blur-md animate-in slide-in-from-bottom-5 ${
+            toastType === 'warning'
+              ? 'bg-amber-950/95 text-amber-100 border-amber-500/50'
+              : 'bg-slate-900/95 text-white border-indigo-500/30'
+          }`}
+        >
+          {toastType === 'warning' ? (
+            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span>{toastMessage}</span>
           <button onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-white">
             <X className="w-3.5 h-3.5" />
@@ -268,7 +281,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
         </div>
       )}
 
-      {/* Streamlined, Minimalist Sub-header Toolbar (No redundant search bar) */}
+      {/* Sub-header Toolbar */}
       <div className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-16 z-40 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
           {/* Left: Scope Module Selector */}
@@ -293,7 +306,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
             )}
           </div>
 
-          {/* Right: Actions (Tokens & Headers, QA Mode, QA Report, Import Spec) */}
+          {/* Right: Actions */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Credentials & Tokens Manager */}
             <button
@@ -341,45 +354,11 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
               <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
               <span>QA Report</span>
             </button>
-
-            {/* In-Browser OpenAPI Spec File / URL Importer */}
-            <label
-              title="Import local swagger.json or openapi.json directly into sandbox"
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-            >
-              <span>📥 Import Spec</span>
-              <input
-                type="file"
-                accept=".json,.yaml,.yml"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                      try {
-                        const content = event.target?.result as string;
-                        JSON.parse(content);
-                        const blob = new Blob([content], { type: 'application/json' });
-                        const objUrl = URL.createObjectURL(blob);
-                        onModuleChange('imported');
-                        window.history.replaceState(null, '', '/docs?imported=true');
-                        const customEvent = new CustomEvent('apidocs:import_spec', { detail: objUrl });
-                        window.dispatchEvent(customEvent);
-                      } catch (err) {
-                        alert('Invalid OpenAPI/Swagger JSON file.');
-                      }
-                    };
-                    reader.readAsText(file);
-                  }
-                }}
-              />
-            </label>
           </div>
         </div>
       </div>
 
-      {/* QA Stats Bar if QA mode is active */}
+      {/* QA Stats Bar */}
       {qaMode && <QABar stats={qaStats} />}
 
       {/* Main Swagger Explorer */}
