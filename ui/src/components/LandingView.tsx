@@ -36,6 +36,9 @@ import {
   PlayCircle,
   Globe,
   Radio,
+  Users,
+  Building,
+  Target,
 } from 'lucide-react';
 import { marked } from 'marked';
 import { NavConfig } from './Navbar';
@@ -72,11 +75,58 @@ interface SpecStats {
   version?: string;
 }
 
-const FRAMEWORK_SNIPPETS: Record<string, { title: string; filename: string; code: string }> = {
-  nethttp: {
-    title: 'net/http',
-    filename: 'main.go',
-    code: `package main
+const AUDIENCE_PERSONAS = [
+  {
+    id: 'backend',
+    role: 'Backend Engineers & Architects',
+    badge: 'Core Engine',
+    icon: '⚡',
+    description: 'Instant developer documentation and live Swagger sandbox with zero external dependencies.',
+    points: [
+      'Pure Go standard library & embed.FS — zero npm/node runtimes',
+      'One-line initialization for native HTTP servers',
+      'Multi-workspace & microservices orchestration out-of-the-box',
+    ],
+  },
+  {
+    id: 'security',
+    role: 'DevSecOps & Security QA',
+    badge: 'OWASP Top 10',
+    icon: '🛡️',
+    description: 'Proactive API vulnerability scanning and automated compliance verification.',
+    points: [
+      'Static specification scanner detecting BOLA, IDOR & unauthenticated routes',
+      'Multi-vector client-side fuzzing (SQLi, NoSQL, SSRF, Command Injection)',
+      'Automated RFC 4180 Excel & Markdown audit reporting',
+    ],
+  },
+  {
+    id: 'qa',
+    role: 'QA Automation Engineers',
+    badge: 'AI Synthesis',
+    icon: '🤖',
+    description: 'Multi-LLM test generation and live assertion execution runner.',
+    points: [
+      'Synthesizes edge cases, auth validation & boundary tests in seconds',
+      'NVIDIA NIM (DeepSeek v4.1), OpenAI, Anthropic, or 100% offline Local Ollama',
+      'Batch test runner with live status and assertion inspectors',
+    ],
+  },
+  {
+    id: 'saas',
+    role: 'B2B SaaS Platform Teams',
+    badge: 'Multi-Tenant',
+    icon: '🏢',
+    description: 'Enterprise tenant isolation, usage limits, and subscription billing.',
+    points: [
+      'Subdomain & API-Key organization routing with isolated quotas',
+      'Custom white-label branding, custom CSS & dynamic themes',
+      'HMAC-verified Stripe webhook billing integration',
+    ],
+  },
+];
+
+const CODE_INTEGRATION_SNIPPET = `package main
 
 import (
     "net/http"
@@ -86,83 +136,17 @@ import (
 func main() {
     mux := http.NewServeMux()
 
-    // ⚡ Mount full-featured documentation & QA portal in 1 line
+    // ⚡ Mount API documentation, Swagger sandbox & QA portal in 1 line
     apidocs.MountNetHTTP(mux, apidocs.Config{
-        Title:        "Acme Cloud Core API",
-        SpecFilePath: "./docs/swagger.json",
-        EnableWorkspaces: true,
+        Title:               "Acme Cloud Core API",
+        Subtitle:            "Developer Reference & Automated QA Hub",
+        SpecFilePath:        "./docs/swagger.json",
+        EnableWorkspaces:    true,
         EnableSecurityAudit: true,
     })
 
     http.ListenAndServe(":8080", mux)
-}`,
-  },
-  gin: {
-    title: 'Gin Gonic',
-    filename: 'server.go',
-    code: `package main
-
-import (
-    "github.com/gin-gonic/gin"
-    "github.com/Natykufsky/go-apidocs"
-)
-
-func main() {
-    r := gin.Default()
-
-    apidocs.MountGin(r, apidocs.Config{
-        Title:        "Fintech Payment Gateway",
-        SpecFilePath: "./swagger.json",
-        EnableWorkspaces: true,
-    })
-
-    r.Run(":8080")
-}`,
-  },
-  fiber: {
-    title: 'Fiber v2',
-    filename: 'app.go',
-    code: `package main
-
-import (
-    "github.com/gofiber/fiber/v2"
-    "github.com/Natykufsky/go-apidocs"
-)
-
-func main() {
-    app := fiber.New()
-
-    apidocs.MountFiber(app, apidocs.Config{
-        Title:        "High-Throughput Microservice",
-        SpecFilePath: "./swagger.json",
-    })
-
-    app.Listen(":8080")
-}`,
-  },
-  chi: {
-    title: 'go-chi',
-    filename: 'router.go',
-    code: `package main
-
-import (
-    "net/http"
-    "github.com/go-chi/chi/v5"
-    "github.com/Natykufsky/go-apidocs"
-)
-
-func main() {
-    r := chi.NewRouter()
-
-    apidocs.MountChi(r, apidocs.Config{
-        Title:        "Enterprise Ledger Service",
-        SpecFilePath: "./docs/swagger.json",
-    })
-
-    http.ListenAndServe(":8080", r)
-}`,
-  },
-};
+}`;
 
 export const LandingView: React.FC<LandingViewProps> = ({
   config,
@@ -176,8 +160,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
   onOpenSecurityAudit,
   onNavigate,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'guide' | 'endpoints'>('overview');
-  const [selectedFramework, setSelectedFramework] = useState<string>('nethttp');
+  const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'audience' | 'guide' | 'endpoints'>('overview');
   const [readmeContent, setReadmeContent] = useState<string>('');
   const [readmeLoading, setReadmeLoading] = useState<boolean>(true);
   const [spec, setSpec] = useState<any>(null);
@@ -454,6 +437,19 @@ export const LandingView: React.FC<LandingViewProps> = ({
 
             <button
               type="button"
+              onClick={() => setActiveTab('audience')}
+              className={`pb-3 px-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'audience'
+                  ? 'border-slate-950 dark:border-white text-slate-950 dark:text-white'
+                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Target Audience & Teams</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('services')}
               className={`pb-3 px-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'services'
@@ -524,10 +520,9 @@ export const LandingView: React.FC<LandingViewProps> = ({
                   Engineered strictly with Go's standard library and embed FS. No Node.js runtime, no CGO bindings, and zero runtime dependencies for lightning fast boot times.
                 </p>
                 <div className="pt-2 flex items-center gap-2 text-[11px] font-mono text-slate-500">
-                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold">net/http</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold">gin</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold">fiber</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold">chi</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold">Standard Library</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold">embed.FS</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold">Self-Contained</span>
                 </div>
               </div>
 
@@ -583,52 +578,40 @@ export const LandingView: React.FC<LandingViewProps> = ({
               </div>
             </div>
 
-            {/* Interactive 1-Minute Framework Integration */}
+            {/* Direct 1-Minute Go Integration Snippet */}
             <div className="p-6 rounded-3xl bg-white dark:bg-[#0d121f] border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-950 dark:text-white">
-                    Drop-in Go Framework Integration
+                    Drop-in Go Integration
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Mount the portal on any HTTP router with full type safety and zero boilerplate.
+                    Mount the portal on any HTTP server with full type safety and zero boilerplate.
                   </p>
                 </div>
 
-                {/* Framework Selector Tabs */}
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                  {Object.keys(FRAMEWORK_SNIPPETS).map((fw) => (
-                    <button
-                      key={fw}
-                      type="button"
-                      onClick={() => setSelectedFramework(fw)}
-                      className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-                        selectedFramework === fw
-                          ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-2xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                      }`}
-                    >
-                      {FRAMEWORK_SNIPPETS[fw].title}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300">
+                    Go Standard Library
+                  </span>
                 </div>
               </div>
 
               {/* Code Snippet Container */}
               <div className="relative rounded-2xl bg-slate-950 text-slate-200 p-4 font-mono text-xs overflow-x-auto border border-slate-800">
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800 text-slate-400 text-[11px]">
-                  <span>{FRAMEWORK_SNIPPETS[selectedFramework].filename}</span>
+                  <span>main.go</span>
                   <button
                     type="button"
-                    onClick={() => handleCopy(FRAMEWORK_SNIPPETS[selectedFramework].code, 'snippet')}
+                    onClick={() => handleCopy(CODE_INTEGRATION_SNIPPET, 'snippet')}
                     className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
                   >
                     {copiedKey === 'snippet' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'snippet' ? 'Copied' : 'Copy'}</span>
+                    <span>{copiedKey === 'snippet' ? 'Copied' : 'Copy Code'}</span>
                   </button>
                 </div>
                 <pre className="text-slate-300 leading-relaxed font-mono">
-                  <code>{FRAMEWORK_SNIPPETS[selectedFramework].code}</code>
+                  <code>{CODE_INTEGRATION_SNIPPET}</code>
                 </pre>
               </div>
             </div>
@@ -636,7 +619,66 @@ export const LandingView: React.FC<LandingViewProps> = ({
           </div>
         )}
 
-        {/* TAB 2: WORKSPACE MICROSERVICES */}
+        {/* TAB 2: TARGET AUDIENCE & PERSONAS */}
+        {activeTab === 'audience' && (
+          <div className="space-y-6">
+            <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+              <h2 className="text-base font-bold text-slate-950 dark:text-white">
+                Engineered for Modern Software Teams
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Whether you are crafting high-throughput microservices, auditing financial APIs, or managing SaaS quotas, go-apidocs scales to your role.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {AUDIENCE_PERSONAS.map((persona) => (
+                <div
+                  key={persona.id}
+                  className="p-6 rounded-2xl bg-white dark:bg-[#0d121f] border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-3 flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">{persona.icon}</span>
+                        <h3 className="text-sm font-bold text-slate-950 dark:text-white">{persona.role}</h3>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold">
+                        {persona.badge}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      {persona.description}
+                    </p>
+
+                    <ul className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                      {persona.points.map((pt, idx) => (
+                        <li key={idx} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{pt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="pt-4">
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('/docs')}
+                      className="w-full py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold transition-all border border-slate-200/70 dark:border-slate-700/80 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Explore {persona.badge} Features</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: WORKSPACE MICROSERVICES */}
         {activeTab === 'services' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -756,7 +798,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
           </div>
         )}
 
-        {/* TAB 3: ENDPOINTS DIRECTORY */}
+        {/* TAB 4: ENDPOINTS DIRECTORY */}
         {activeTab === 'endpoints' && (
           <div className="space-y-4">
             <div className="p-3.5 bg-white dark:bg-[#0d121f] rounded-2xl border border-slate-200/90 dark:border-slate-800 flex items-center gap-3 shadow-xs">
@@ -795,7 +837,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
           </div>
         )}
 
-        {/* TAB 4: DEVELOPER GUIDE */}
+        {/* TAB 5: DEVELOPER GUIDE */}
         {activeTab === 'guide' && (
           <div className="bg-white dark:bg-[#0d121f] rounded-3xl p-6 sm:p-10 border border-slate-200/90 dark:border-slate-800 shadow-xs">
             {readmeLoading ? (
