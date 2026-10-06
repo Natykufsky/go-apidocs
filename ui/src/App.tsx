@@ -9,6 +9,7 @@ import { CredentialManagerModal, StoredCredentials } from './components/Credenti
 import { CodeSnippetModal } from './components/CodeSnippetModal';
 import { SchemaImporterModal } from './components/SchemaImporterModal';
 import { SecurityAuditModal } from './components/SecurityAuditModal';
+import { AITestGeneratorModal, AITestCase } from './components/AITestGeneratorModal';
 import { Workspace } from './components/WorkspaceSwitcher';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
@@ -84,6 +85,7 @@ export const App: React.FC = () => {
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [snippetEndpoint, setSnippetEndpoint] = useState<string | null>(null);
+  const [aiTestEndpoint, setAiTestEndpoint] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
   const [allEndpointsList, setAllEndpointsList] = useState<string[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -494,6 +496,7 @@ export const App: React.FC = () => {
         onSelectService={handleSelectService}
         onOpenImporter={() => setIsImporterModalOpen(true)}
         onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
+        onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
         onNavigate={handleNavigate}
         onOpenSearch={() => setIsSearchModalOpen(true)}
         onOpenCredentials={() => setIsCredsModalOpen(true)}
@@ -521,6 +524,7 @@ export const App: React.FC = () => {
           onSelectService={handleSelectService}
           onOpenImporter={() => setIsImporterModalOpen(true)}
           onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
+          onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
           onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
           onOpenSearch={() => setIsSearchModalOpen(true)}
           onOpenCredentials={() => setIsCredsModalOpen(true)}
@@ -684,6 +688,23 @@ export const App: React.FC = () => {
         onSaveRecord={handleSaveInspectRecord}
         onSelectEndpoint={(ep) => setInspectEndpoint(ep)}
         onOpenSnippetGenerator={(ep) => setSnippetEndpoint(ep)}
+        onOpenAIGenerator={(ep) => setAiTestEndpoint(ep)}
+      />
+
+      {/* AI DeepSeek Test Suite Generator Modal */}
+      <AITestGeneratorModal
+        isOpen={!!aiTestEndpoint}
+        onClose={() => setAiTestEndpoint(null)}
+        endpointKey={aiTestEndpoint || ''}
+        onLoadIntoSandbox={(tc) => {
+          // If body exists, store temporary sandbox preload payload
+          if (tc.request_body) {
+            try {
+              sessionStorage.setItem('apidocs_sandbox_preload', JSON.stringify(tc.request_body));
+            } catch (e) {}
+          }
+          handleNavigate('/docs');
+        }}
       />
     </div>
   );

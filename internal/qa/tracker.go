@@ -1,6 +1,7 @@
-package apidocs
+package qa
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,25 +12,30 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+
+	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
+	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
 )
 
-// EndpointRecord holds the QA review and test status of an individual endpoint.
+// EndpointRecord holds the QA review, test status, and AI-generated test suite for an endpoint.
 type EndpointRecord struct {
-	EndpointKey string `json:"endpoint_key"` // e.g., "GET /api/v1/entities"
-	Endpoint    string `json:"endpoint,omitempty"`
-	Status      string `json:"status"` // "passed", "failed", "retest", "untested"
-	Comment     string `json:"comment"`
-	Tester      string `json:"tester"`
-	TestedAt    string `json:"tested_at"`
+	EndpointKey string               `json:"endpoint_key"` // e.g., "GET /api/v1/entities"
+	Endpoint    string               `json:"endpoint,omitempty"`
+	Status      string               `json:"status"` // "passed", "failed", "retest", "untested"
+	Comment     string               `json:"comment"`
+	Tester      string               `json:"tester"`
+	TestedAt    string               `json:"tested_at"`
+	AISuite     *aiDomain.TestSuite  `json:"ai_suite,omitempty"`
 }
 
 type QATracker struct {
 	storagePath string
 	title       string
+	llmClient   aiPort.LLMClientPort
 	mu          sync.RWMutex
 }
 
-func newQATracker(storagePath, title string) *QATracker {
+func NewQATracker(storagePath, title string, llmClient aiPort.LLMClientPort) *QATracker {
 	if storagePath == "" {
 		storagePath = "./docs/qa_tracker.json"
 	}
@@ -40,6 +46,7 @@ func newQATracker(storagePath, title string) *QATracker {
 	return &QATracker{
 		storagePath: storagePath,
 		title:       title,
+		llmClient:   llmClient,
 	}
 }
 
@@ -162,8 +169,7 @@ func (q *QATracker) BuildCSVReport() string {
 	q.mu.RUnlock()
 
 	var sb strings.Builder
-	// UTF-8 BOM for Microsoft Excel auto-detection
-	sb.WriteString("\xEF\xBB\xBF")
+	sb.WriteString("\xEF\xBB\xBF") // UTF-8 BOM
 	sb.WriteString("Method & Endpoint,Status,Tester,Tested At,QA Comments / Notes\r\n")
 
 	for ep, item := range data {
@@ -332,4 +338,119 @@ func (q *QATracker) HandleGetReport(c *fiber.Ctx) error {
 
 	c.Set("Content-Type", "text/markdown; charset=utf-8")
 	return c.SendString(reportStr)
+}
+
+type AIGenerateRequest struct {
+	EndpointKey  string `json:"endpoint_key"`
+	SpecJSON     string `json:"spec_json"`
+	CustomPrompt string `json:"custom_prompt,omitempty"`
+}
+
+// HandleGenerateAITestsHTTP generates test cases using the LLM for net/http.
+func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if q.llmClient == nil || !q.llmClient.IsAvailable() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": "NVIDIA AI service is not configured. Please set the NVIDIA_API_KEY environment variable or configure Config.NVIDIA.APIKey.",
+		})
+		return
+	}
+
+	var req AIGenerateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	if req.EndpointKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "endpoint_key is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+
+	suite, err := q.llmClient.GenerateTests(ctx, aiPort.GenerateOptions{
+		EndpointKey:  req.EndpointKey,
+		SpecJSON:     req.SpecJSON,
+		CustomPrompt: req.CustomPrompt,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "AI test generation failed: " + err.Error()})
+		return
+	}
+
+	q.mu.Lock()
+	data := q.loadData()
+	rec := data[req.EndpointKey]
+	if rec.EndpointKey == "" {
+		rec.EndpointKey = req.EndpointKey
+		rec.Status = "untested"
+		rec.TestedAt = time.Now().Format("2006-01-02 15:04:05")
+		rec.Tester = "DeepSeek AI (NVIDIA NIM)"
+	}
+	rec.AISuite = suite
+	data[req.EndpointKey] = rec
+	_ = q.saveData(data)
+	q.mu.Unlock()
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"suite":   suite,
+	})
+}
+
+// HandleGenerateAITests generates test cases using LLM for Fiber.
+func (q *QATracker) HandleGenerateAITests(c *fiber.Ctx) error {
+	if q.llmClient == nil || !q.llmClient.IsAvailable() {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "NVIDIA AI service is not configured. Please set the NVIDIA_API_KEY environment variable or configure Config.NVIDIA.APIKey.",
+		})
+	}
+
+	var req AIGenerateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body: " + err.Error()})
+	}
+
+	if req.EndpointKey == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "endpoint_key is required"})
+	}
+
+	ctx, cancel := context.WithTimeout(c.Context(), 90*time.Second)
+	defer cancel()
+
+	suite, err := q.llmClient.GenerateTests(ctx, aiPort.GenerateOptions{
+		EndpointKey:  req.EndpointKey,
+		SpecJSON:     req.SpecJSON,
+		CustomPrompt: req.CustomPrompt,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "AI test generation failed: " + err.Error()})
+	}
+
+	q.mu.Lock()
+	data := q.loadData()
+	rec := data[req.EndpointKey]
+	if rec.EndpointKey == "" {
+		rec.EndpointKey = req.EndpointKey
+		rec.Status = "untested"
+		rec.TestedAt = time.Now().Format("2006-01-02 15:04:05")
+		rec.Tester = "DeepSeek AI (NVIDIA NIM)"
+	}
+	rec.AISuite = suite
+	data[req.EndpointKey] = rec
+	_ = q.saveData(data)
+	q.mu.Unlock()
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"suite":   suite,
+	})
 }

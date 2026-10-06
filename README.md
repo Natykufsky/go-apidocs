@@ -11,7 +11,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/Natykufsky/go-apidocs/graphs/commit-activity)
 
 <p align="center">
-  <strong>Multi-Service Workspaces • Pre-Flight OpenAPI Importer • Automated OWASP Cybersecurity Audit • Live Security Headers Analyzer • Client-Side Fuzzing Payloads • Automatic Token & Multi-Tenant Header Capture • ReadMe-Style Developer Guide • Real-Time Endpoint Stats & Safe Mode Secret Masking • Multi-Language Code Snippets • 1-Click Excel & Markdown Audit Reports • Zero Deployment Dependencies</strong>
+  <strong>Multi-Service Workspaces • AI Test Generation (DeepSeek via NVIDIA NIM) • Pre-Flight OpenAPI Importer • Automated OWASP Cybersecurity Audit • Live Security Headers Analyzer • Automatic Token Capture • ReadMe Developer Guide • Multi-Language Code Snippets • 1-Click Excel & Markdown Audit Reports • Zero Deployment Dependencies</strong>
 </p>
 
 </div>
@@ -20,21 +20,22 @@
 
 ## 🌟 Why `go-apidocs`?
 
-Standard Swagger UI solutions only display a single static API contract. **`go-apidocs`** transforms your documentation into an enterprise-grade **API Workspace Hub, Cybersecurity Audit Engine & QA Collaboration Suite**:
+Standard Swagger UI solutions only display a single static API contract. **`go-apidocs`** transforms your documentation into an enterprise-grade **API Workspace Hub, AI Test Generation Studio, Cybersecurity Audit Engine & QA Collaboration Suite**:
 
-1. **🏢 Multi-Service Workspaces (`/docs/workspaces`)**: Organize, switch, and manage multiple microservices, APIs, and environments (`Local`, `Staging`, `Production`) from a unified workspace switcher in the navbar.
-2. **📥 Pre-Flight Schema Importer**: Upload OpenAPI JSON/YAML files or fetch remote URLs with client-side syntax verification, operation count preview, and direct launch into the Swagger sandbox.
-3. **🛡️ Automated OWASP API Top 10 Cybersecurity Audit**: Static analysis engine scans OpenAPI definitions for missing authentication on mutating routes, exposed API credentials/keys in examples, and unbounded schemas, assigning an overall security posture score (0–100) and letter grade (`A+` to `F`).
-4. **🔒 Live Environment Security Headers Analyzer**: Probes target environments for `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options`, `Strict-Transport-Security` (HSTS), and CORS misconfigurations using an SSRF-hardened client.
-5. **🧪 Client-Side Fuzzing Payloads**: 1-click injection presets for SQL Injection (SQLi), Cross-Site Scripting (XSS), and boundary/overflow limits for browser-side testing.
-6. **🏠 Interactive Developer Hub (`/`)**: Automatically renders your project's `README.md` with authentic GitHub typography, **Secret Masking Safe Mode** (redacts passwords, JWTs, DB strings), and displays live endpoint statistics and microservice cards.
-7. **🔐 Automatic Token & Multi-Tenant Credential Interceptor**: Testing a login/token endpoint automatically captures `access_token`, `refresh_token`, `tenant_id`, and `entity_id`, immediately attaching them to all subsequent requests.
-8. **💻 Multi-Language Code Snippet Generator**: 1-click generation of production-ready **cURL**, **Go**, **Node.js (`fetch`)**, and **Python (`requests`)** code snippets pre-populated with active authorization tokens.
-9. **📖 ReadMe-Style Developer Guide (`/guide`)**: Interactive multi-column developer reference powered by Scalar with full support for hash anchors, search, and multi-language snippets.
-10. **⚡ Swagger UI Sandbox (`/docs`)**: Interactive API playground with "Try It Out", token persistence, clean in-endpoint QA badges with comment previews, and real-time response PII leakage detection.
-11. **🔒 Password Security Gate (`/docs/login`)**: Protect staging and production API specs with cryptographic HMAC-signed session cookies and zero external auth dependencies.
-12. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown and RFC 4180 Excel (`.csv`) reports of all tested endpoints with bug notes ready for GitHub Issues or Jira.
-13. **📦 100% Self-Contained (`//go:embed`)**: All React UI assets, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel/Air-gapped offline networks.
+1. **🤖 AI-Powered Test Case Generation (DeepSeek via NVIDIA NIM)**: Automatically analyzes your OpenAPI schema and synthesizes comprehensive test cases covering *Happy Paths*, *Boundary & Edge Cases*, *Negative & Error Handling*, and *Security & Injection Probes* with 1-click execution into the sandbox.
+2. **🏢 Multi-Service Workspaces (`/docs/workspaces`)**: Organize, switch, and manage multiple microservices, APIs, and environments (`Local`, `Staging`, `Production`) from a unified workspace switcher in the navbar.
+3. **📥 Pre-Flight Schema Importer**: Upload OpenAPI JSON/YAML files or fetch remote URLs with client-side syntax verification, operation count preview, and direct launch into the Swagger sandbox.
+4. **🛡️ Automated OWASP API Top 10 Cybersecurity Audit**: Static analysis engine scans OpenAPI definitions for missing authentication on mutating routes, exposed API credentials/keys in examples, and unbounded schemas, assigning an overall security posture score (0–100) and letter grade (`A+` to `F`).
+5. **🔒 Live Environment Security Headers Analyzer**: Probes target environments for `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options`, `Strict-Transport-Security` (HSTS), and CORS misconfigurations using an SSRF-hardened client.
+6. **🧪 Client-Side Fuzzing Payloads**: 1-click injection presets for SQL Injection (SQLi), Cross-Site Scripting (XSS), and boundary/overflow limits for browser-side testing.
+7. **🏠 Interactive Developer Hub (`/`)**: Automatically renders your project's `README.md` with authentic GitHub typography, **Secret Masking Safe Mode** (redacts passwords, JWTs, DB strings), and displays live endpoint statistics and microservice cards.
+8. **🔐 Automatic Token & Multi-Tenant Credential Interceptor**: Testing a login/token endpoint automatically captures `access_token`, `refresh_token`, `tenant_id`, and `entity_id`, immediately attaching them to all subsequent requests.
+9. **💻 Multi-Language Code Snippet Generator**: 1-click generation of production-ready **cURL**, **Go**, **Node.js (`fetch`)**, and **Python (`requests`)** code snippets pre-populated with active authorization tokens.
+10. **📖 ReadMe-Style Developer Guide (`/guide`)**: Interactive multi-column developer reference powered by Scalar with full support for hash anchors, search, and multi-language snippets.
+11. **⚡ Swagger UI Sandbox (`/docs`)**: Interactive API playground with "Try It Out", token persistence, clean in-endpoint QA badges with comment previews, and real-time response PII leakage detection.
+12. **🔒 Password Security Gate (`/docs/login`)**: Protect staging and production API specs with cryptographic HMAC-signed session cookies and zero external auth dependencies.
+13. **📋 Automated Executive Audit Reports (`/docs/qa/report`)**: Generate live Markdown and RFC 4180 Excel (`.csv`) reports of all tested endpoints with bug notes ready for GitHub Issues or Jira.
+14. **📦 100% Self-Contained (`//go:embed`)**: All React UI assets, CSS, and JS files are compiled directly into your Go binary. Zero CDN downtime, zero missing file paths on Docker/Kubernetes/cPanel/Air-gapped offline networks.
 
 ---
 
@@ -126,6 +127,10 @@ You can configure multiple microservices and workspaces directly in Go:
 apidocs.Mount(app, apidocs.Config{
 	Title:            "FinTech Microservices Portal",
 	EnableWorkspaces: true,
+	NVIDIA: apidocs.NVIDIAConfig{
+		APIKey: "nvapi-...", // Or set NVIDIA_API_KEY env variable
+		Model:  "deepseek-ai/deepseek-v4.1-flash",
+	},
 	Workspaces: []apidocs.Workspace{
 		{
 			ID:          "payments",
@@ -166,6 +171,25 @@ apidocs.Mount(app, apidocs.Config{
 		},
 	},
 })
+```
+
+---
+
+## 🐳 Microservice & Standalone Deployment
+
+`go-apidocs` can run as an independent microservice container with persistent volume storage for uploaded schemas:
+
+```bash
+# Set your NVIDIA API key for DeepSeek test generation
+export NVIDIA_API_KEY="nvapi-your-key"
+
+# Launch via Docker Compose
+docker compose up -d
+```
+
+Or run directly via Go CLI:
+```bash
+go run ./cmd/go-apidocs --spec=./docs/swagger.json --port=8080 --workspaces=true
 ```
 
 ---

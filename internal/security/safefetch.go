@@ -1,4 +1,4 @@
-package apidocs
+package security
 
 import (
 	"context"
@@ -47,8 +47,8 @@ func (p RemoteFetchPolicy) Normalize() RemoteFetchPolicy {
 	return p
 }
 
-// isIPBlocked checks if an IP belongs to private, loopback, link-local, multicast, or cloud metadata ranges.
-func isIPBlocked(ip netip.Addr) bool {
+// IsIPBlocked checks if an IP belongs to private, loopback, link-local, multicast, or cloud metadata ranges.
+func IsIPBlocked(ip netip.Addr) bool {
 	ip = ip.Unmap()
 
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
@@ -76,8 +76,8 @@ func isIPBlocked(ip netip.Addr) bool {
 	return false
 }
 
-// isHostAllowed checks if the target hostname matches the configured host allowlist.
-func isHostAllowed(hostname string, allowlist []string) bool {
+// IsHostAllowed checks if the target hostname matches the configured host allowlist.
+func IsHostAllowed(hostname string, allowlist []string) bool {
 	if len(allowlist) == 0 {
 		return false
 	}
@@ -124,15 +124,15 @@ func ValidateTargetURL(rawURL string, policy RemoteFetchPolicy) (*url.URL, error
 	if hostname == "" {
 		return nil, errors.New("empty hostname in url")
 	}
-	if !isHostAllowed(hostname, policy.HostAllowlist) {
+	if !IsHostAllowed(hostname, policy.HostAllowlist) {
 		return nil, fmt.Errorf("%w: %s", ErrHostNotAllowed, hostname)
 	}
 
 	return u, nil
 }
 
-// newSafeHTTPClient returns an http.Client with dial-time IP filtering to defeat SSRF and DNS rebinding attacks.
-func newSafeHTTPClient(policy RemoteFetchPolicy) *http.Client {
+// NewSafeHTTPClient returns an http.Client with dial-time IP filtering to defeat SSRF and DNS rebinding attacks.
+func NewSafeHTTPClient(policy RemoteFetchPolicy) *http.Client {
 	policy = policy.Normalize()
 
 	dialer := &net.Dialer{
@@ -158,7 +158,7 @@ func newSafeHTTPClient(policy RemoteFetchPolicy) *http.Client {
 
 			// Check all resolved IPs against the blocked ranges
 			for _, ip := range ips {
-				if isIPBlocked(ip) {
+				if IsIPBlocked(ip) {
 					return nil, fmt.Errorf("%w: %s resolved to forbidden address %s", ErrBlockedAddress, host, ip)
 				}
 			}

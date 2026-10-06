@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/netip"
 	"testing"
+
+	"github.com/Natykufsky/go-apidocs/internal/security"
 )
 
 func TestSSRF_BlockedIPs(t *testing.T) {
@@ -28,7 +30,7 @@ func TestSSRF_BlockedIPs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed parsing ip %s: %v", tc.ip, err)
 		}
-		result := isIPBlocked(ip)
+		result := security.IsIPBlocked(ip)
 		if result != tc.blocked {
 			t.Errorf("ip %s: expected blocked=%v, got %v", tc.ip, tc.blocked, result)
 		}
@@ -38,19 +40,19 @@ func TestSSRF_BlockedIPs(t *testing.T) {
 func TestSSRF_HostAllowlist(t *testing.T) {
 	allowlist := []string{"api.example.com", "*.trusted.org"}
 
-	if !isHostAllowed("api.example.com", allowlist) {
+	if !security.IsHostAllowed("api.example.com", allowlist) {
 		t.Error("expected api.example.com to be allowed")
 	}
-	if !isHostAllowed("sub.trusted.org", allowlist) {
+	if !security.IsHostAllowed("sub.trusted.org", allowlist) {
 		t.Error("expected sub.trusted.org to be allowed")
 	}
-	if !isHostAllowed("trusted.org", allowlist) {
+	if !security.IsHostAllowed("trusted.org", allowlist) {
 		t.Error("expected trusted.org to be allowed")
 	}
-	if isHostAllowed("evil.com", allowlist) {
+	if security.IsHostAllowed("evil.com", allowlist) {
 		t.Error("expected evil.com to be rejected")
 	}
-	if isHostAllowed("nottrusted.org.evil.com", allowlist) {
+	if security.IsHostAllowed("nottrusted.org.evil.com", allowlist) {
 		t.Error("expected nottrusted.org.evil.com to be rejected")
 	}
 }

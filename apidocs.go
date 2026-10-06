@@ -2,6 +2,7 @@ package apidocs
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -20,10 +21,116 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 
 	"github.com/Natykufsky/go-apidocs/assets"
+	aiAdapter "github.com/Natykufsky/go-apidocs/internal/ai/adapter"
+	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
+	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/internal/auth"
+	"github.com/Natykufsky/go-apidocs/internal/qa"
+	"github.com/Natykufsky/go-apidocs/internal/schema"
+	"github.com/Natykufsky/go-apidocs/internal/security"
+	"github.com/Natykufsky/go-apidocs/internal/workspace"
 )
 
-// NavItem represents a link in the unified navigation header.
-type NavItem struct {
+// DocsSessionCookieName is the cookie name used for session authentication tokens.
+const DocsSessionCookieName = auth.DocsSessionCookieName
+
+// Re-export core types for backwards compatibility and clean public API
+type (
+	NavItem             = NavItemConfig
+	Authorizer          = workspace.Authorizer
+	AuthorizerFunc      = workspace.AuthorizerFunc
+	AllowAllAuthorizer  = workspace.AllowAllAuthorizer
+	RateLimitConfig     = workspace.RateLimitConfig
+	AuditEvent          = workspace.AuditEvent
+	APIService          = workspace.APIService
+	Workspace           = workspace.Workspace
+	Capabilities        = workspace.Capabilities
+	WorkspaceManager    = workspace.WorkspaceManager
+	RemoteFetchPolicy   = security.RemoteFetchPolicy
+	SecurityAuditResult = security.SecurityAuditResult
+	SecurityFinding     = security.SecurityFinding
+	HeaderAuditResult   = security.HeaderAuditResult
+	FuzzingPresetGroup  = security.FuzzingPresetGroup
+	FuzzPayload         = security.FuzzPayload
+	ParsedSpec          = schema.ParsedSpec
+	SpecFilter          = schema.SpecFilter
+	EndpointRecord      = qa.EndpointRecord
+	QATracker           = qa.QATracker
+	AITestCase          = aiDomain.TestCase
+	AITestSuite         = aiDomain.TestSuite
+	LLMClientPort       = aiPort.LLMClientPort
+)
+
+// NVIDIAConfig configures the NVIDIA NIM DeepSeek LLM for QA test generation.
+type NVIDIAConfig struct {
+	APIKey      string        `json:"api_key"`
+	BaseURL     string        `json:"base_url"`
+	Model       string        `json:"model"`
+	Timeout     time.Duration `json:"timeout"`
+	Temperature float64       `json:"temperature"`
+	MaxTokens   int           `json:"max_tokens"`
+}
+
+// Public session and auth function re-exports delegating to internal/auth
+func GenerateDocsSessionToken(username, secret string) string {
+	return auth.GenerateDocsSessionToken(username, secret)
+}
+
+func VerifyDocsSessionToken(tokenStr, expectedUsername, secret string) bool {
+	return auth.VerifyDocsSessionToken(tokenStr, expectedUsername, secret)
+}
+
+func WebAuthMiddleware(authEnabled bool, authUser, authPass, jwtSecret string) fiber.Handler {
+	return auth.WebAuthMiddleware(authEnabled, authUser, authPass, jwtSecret)
+}
+
+func HTTPAuthMiddleware(authEnabled bool, authUser, authPass, jwtSecret string) func(http.Handler) http.Handler {
+	return auth.HTTPAuthMiddleware(authEnabled, authUser, authPass, jwtSecret)
+}
+
+func GinAuthMiddleware(authEnabled bool, authUser, authPass, jwtSecret string) gin.HandlerFunc {
+	return auth.GinAuthMiddleware(authEnabled, authUser, authPass, jwtSecret)
+}
+
+// Public schema and security function re-exports delegating to internal packages
+func ParseSpec(r io.Reader, maxBytes int64) (*ParsedSpec, []byte, error) {
+	return schema.ParseSpec(r, maxBytes)
+}
+
+func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
+	return security.AnalyzeSpecSecurity(spec)
+}
+
+func AuditLiveHeaders(ctx context.Context, client *http.Client, targetURL string) (*HeaderAuditResult, error) {
+	return security.AuditLiveHeaders(ctx, client, targetURL)
+}
+
+func NewSafeHTTPClient(policy RemoteFetchPolicy) *http.Client {
+	return security.NewSafeHTTPClient(policy)
+}
+
+func NewWorkspaceManager(
+	workspaces []Workspace,
+	storageRoot string,
+	maxSpecBytes int64,
+	maxCacheBytes int64,
+	authorizer Authorizer,
+	rateLimit RateLimitConfig,
+	auditLogger func(AuditEvent),
+) (*WorkspaceManager, error) {
+	return workspace.NewWorkspaceManager(
+		workspaces,
+		storageRoot,
+		maxSpecBytes,
+		maxCacheBytes,
+		authorizer,
+		rateLimit,
+		auditLogger,
+	)
+}
+
+// NavItemConfig represents a link in the unified navigation header.
+type NavItemConfig struct {
 	Label    string `json:"label"`
 	URL      string `json:"url"`
 	Icon     string `json:"icon,omitempty"`
@@ -117,6 +224,9 @@ type Config struct {
 
 	// WorkspacesDir is the directory to scan for workspace folders. Default: "<DocsDir>/workspaces"
 	WorkspacesDir string
+
+	// NVIDIA configures NVIDIA NIM DeepSeek LLM for automated QA test case generation.
+	NVIDIA NVIDIAConfig
 }
 
 // ValidateConfig checks for configuration consistency.
@@ -228,7 +338,7 @@ func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 		}
 	}
 
-	wm, err := NewWorkspaceManager(
+	wm, err := workspace.NewWorkspaceManager(
 		workspaces,
 		cfg.StorageRoot,
 		cfg.MaxSpecBytes,
@@ -273,8 +383,9 @@ func MountFiber(app *fiber.App, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	defaultFilter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
-	defaultQA := newQATracker(cfg.QAStoragePath, cfg.Title)
+	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
+	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 
 	// Capabilities API
 	app.Get("/docs/capabilities", func(c *fiber.Ctx) error {
@@ -437,11 +548,12 @@ func MountFiber(app *fiber.App, cfg Config) {
 		})
 	}
 
-	// QA Tracking APIs
+	// QA Tracking & AI Test Generation APIs
 	app.Get("/docs/qa/data", defaultQA.HandleGetData)
 	app.Post("/docs/qa/record", defaultQA.HandleSaveRecord)
 	app.Post("/docs/qa/reset", defaultQA.HandleResetData)
 	app.Get("/docs/qa/report", defaultQA.HandleGetReport)
+	app.Post("/docs/qa/ai-generate", defaultQA.HandleGenerateAITests)
 
 	// Cybersecurity Audit Engine APIs
 	if cfg.EnableSecurityAudit {
@@ -472,7 +584,7 @@ func MountFiber(app *fiber.App, cfg Config) {
 			targetEnvURL := c.Query("target_url")
 			if targetEnvURL != "" {
 				// Verify target URL is in configured environments or allowed by policy
-				safeClient := newSafeHTTPClient(cfg.RemoteFetch)
+				safeClient := security.NewSafeHTTPClient(cfg.RemoteFetch)
 				headerAudit, err := AuditLiveHeaders(c.Context(), safeClient, targetEnvURL)
 				if err == nil {
 					auditResult.HeaderAudit = headerAudit
@@ -585,8 +697,9 @@ func MountChi(r chi.Router, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	defaultFilter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
-	defaultQA := newQATracker(cfg.QAStoragePath, cfg.Title)
+	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
+	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 	authGuard := HTTPAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
 	assetServer := NewAssetFileServer(cfg.EmbeddedFS)
 
@@ -625,11 +738,12 @@ func MountChi(r chi.Router, cfg Config) {
 		r.Get("/docs/security/audit", SecurityAuditHandler(cfg, wm))
 	}
 
-	// QA Tracking and Reports
+	// QA Tracking, Reports & AI Test Generation
 	r.Get("/docs/qa/data", defaultQA.HandleGetDataHTTP)
 	r.Post("/docs/qa/record", defaultQA.HandleSaveRecordHTTP)
 	r.Post("/docs/qa/reset", defaultQA.HandleResetDataHTTP)
 	r.Get("/docs/qa/report", defaultQA.HandleGetReportHTTP)
+	r.Post("/docs/qa/ai-generate", defaultQA.HandleGenerateAITestsHTTP)
 
 	// Login & Session Routes
 	r.Get("/docs/login", LoginHandler(cfg, authEnabled))
@@ -667,8 +781,9 @@ func MountGin(r gin.IRoutes, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	defaultFilter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
-	defaultQA := newQATracker(cfg.QAStoragePath, cfg.Title)
+	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
+	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 	authGuard := GinAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
 	assetServer := NewAssetFileServer(cfg.EmbeddedFS)
 
@@ -707,11 +822,12 @@ func MountGin(r gin.IRoutes, cfg Config) {
 		r.GET("/docs/security/audit", gin.WrapF(SecurityAuditHandler(cfg, wm)))
 	}
 
-	// QA Tracking and Reports
+	// QA Tracking, Reports & AI Test Generation
 	r.GET("/docs/qa/data", gin.WrapF(defaultQA.HandleGetDataHTTP))
 	r.POST("/docs/qa/record", gin.WrapF(defaultQA.HandleSaveRecordHTTP))
 	r.POST("/docs/qa/reset", gin.WrapF(defaultQA.HandleResetDataHTTP))
 	r.GET("/docs/qa/report", gin.WrapF(defaultQA.HandleGetReportHTTP))
+	r.POST("/docs/qa/ai-generate", gin.WrapF(defaultQA.HandleGenerateAITestsHTTP))
 
 	// Login & Session Routes
 	r.GET("/docs/login", gin.WrapF(LoginHandler(cfg, authEnabled)))
@@ -739,8 +855,9 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	defaultFilter := newSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
-	defaultQA := newQATracker(cfg.QAStoragePath, cfg.Title)
+	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
+	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 	authGuard := HTTPAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
 	assetServer := NewAssetFileServer(cfg.EmbeddedFS)
 
@@ -763,13 +880,14 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	mux.HandleFunc("/swagger/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 	mux.HandleFunc("/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 
-	// Nav & QA APIs
+	// Nav, QA & AI Test Generation APIs
 	mux.HandleFunc("/docs/nav", NavHandler(cfg))
 	mux.HandleFunc("/docs/readme", ReadmeHandler(cfg))
 	mux.HandleFunc("/docs/qa/data", defaultQA.HandleGetDataHTTP)
 	mux.HandleFunc("/docs/qa/record", defaultQA.HandleSaveRecordHTTP)
 	mux.HandleFunc("/docs/qa/reset", defaultQA.HandleResetDataHTTP)
 	mux.HandleFunc("/docs/qa/report", defaultQA.HandleGetReportHTTP)
+	mux.HandleFunc("/docs/qa/ai-generate", defaultQA.HandleGenerateAITestsHTTP)
 
 	// Workspace APIs
 	if cfg.EnableWorkspaces {
@@ -956,7 +1074,7 @@ func SecurityAuditHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 
 		targetEnvURL := r.URL.Query().Get("target_url")
 		if targetEnvURL != "" {
-			safeClient := newSafeHTTPClient(cfg.RemoteFetch)
+			safeClient := security.NewSafeHTTPClient(cfg.RemoteFetch)
 			headerAudit, err := AuditLiveHeaders(r.Context(), safeClient, targetEnvURL)
 			if err == nil {
 				auditResult.HeaderAudit = headerAudit

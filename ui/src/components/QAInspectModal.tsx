@@ -14,6 +14,7 @@ import {
   Tag,
   Code2,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { QARecord } from './QAReportModal';
 
@@ -26,6 +27,7 @@ interface QAInspectModalProps {
   onSaveRecord: (endpoint: string, status: 'passed' | 'retest' | 'failed' | 'untested', comment: string) => void;
   onSelectEndpoint: (endpoint: string) => void;
   onOpenSnippetGenerator?: (endpoint: string) => void;
+  onOpenAIGenerator?: (endpoint: string) => void;
 }
 
 export const QAInspectModal: React.FC<QAInspectModalProps> = ({
@@ -37,6 +39,7 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
   onSaveRecord,
   onSelectEndpoint,
   onOpenSnippetGenerator,
+  onOpenAIGenerator,
 }) => {
   const record = qaData[endpointKey] || { status: 'untested', comment: '', tested_at: '' };
 
@@ -116,6 +119,17 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenAIGenerator && (
+              <button
+                onClick={() => onOpenAIGenerator(endpointKey)}
+                title="Generate comprehensive test cases with DeepSeek v4.1 Flash"
+                className="px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-750 text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">AI Tests</span>
+              </button>
+            )}
+
             {onOpenSnippetGenerator && (
               <button
                 onClick={() => onOpenSnippetGenerator(endpointKey)}

@@ -1,4 +1,4 @@
-package apidocs
+package security
 
 import (
 	"context"
@@ -22,20 +22,20 @@ type SecurityAuditResult struct {
 	StaticFindings []SecurityFinding    `json:"static_findings"`
 	HeaderAudit    *HeaderAuditResult   `json:"header_audit,omitempty"`
 	FuzzingPresets []FuzzingPresetGroup `json:"fuzzing_presets"`
-	OWASPMatrix    map[string]int       `json:"owasp_matrix,omitempty"` // OWASP category -> count of findings
+	OWASPMatrix    map[string]int       `json:"owasp_matrix,omitempty"`
 }
 
 // SecurityFinding represents an identified vulnerability or compliance gap.
 type SecurityFinding struct {
 	ID          string `json:"id"`
-	Category    string `json:"category"` // "Authentication", "Data Exposure", "BOLA/IDOR", "Rate Limiting", "Input Validation", "Security Headers"
+	Category    string `json:"category"`
 	Severity    string `json:"severity"` // "CRITICAL", "WARNING", "INFO", "PASS"
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Path        string `json:"path,omitempty"`
 	Method      string `json:"method,omitempty"`
 	Remediation string `json:"remediation"`
-	OWASPRef    string `json:"owasp_ref,omitempty"` // e.g. "API1:2023", "API2:2023", "API3:2023"
+	OWASPRef    string `json:"owasp_ref,omitempty"`
 }
 
 // HeaderAuditResult represents live HTTP security headers evaluation.
@@ -60,7 +60,6 @@ type FuzzPayload struct {
 	Risk        string `json:"risk"`
 }
 
-// Secret & sensitive field detection patterns for static analysis
 var (
 	reAWSKey       = regexp.MustCompile(`(?i)(AKIA|ASIA)[0-9A-Z]{16}`)
 	reJWT          = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`)
@@ -91,7 +90,6 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 		hasGlobalSecurity = true
 	}
 
-	// 1. Check if security schemes are defined (OWASP API2: Broken Authentication)
 	hasSecDefinitions := false
 	if components, ok := spec["components"].(map[string]any); ok {
 		if schemes, ok := components["securitySchemes"].(map[string]any); ok && len(schemes) > 0 {
@@ -127,7 +125,6 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 		passCount++
 	}
 
-	// Inspect each path and operation
 	unprotectedMutations := 0
 	secretsDetected := 0
 	bolaIssues := 0
@@ -152,7 +149,6 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 				continue
 			}
 
-			// Check authentication on mutating operations (OWASP API2)
 			hasOpSecurity := hasGlobalSecurity
 			if sec, ok := opMap["security"].([]any); ok {
 				hasOpSecurity = len(sec) > 0
@@ -160,7 +156,7 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 
 			if (method == "POST" || method == "PUT" || method == "DELETE" || method == "PATCH") && !hasOpSecurity {
 				unprotectedMutations++
-				if unprotectedMutations <= 5 { // Report up to 5
+				if unprotectedMutations <= 5 {
 					result.StaticFindings = append(result.StaticFindings, SecurityFinding{
 						ID:          fmt.Sprintf("AUTH_UNPROTECTED_%s_%s", method, pathStr),
 						Category:    "Authentication",
@@ -178,8 +174,6 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 				}
 			}
 
-			// BOLA / IDOR Detection (OWASP API1: Broken Object Level Authorization)
-			// Flag endpoints with direct object identifiers that have no explicit authorization scope
 			if reIDParam.MatchString(pathStr) && !hasOpSecurity {
 				bolaIssues++
 				if bolaIssues <= 5 {
@@ -200,7 +194,6 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 				}
 			}
 
-			// Check parameters for Sensitive Tokens in Query (OWASP API2 / API3)
 			if params, ok := opMap["parameters"].([]any); ok {
 				for _, p := range params {
 					paramMap, _ := p.(map[string]any)
@@ -229,7 +222,6 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 				}
 			}
 
-			// Check for Missing Pagination on List Collections (OWASP API4: Unrestricted Resource Consumption)
 			if method == "GET" && !strings.Contains(pathStr, "{") {
 				hasPagination := false
 				if params, ok := opMap["parameters"].([]any); ok {
@@ -262,7 +254,6 @@ func AnalyzeSpecSecurity(spec map[string]any) SecurityAuditResult {
 				}
 			}
 
-			// Scan examples and descriptions for hardcoded secrets (OWASP API3: Broken Object Property Level Authorization)
 			opJSON, _ := json.Marshal(opMap)
 			opStr := string(opJSON)
 
@@ -385,7 +376,6 @@ func AuditLiveHeaders(ctx context.Context, client *http.Client, targetURL string
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// Try GET fallback
 		req, _ = http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 		resp, err = client.Do(req)
 		if err != nil {
@@ -408,7 +398,6 @@ func AuditLiveHeaders(ctx context.Context, client *http.Client, targetURL string
 		Checks:    []SecurityFinding{},
 	}
 
-	// 1. Content-Security-Policy (OWASP API8)
 	if csp := resp.Header.Get("Content-Security-Policy"); csp != "" {
 		audit.Checks = append(audit.Checks, SecurityFinding{
 			ID:          "HEADER_CSP_OK",
@@ -431,7 +420,6 @@ func AuditLiveHeaders(ctx context.Context, client *http.Client, targetURL string
 		})
 	}
 
-	// 2. X-Content-Type-Options: nosniff
 	if cto := resp.Header.Get("X-Content-Type-Options"); strings.EqualFold(cto, "nosniff") {
 		audit.Checks = append(audit.Checks, SecurityFinding{
 			ID:          "HEADER_CTO_OK",
@@ -454,7 +442,6 @@ func AuditLiveHeaders(ctx context.Context, client *http.Client, targetURL string
 		})
 	}
 
-	// 3. X-Frame-Options
 	if xfo := resp.Header.Get("X-Frame-Options"); xfo != "" {
 		audit.Checks = append(audit.Checks, SecurityFinding{
 			ID:          "HEADER_XFO_OK",
@@ -477,7 +464,6 @@ func AuditLiveHeaders(ctx context.Context, client *http.Client, targetURL string
 		})
 	}
 
-	// 4. Strict-Transport-Security (HSTS)
 	if hsts := resp.Header.Get("Strict-Transport-Security"); hsts != "" {
 		audit.Checks = append(audit.Checks, SecurityFinding{
 			ID:          "HEADER_HSTS_OK",
@@ -500,7 +486,6 @@ func AuditLiveHeaders(ctx context.Context, client *http.Client, targetURL string
 		})
 	}
 
-	// 5. CORS Check
 	cors := resp.Header.Get("Access-Control-Allow-Origin")
 	if cors == "*" && resp.Header.Get("Access-Control-Allow-Credentials") == "true" {
 		audit.Checks = append(audit.Checks, SecurityFinding{

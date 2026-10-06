@@ -44,6 +44,7 @@ interface SidebarProps {
   onSelectService?: (workspaceId: string, serviceId: string) => void;
   onOpenImporter?: () => void;
   onOpenSecurityAudit?: () => void;
+  onOpenAITests?: () => void;
   onNavigate: (path: string) => void;
   onOpenSearch?: () => void;
   onOpenCredentials?: () => void;
@@ -72,6 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectService,
   onOpenImporter,
   onOpenSecurityAudit,
+  onOpenAITests,
   onNavigate,
   onOpenSearch,
   onOpenCredentials,
@@ -242,6 +244,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </a>
               );
             })}
+
+            {/* AI Test Generation Studio Trigger */}
+            {onOpenAITests && (
+              <button
+                onClick={onOpenAITests}
+                title="AI DeepSeek Test Suite Synthesis"
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer bg-gradient-to-r from-purple-500/10 to-indigo-500/10 dark:from-purple-950/30 dark:to-indigo-950/30 border border-purple-200/90 dark:border-purple-800/80 text-purple-900 dark:text-purple-300 hover:from-purple-500/20 hover:to-indigo-500/20 shadow-2xs ${
+                  collapsed ? 'justify-center' : 'justify-between'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 animate-pulse" />
+                  {!collapsed && <span className="truncate">AI Test Studio</span>}
+                </div>
+                {!collapsed && (
+                  <span className="px-1.5 py-0.5 text-[9px] rounded-full bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200 font-extrabold uppercase">
+                    DeepSeek
+                  </span>
+                )}
+              </button>
+            )}
           </nav>
         </div>
 

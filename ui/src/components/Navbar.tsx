@@ -29,6 +29,7 @@ interface NavbarProps {
   onSelectService?: (workspaceId: string, serviceId: string) => void;
   onOpenImporter?: () => void;
   onOpenSecurityAudit?: () => void;
+  onOpenAITests?: () => void;
   onToggleMobileSidebar: () => void;
   onOpenSearch?: () => void;
   onOpenCredentials?: () => void;
@@ -48,6 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectService,
   onOpenImporter,
   onOpenSecurityAudit,
+  onOpenAITests,
   onToggleMobileSidebar,
   onOpenSearch,
   onOpenCredentials,
@@ -173,6 +175,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Audit</span>
+            </button>
+          )}
+
+          {/* AI DeepSeek Test Suite Quick Launcher */}
+          {onOpenAITests && (
+            <button
+              onClick={onOpenAITests}
+              title="AI DeepSeek QA & Security Test Generator"
+              className="hidden md:flex items-center gap-1.5 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 dark:from-purple-950/40 dark:to-indigo-950/40 hover:from-purple-500/20 hover:to-indigo-500/20 border border-purple-300/80 dark:border-purple-700/80 text-purple-900 dark:text-purple-300 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
+              <span>AI Tests</span>
             </button>
           )}
 

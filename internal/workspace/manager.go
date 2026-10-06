@@ -1,4 +1,4 @@
-package apidocs
+package workspace
 
 import (
 	"crypto/rand"
@@ -13,9 +13,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Natykufsky/go-apidocs/internal/security"
 )
 
 var (
+	// ErrSpecTooLarge is returned when the uploaded spec exceeds MaxSpecBytes.
+	ErrSpecTooLarge = errors.New("spec exceeds maximum allowed file size")
 	// ErrPathEscape is returned when a path traversal attempt is detected.
 	ErrPathEscape = errors.New("file path escapes sandboxed storage root")
 	// ErrSymlinkForbidden is returned when a path is a symbolic link.
@@ -72,18 +76,18 @@ type AuditEvent struct {
 
 // APIService represents a single API or microservice within a workspace.
 type APIService struct {
-	ID            string            `json:"id"`
-	Title         string            `json:"title"`
-	Version       string            `json:"version"`
-	Description   string            `json:"description,omitempty"`
-	Icon          string            `json:"icon,omitempty"`
-	SpecFilePath  string            `json:"spec_file_path,omitempty"`
-	SpecURL       string            `json:"spec_url,omitempty"`
-	DocsDir       string            `json:"docs_dir,omitempty"`
-	PathsDir      string            `json:"paths_dir,omitempty"`
-	ReadmePath    string            `json:"readme_path,omitempty"`
-	QAStoragePath string            `json:"qa_storage_path,omitempty"`
-	Environments  map[string]string `json:"environments,omitempty"` // e.g. {"Local": "http://localhost:8080", "Staging": "https://stg.api.com"}
+	ID            string              `json:"id"`
+	Title         string              `json:"title"`
+	Version       string              `json:"version"`
+	Description   string              `json:"description,omitempty"`
+	Icon          string              `json:"icon,omitempty"`
+	SpecFilePath  string              `json:"spec_file_path,omitempty"`
+	SpecURL       string              `json:"spec_url,omitempty"`
+	DocsDir       string              `json:"docs_dir,omitempty"`
+	PathsDir      string              `json:"paths_dir,omitempty"`
+	ReadmePath    string              `json:"readme_path,omitempty"`
+	QAStoragePath string              `json:"qa_storage_path,omitempty"`
+	Environments  map[string]string   `json:"environments,omitempty"` // e.g. {"Local": "http://localhost:8080", "Staging": "https://stg.api.com"}
 	ModuleTagMap  map[string][]string `json:"module_tag_map,omitempty"`
 
 	// StoredFilename internal sandboxed storage filename (e.g. "a1b2c3d4.json")
@@ -101,31 +105,31 @@ type Workspace struct {
 
 // Capabilities represents the runtime feature flags exposed to the frontend SPA.
 type Capabilities struct {
-	WorkspacesEnabled      bool              `json:"workspaces_enabled"`
-	WorkspaceWritesEnabled bool              `json:"workspace_writes_enabled"`
-	SecurityAuditEnabled   bool              `json:"security_audit_enabled"`
-	RemoteFetchEnabled     bool              `json:"remote_fetch_enabled"`
-	RemoteFetchPolicy      RemoteFetchPolicy `json:"remote_fetch_policy"`
-	MaxSpecBytes           int64             `json:"max_spec_bytes"`
+	WorkspacesEnabled      bool                       `json:"workspaces_enabled"`
+	WorkspaceWritesEnabled bool                       `json:"workspace_writes_enabled"`
+	SecurityAuditEnabled   bool                       `json:"security_audit_enabled"`
+	RemoteFetchEnabled     bool                       `json:"remote_fetch_enabled"`
+	RemoteFetchPolicy      security.RemoteFetchPolicy `json:"remote_fetch_policy"`
+	MaxSpecBytes           int64                      `json:"max_spec_bytes"`
 }
 
 // WorkspaceManager manages multi-workspace registration, sandboxed disk storage, and bounded LRU caching.
 type WorkspaceManager struct {
-	mu           sync.RWMutex
-	workspaces   map[string]*Workspace
-	storageRoot  string
-	maxSpecBytes int64
+	mu            sync.RWMutex
+	workspaces    map[string]*Workspace
+	storageRoot   string
+	maxSpecBytes  int64
 	maxCacheBytes int64
 
 	// Bounded in-memory spec cache
-	cacheMu      sync.Mutex
-	cache        map[string][]byte
-	cacheKeys    []string
+	cacheMu        sync.Mutex
+	cache          map[string][]byte
+	cacheKeys      []string
 	currCacheBytes int64
 
-	authorizer   Authorizer
-	auditLogger  func(AuditEvent)
-	rateLimiter  *simpleRateLimiter
+	authorizer  Authorizer
+	auditLogger func(AuditEvent)
+	rateLimiter *simpleRateLimiter
 }
 
 // simpleRateLimiter provides basic token bucket rate limiting per principal or IP.
@@ -241,7 +245,6 @@ func (wm *WorkspaceManager) LogAudit(evt AuditEvent) {
 		wm.auditLogger(evt)
 		return
 	}
-	// Fallback to slog
 	slog.Info("apidocs_audit",
 		"ts", evt.Timestamp.Format(time.RFC3339),
 		"principal", evt.Principal,
@@ -266,7 +269,6 @@ func (wm *WorkspaceManager) SafeJoin(subPath string) (string, error) {
 		return "", fmt.Errorf("%w: %s", ErrPathEscape, subPath)
 	}
 
-	// Reject if any element is a symlink
 	if info, err := os.Lstat(full); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return "", ErrSymlinkForbidden
@@ -346,12 +348,10 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 		return nil, fmt.Errorf("%w: %d bytes (limit: %d)", ErrSpecTooLarge, len(specData), wm.maxSpecBytes)
 	}
 
-	// Ensure sandboxed storage root exists
 	if err := os.MkdirAll(wm.storageRoot, 0750); err != nil {
 		return nil, fmt.Errorf("failed creating storage directory: %w", err)
 	}
 
-	// Generate a secure UUID filename (never trust client filename)
 	randBytes := make([]byte, 16)
 	if _, err := rand.Read(randBytes); err != nil {
 		return nil, fmt.Errorf("failed generating uuid: %w", err)
@@ -363,7 +363,6 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 		return nil, err
 	}
 
-	// Atomic write via temp file
 	tempPath := targetPath + ".tmp"
 	if err := os.WriteFile(tempPath, specData, 0600); err != nil {
 		return nil, fmt.Errorf("failed writing temp spec file: %w", err)
@@ -384,7 +383,6 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 
 	ws, ok := wm.workspaces[wsID]
 	if !ok {
-		// Auto-create workspace if it doesn't exist
 		ws = &Workspace{
 			ID:       wsID,
 			Name:     strings.Title(strings.ReplaceAll(wsID, "-", " ")),
@@ -394,7 +392,6 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 		wm.workspaces[wsID] = ws
 	}
 
-	// Update existing service or append
 	updated := false
 	for i := range ws.Services {
 		if ws.Services[i].ID == svc.ID {
@@ -407,9 +404,7 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 		ws.Services = append(ws.Services, svc)
 	}
 
-	// Cache spec in memory
 	wm.putCache(wsID+":"+svc.ID, specData)
-
 	return &svc, nil
 }
 
@@ -461,12 +456,10 @@ func (wm *WorkspaceManager) putCache(key string, data []byte) {
 	defer wm.cacheMu.Unlock()
 
 	dataLen := int64(len(data))
-	// If single item exceeds maxCacheBytes, don't cache
 	if dataLen > wm.maxCacheBytes {
 		return
 	}
 
-	// Evict oldest items if exceeding capacity
 	for wm.currCacheBytes+dataLen > wm.maxCacheBytes && len(wm.cacheKeys) > 0 {
 		oldest := wm.cacheKeys[0]
 		wm.cacheKeys = wm.cacheKeys[1:]

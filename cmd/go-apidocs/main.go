@@ -22,6 +22,12 @@ func main() {
 	authPass := flag.String("pass", "", "Optional password to protect docs (or set DOCS_AUTH_PASS)")
 	jwtSecret := flag.String("secret", "apidocs_standalone_secret_key", "HMAC cookie signing secret")
 	qaStorage := flag.String("qa-storage", "./docs/qa_tracker.json", "File path to persist QA reviews and bug comments")
+	storageRoot := flag.String("storage-root", "./apidocs-data", "Storage root directory for imported specs")
+	enableWorkspaces := flag.Bool("workspaces", true, "Enable multi-workspace catalog")
+	enableWrites := flag.Bool("allow-imports", true, "Allow uploading & importing custom specs")
+	enableSecurity := flag.Bool("security-audit", true, "Enable static & live cybersecurity audit suite")
+	nvidiaKey := flag.String("nvidia-key", "", "NVIDIA API Key for DeepSeek test generation (or env NVIDIA_API_KEY)")
+	nvidiaModel := flag.String("nvidia-model", "deepseek-ai/deepseek-v4.1-flash", "NVIDIA NIM model identifier")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "🚀 go-apidocs — Zero-Dependency Standalone API Documentation & QA Portal Server\n\n")
@@ -31,22 +37,30 @@ func main() {
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
 		fmt.Fprintf(os.Stderr, "  go-apidocs --spec=./docs/swagger.json --port=8080\n")
-		fmt.Fprintf(os.Stderr, "  go-apidocs --spec=./openapi.json --readme=./README.md --user=admin --pass=secret123\n")
+		fmt.Fprintf(os.Stderr, "  go-apidocs --spec=./openapi.json --nvidia-key=nvapi-...\n")
 	}
 
 	flag.Parse()
 
 	cfg := apidocs.Config{
-		SpecFilePath:  *specPath,
-		ReadmePath:    *readmePath,
-		DocsDir:       *docsDir,
-		PathsDir:      *pathsDir,
-		Title:         *title,
-		Subtitle:      *subtitle,
-		AuthUser:      *authUser,
-		AuthPassword:  *authPass,
-		JWTSecret:     *jwtSecret,
-		QAStoragePath: *qaStorage,
+		SpecFilePath:          *specPath,
+		ReadmePath:            *readmePath,
+		DocsDir:               *docsDir,
+		PathsDir:              *pathsDir,
+		Title:                 *title,
+		Subtitle:              *subtitle,
+		AuthUser:              *authUser,
+		AuthPassword:          *authPass,
+		JWTSecret:             *jwtSecret,
+		QAStoragePath:         *qaStorage,
+		StorageRoot:           *storageRoot,
+		EnableWorkspaces:      *enableWorkspaces,
+		EnableWorkspaceWrites: *enableWrites,
+		EnableSecurityAudit:   *enableSecurity,
+		NVIDIA: apidocs.NVIDIAConfig{
+			APIKey: *nvidiaKey,
+			Model:  *nvidiaModel,
+		},
 	}
 
 	mux := http.NewServeMux()
@@ -62,6 +76,11 @@ func main() {
 		fmt.Printf("   🔒 Security Gate:              Enabled (User: %s)\n", *authUser)
 	} else {
 		fmt.Printf("   🔓 Security Gate:              Public Access (No Auth)\n")
+	}
+	if *nvidiaKey != "" || os.Getenv("NVIDIA_API_KEY") != "" {
+		fmt.Printf("   🤖 AI Test Generation:         Enabled (%s)\n", *nvidiaModel)
+	} else {
+		fmt.Printf("   🤖 AI Test Generation:         Disabled (Set --nvidia-key or NVIDIA_API_KEY)\n")
 	}
 	fmt.Println("==================================================================")
 

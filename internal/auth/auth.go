@@ -1,4 +1,4 @@
-package apidocs
+package auth
 
 import (
 	"crypto/hmac"

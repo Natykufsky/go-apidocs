@@ -1,4 +1,4 @@
-package apidocs
+package schema
 
 import (
 	"bytes"

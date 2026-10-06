@@ -1,4 +1,4 @@
-package apidocs
+package schema
 
 import (
 	"encoding/json"
@@ -20,7 +20,7 @@ type SpecFilter struct {
 	embeddedFiles map[string][]byte
 }
 
-func newSpecFilter(specPath, docsDir, pathsDir string, moduleTagMap map[string][]string, embeddedFiles map[string][]byte) *SpecFilter {
+func NewSpecFilter(specPath, docsDir, pathsDir string, moduleTagMap map[string][]string, embeddedFiles map[string][]byte) *SpecFilter {
 	if moduleTagMap == nil {
 		moduleTagMap = make(map[string][]string)
 	}
@@ -80,7 +80,6 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 			}
 		}
 		if len(data) == 0 {
-			// Check if modular OpenAPI directory structure exists (e.g. swagger_base.json + schemas.json + paths/*.json)
 			baseCandidates := []string{
 				f.docsDir + "/swagger_base.json",
 				"./docs/swagger_base.json",
@@ -105,7 +104,6 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 			if len(baseData) > 0 {
 				var modularSpec map[string]interface{}
 				if json.Unmarshal(baseData, &modularSpec) == nil {
-					// Merge schemas
 					schemaCandidates := []string{
 						baseDir + "schemas.json",
 						f.docsDir + "/schemas.json",
@@ -128,7 +126,6 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 						}
 					}
 
-					// Merge paths
 					mergedPaths := make(map[string]interface{})
 					pathsDirCandidates := []string{
 						f.pathsDir,
@@ -223,7 +220,6 @@ func (f *SpecFilter) FilterSpec(module, customTag string) (map[string]interface{
 				}
 			}
 		}
-		// If not matched via moduleTagMap, treat module directly as the tag name or keyword!
 		if !matchedInMap || len(allowedTags) == 0 {
 			allowedTags[module] = true
 			allowedTags[moduleLower] = true

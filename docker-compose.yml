@@ -1,0 +1,24 @@
+services:
+  go-apidocs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: go-apidocs-hub
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - NVIDIA_MODEL=deepseek-ai/deepseek-v4.1-flash
+      - NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+      - DOCS_AUTH_USER=${DOCS_AUTH_USER:-admin}
+      - DOCS_AUTH_PASS=${DOCS_AUTH_PASS:-admin}
+      - DOCS_AUTH_ENABLED=${DOCS_AUTH_ENABLED:-false}
+    volumes:
+      - apidocs-data:/app/apidocs-data
+      - ./docs:/app/docs
+
+volumes:
+  apidocs-data:
+    driver: local
