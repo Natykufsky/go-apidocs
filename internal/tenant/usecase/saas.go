@@ -1,0 +1,137 @@
+package saas
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/Natykufsky/go-apidocs/internal/core/domain"
+	tenantDomain "github.com/Natykufsky/go-apidocs/internal/tenant/domain"
+	tenantPort "github.com/Natykufsky/go-apidocs/internal/tenant/port"
+)
+
+type contextKey string
+
+const TenantContextKey contextKey = "apidocs_saas_tenant"
+
+// Service provides tenant lifecycle and SaaS quota checks.
+type Service struct {
+	repo tenantPort.TenantRepository
+}
+
+// NewService instantiates a SaaS service.
+func NewService(repo tenantPort.TenantRepository) *Service {
+	return &Service{repo: repo}
+}
+
+// RegisterTenantRequest represents onboarding input payload.
+type RegisterTenantRequest struct {
+	ID   string          `json:"id"`
+	Name string          `json:"name"`
+	Plan domain.PlanTier `json:"plan"`
+}
+
+// RegisterTenant provisions a new SaaS tenant with default plan limits and API keys.
+func (s *Service) RegisterTenant(ctx context.Context, req RegisterTenantRequest) (*tenantDomain.Tenant, error) {
+	if strings.TrimSpace(req.ID) == "" {
+		return nil, fmt.Errorf("tenant ID is required")
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		req.Name = req.ID
+	}
+	if req.Plan == "" {
+		req.Plan = domain.PlanCommunity
+	}
+
+	// Check for existing ID
+	if existing, _ := s.repo.GetByID(ctx, domain.TenantID(req.ID)); existing != nil {
+		return nil, fmt.Errorf("tenant with ID '%s' already exists", req.ID)
+	}
+
+	// Generate secure API Key
+	rawKey := make([]byte, 16)
+	_, _ = rand.Read(rawKey)
+	apiKey := fmt.Sprintf("ak_live_%s", hex.EncodeToString(rawKey))
+
+	tenant := &tenantDomain.Tenant{
+		ID:        domain.TenantID(strings.ToLower(req.ID)),
+		Name:      req.Name,
+		Plan:      req.Plan,
+		APIKey:    apiKey,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		Limits:    tenantDomain.DefaultLimitsForPlan(req.Plan),
+	}
+
+	if err := s.repo.Save(ctx, tenant); err != nil {
+		return nil, fmt.Errorf("failed to save tenant: %w", err)
+	}
+
+	return tenant, nil
+}
+
+// GetTenant retrieves a tenant by ID.
+func (s *Service) GetTenant(ctx context.Context, id domain.TenantID) (*tenantDomain.Tenant, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
+// ResolveTenantFromRequest inspects headers, query params, subdomains, and API keys to identify the tenant.
+func (s *Service) ResolveTenantFromRequest(r *http.Request) (*tenantDomain.Tenant, error) {
+	ctx := r.Context()
+
+	// 1. API Key Auth (Bearer token or X-API-Key header)
+	apiKey := r.Header.Get("X-API-Key")
+	if apiKey == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ak_") {
+			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+	if apiKey != "" {
+		if tenant, err := s.repo.GetByAPIKey(ctx, apiKey); err == nil && tenant != nil {
+			return tenant, nil
+		}
+	}
+
+	// 2. Explicit Header (e.g., from reverse proxy / API gateway)
+	if tenantID := r.Header.Get("X-Tenant-ID"); tenantID != "" {
+		if tenant, err := s.repo.GetByID(ctx, domain.TenantID(tenantID)); err == nil && tenant != nil {
+			return tenant, nil
+		}
+	}
+
+	// 3. Subdomain extraction (e.g. acme.apidocs.dev -> acme)
+	host := r.Host
+	if strings.Contains(host, ":") {
+		host = strings.Split(host, ":")[0]
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) >= 3 {
+		subdomain := strings.ToLower(parts[0])
+		if subdomain != "www" && subdomain != "api" && subdomain != "app" {
+			if tenant, err := s.repo.GetByID(ctx, domain.TenantID(subdomain)); err == nil && tenant != nil {
+				return tenant, nil
+			}
+		}
+	}
+
+	// 4. Default fallback tenant
+	return s.repo.GetByID(ctx, "default")
+}
+
+// Middleware returns an HTTP middleware that extracts and sets Tenant in request context.
+func (s *Service) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenant, err := s.ResolveTenantFromRequest(r)
+		if err != nil || tenant == nil {
+			http.Error(w, `{"error":"unauthorized or tenant not found"}`, http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), TenantContextKey, tenant)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
