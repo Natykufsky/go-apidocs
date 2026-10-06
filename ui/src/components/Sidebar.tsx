@@ -181,31 +181,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Workspace Switcher in Sidebar */}
-        {workspaces.length > 0 && onSelectService && (
-          <div className="pt-0.5">
-            {!collapsed ? (
-              <div className="w-full">
-                <WorkspaceSwitcher
-                  workspaces={workspaces}
-                  activeWorkspaceId={activeWorkspaceId}
-                  activeServiceId={activeServiceId}
-                  writesEnabled={writesEnabled}
-                  onSelectService={onSelectService}
-                  onOpenImporter={onOpenImporter}
-                  onOpenSecurityAudit={onOpenSecurityAudit}
-                />
-              </div>
-            ) : (
-              <div className="flex justify-center" title={`${activeWs?.name} - ${activeSvc?.title}`}>
-                <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm font-bold text-slate-700 dark:text-slate-300 shadow-2xs">
-                  {activeWs?.icon || '📁'}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Quick Spotlight Search Trigger */}
         {onOpenSearch && (
           <button

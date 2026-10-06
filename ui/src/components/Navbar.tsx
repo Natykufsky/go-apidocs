@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Menu, Lock, Search, ShieldCheck, ChevronRight, Sparkles, KeyRound, EyeOff, Globe } from 'lucide-react';
-import { Workspace } from './WorkspaceSwitcher';
+import { Workspace, WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 export interface NavItem {
   label: string;
@@ -24,7 +24,10 @@ interface NavbarProps {
   workspaces?: Workspace[];
   activeWorkspaceId?: string;
   activeServiceId?: string;
+  writesEnabled?: boolean;
   securityAuditEnabled?: boolean;
+  onSelectService?: (workspaceId: string, serviceId: string) => void;
+  onOpenImporter?: () => void;
   onOpenSecurityAudit?: () => void;
   onToggleMobileSidebar: () => void;
   onOpenSearch?: () => void;
@@ -40,7 +43,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   workspaces = [],
   activeWorkspaceId = 'default',
   activeServiceId = 'default',
+  writesEnabled = false,
   securityAuditEnabled = false,
+  onSelectService,
+  onOpenImporter,
   onOpenSecurityAudit,
   onToggleMobileSidebar,
   onOpenSearch,
@@ -82,10 +88,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   const activeSvc = activeWs?.services?.find((s) => s.id === activeServiceId) || activeWs?.services?.[0];
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200 shadow-xs">
-      <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-3">
-        {/* Left: Mobile Toggle & Hierarchy Breadcrumb */}
-        <div className="flex items-center gap-3 min-w-0">
+    <header className="sticky top-0 z-30 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200 shadow-xs">
+      <div className="w-full px-3 sm:px-5 lg:px-6 h-14 flex items-center justify-between gap-3">
+        {/* Left: Mobile Toggle & Workspace Switcher + Breadcrumb */}
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onToggleMobileSidebar}
             className="lg:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shrink-0"
@@ -94,18 +100,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Menu className="w-5 h-5" />
           </button>
 
+          {/* Workspace Switcher in Navbar */}
+          {workspaces.length > 0 && onSelectService && (
+            <div className="shrink-0">
+              <WorkspaceSwitcher
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+                activeServiceId={activeServiceId}
+                writesEnabled={writesEnabled}
+                onSelectService={onSelectService}
+                onOpenImporter={onOpenImporter}
+                onOpenSecurityAudit={onOpenSecurityAudit}
+              />
+            </div>
+          )}
+
           {/* Breadcrumb Hierarchy */}
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium truncate">
-            <span className="text-slate-400 dark:text-slate-500 hidden sm:inline truncate max-w-[120px]">
-              {activeWs?.name || 'Workspace'}
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0 hidden sm:inline" />
-            <span className="text-slate-800 dark:text-slate-200 font-semibold truncate flex items-center gap-1 max-w-[140px] sm:max-w-[200px]">
-              <span className="shrink-0">{activeSvc?.icon || '⚡'}</span>
-              <span className="truncate">{activeSvc?.title || 'Main API'}</span>
-            </span>
+          <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium truncate">
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0" />
-            <span className="inline-flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-50/90 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800/80 shadow-2xs shrink-0">
+            <span className="inline-flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-50/90 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200/80 dark:border-emerald-800/80 shadow-2xs shrink-0">
               <span>{pageMeta.icon}</span>
               <span>{pageMeta.title}</span>
             </span>

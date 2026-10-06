@@ -509,14 +509,17 @@ export const App: React.FC = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-        {/* Sleek Minimal Top Navbar */}
+        {/* Sleek Minimal Top Navbar with Top-Level Workspace Switcher */}
         <Navbar
           config={navConfig}
           currentPath={currentPath}
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           activeServiceId={activeServiceId}
+          writesEnabled={capabilities.workspace_writes_enabled}
           securityAuditEnabled={capabilities.security_audit_enabled}
+          onSelectService={handleSelectService}
+          onOpenImporter={() => setIsImporterModalOpen(true)}
           onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
           onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
           onOpenSearch={() => setIsSearchModalOpen(true)}
