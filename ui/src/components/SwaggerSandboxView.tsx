@@ -312,7 +312,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       )}
 
       {/* Sub-header Toolbar */}
-      <div className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-16 z-40 shadow-xs">
+      <div className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-14 z-20 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
           {/* Left: Scope Module Selector */}
           <div className="flex items-center gap-2">

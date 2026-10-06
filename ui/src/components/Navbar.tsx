@@ -88,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const activeSvc = activeWs?.services?.find((s) => s.id === activeServiceId) || activeWs?.services?.[0];
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200 shadow-xs">
+    <header className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200 shadow-xs">
       <div className="w-full px-3 sm:px-5 lg:px-6 h-14 flex items-center justify-between gap-3">
         {/* Left: Mobile Toggle & Workspace Switcher + Breadcrumb */}
         <div className="flex items-center gap-2.5 min-w-0">
