@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	DefaultDeepSeekModel = "deepseek-ai/deepseek-v4.1-flash"
-	DefaultNVIDIABaseURL = "https://integrate.api.nvidia.com/v1"
+	DefaultAnthropicModel   = "claude-3-5-sonnet-20241022"
+	DefaultAnthropicBaseURL = "https://api.anthropic.com/v1"
+	AnthropicVersion        = "2023-06-01"
 )
 
-// NVIDIAAdapter implements port.LLMClientPort targeting NVIDIA NIM API.
-type NVIDIAAdapter struct {
+// AnthropicAdapter implements port.LLMClientPort for Anthropic Claude models.
+type AnthropicAdapter struct {
 	apiKey      string
 	baseURL     string
 	model       string
@@ -31,28 +32,28 @@ type NVIDIAAdapter struct {
 	httpClient  *http.Client
 }
 
-// NewNVIDIAAdapter creates a new NVIDIA NIM adapter.
-func NewNVIDIAAdapter(apiKey, baseURL, model string, timeout time.Duration) *NVIDIAAdapter {
+// NewAnthropicAdapter creates a new Anthropic Claude adapter.
+func NewAnthropicAdapter(apiKey, baseURL, model string, timeout time.Duration) *AnthropicAdapter {
 	if apiKey == "" {
-		apiKey = os.Getenv("NVIDIA_API_KEY")
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
 	}
 	if baseURL == "" {
-		baseURL = os.Getenv("NVIDIA_BASE_URL")
+		baseURL = os.Getenv("ANTHROPIC_BASE_URL")
 		if baseURL == "" {
-			baseURL = DefaultNVIDIABaseURL
+			baseURL = DefaultAnthropicBaseURL
 		}
 	}
 	if model == "" {
-		model = os.Getenv("NVIDIA_MODEL")
+		model = os.Getenv("ANTHROPIC_MODEL")
 		if model == "" {
-			model = DefaultDeepSeekModel
+			model = DefaultAnthropicModel
 		}
 	}
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
 
-	return &NVIDIAAdapter{
+	return &AnthropicAdapter{
 		apiKey:      apiKey,
 		baseURL:     baseURL,
 		model:       model,
@@ -63,20 +64,20 @@ func NewNVIDIAAdapter(apiKey, baseURL, model string, timeout time.Duration) *NVI
 	}
 }
 
-// ProviderName returns the identifier for this inference adapter.
-func (a *NVIDIAAdapter) ProviderName() string {
-	return "nvidia"
+// ProviderName returns the adapter identifier.
+func (a *AnthropicAdapter) ProviderName() string {
+	return "anthropic"
 }
 
-// IsAvailable checks if the adapter has valid credentials.
-func (a *NVIDIAAdapter) IsAvailable() bool {
+// IsAvailable checks if the Anthropic adapter has configured credentials.
+func (a *AnthropicAdapter) IsAvailable() bool {
 	return a != nil && strings.TrimSpace(a.apiKey) != ""
 }
 
-// GenerateTests queries NVIDIA NIM DeepSeek endpoint.
-func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOptions) (*domain.TestSuite, error) {
+// GenerateTests queries Anthropic Messages API.
+func (a *AnthropicAdapter) GenerateTests(ctx context.Context, opts port.GenerateOptions) (*domain.TestSuite, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("NVIDIA AI adapter is not configured: missing API key")
+		return nil, fmt.Errorf("Anthropic adapter is not configured: missing API key")
 	}
 
 	modelToUse := a.model
@@ -86,56 +87,51 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 
 	prompt := a.buildPrompt(opts)
 
-	type chatMessage struct {
+	type anthropicMessage struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	}
 
-	type chatRequest struct {
-		Model          string                 `json:"model"`
-		Messages       []chatMessage          `json:"messages"`
-		Temperature    float64                `json:"temperature"`
-		MaxTokens      int                    `json:"max_tokens"`
-		ResponseFormat map[string]interface{} `json:"response_format,omitempty"`
+	type anthropicRequest struct {
+		Model       string             `json:"model"`
+		MaxTokens   int                `json:"max_tokens"`
+		Temperature float64            `json:"temperature"`
+		System      string             `json:"system"`
+		Messages    []anthropicMessage `json:"messages"`
 	}
 
-	payload := chatRequest{
-		Model: modelToUse,
-		Messages: []chatMessage{
-			{
-				Role:    "system",
-				Content: "You are an elite QA automation and cybersecurity test engineering engine. Output strict, valid JSON conforming to the requested schema with no markdown decoration or extra commentary.",
-			},
+	payload := anthropicRequest{
+		Model:       modelToUse,
+		MaxTokens:   a.maxTokens,
+		Temperature: a.temperature,
+		System:      "You are an elite QA automation and cybersecurity test engineering engine. Output ONLY valid, parseable JSON conforming strictly to the requested schema. Do not include markdown ticks, code blocks, or conversational pleasantries.",
+		Messages: []anthropicMessage{
 			{
 				Role:    "user",
 				Content: prompt,
 			},
 		},
-		Temperature: a.temperature,
-		MaxTokens:   a.maxTokens,
-		ResponseFormat: map[string]interface{}{
-			"type": "json_object",
-		},
 	}
 
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal AI request: %w", err)
+		return nil, fmt.Errorf("failed to marshal Anthropic request: %w", err)
 	}
 
-	apiURL := strings.TrimRight(a.baseURL, "/") + "/chat/completions"
+	apiURL := strings.TrimRight(a.baseURL, "/") + "/messages"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+a.apiKey)
+	httpReq.Header.Set("x-api-key", a.apiKey)
+	httpReq.Header.Set("anthropic-version", AnthropicVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
 	resp, err := a.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("nvidia nim request failed: %w", err)
+		return nil, fmt.Errorf("anthropic request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -145,32 +141,31 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("nvidia nim API returned error (status %d): %s", resp.StatusCode, string(respBytes))
+		return nil, fmt.Errorf("anthropic API returned error (status %d): %s", resp.StatusCode, string(respBytes))
 	}
 
-	type openAIChoice struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
+	type anthropicContentBlock struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
 	}
 
-	type openAIResponse struct {
-		Choices []openAIChoice `json:"choices"`
-		Error   *struct {
-			Message string `json:"message"`
-		} `json:"error,omitempty"`
+	type anthropicResponse struct {
+		Content []anthropicContentBlock `json:"content"`
 	}
 
-	var chatResp openAIResponse
-	if err := json.Unmarshal(respBytes, &chatResp); err != nil {
-		return nil, fmt.Errorf("failed to decode NVIDIA API response envelope: %w", err)
+	var anthropicResp anthropicResponse
+	if err := json.Unmarshal(respBytes, &anthropicResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Anthropic response: %w", err)
 	}
 
-	if len(chatResp.Choices) == 0 || chatResp.Choices[0].Message.Content == "" {
-		return nil, fmt.Errorf("received empty completion from deepseek model")
+	var rawContent string
+	for _, block := range anthropicResp.Content {
+		if block.Type == "text" {
+			rawContent += block.Text
+		}
 	}
 
-	rawContent := strings.TrimSpace(chatResp.Choices[0].Message.Content)
+	rawContent = strings.TrimSpace(rawContent)
 	if strings.HasPrefix(rawContent, "```json") {
 		rawContent = strings.TrimPrefix(rawContent, "```json")
 		rawContent = strings.TrimSuffix(rawContent, "```")
@@ -182,11 +177,11 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 
 	var suite domain.TestSuite
 	if err := json.Unmarshal([]byte(rawContent), &suite); err != nil {
-		return nil, fmt.Errorf("failed to parse DeepSeek test suite JSON: %w (raw response: %s)", err, rawContent)
+		return nil, fmt.Errorf("failed to parse Claude test suite JSON: %w (raw response: %s)", err, rawContent)
 	}
 
 	suite.EndpointKey = opts.EndpointKey
-	suite.ModelUsed = a.model
+	suite.ModelUsed = modelToUse
 	suite.GeneratedAt = time.Now().UTC()
 
 	for i := range suite.TestCases {
@@ -198,7 +193,7 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 	return &suite, nil
 }
 
-func (a *NVIDIAAdapter) buildPrompt(opts port.GenerateOptions) string {
+func (a *AnthropicAdapter) buildPrompt(opts port.GenerateOptions) string {
 	specContent := opts.SpecJSON
 	if specContent == "" {
 		specContent = "Endpoint: " + opts.EndpointKey

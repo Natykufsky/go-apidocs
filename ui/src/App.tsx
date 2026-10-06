@@ -10,6 +10,7 @@ import { CodeSnippetModal } from './components/CodeSnippetModal';
 import { SchemaImporterModal } from './components/SchemaImporterModal';
 import { SecurityAuditModal } from './components/SecurityAuditModal';
 import { AITestGeneratorModal, AITestCase } from './components/AITestGeneratorModal';
+import { TenantSettingsModal, TenantTheme } from './components/TenantSettingsModal';
 import { Workspace } from './components/WorkspaceSwitcher';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
@@ -83,6 +84,8 @@ export const App: React.FC = () => {
   const [isCredsModalOpen, setIsCredsModalOpen] = useState<boolean>(false);
   const [isImporterModalOpen, setIsImporterModalOpen] = useState<boolean>(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
+  const [isTenantModalOpen, setIsTenantModalOpen] = useState<boolean>(false);
+  const [tenantTheme, setTenantTheme] = useState<TenantTheme | null>(null);
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [snippetEndpoint, setSnippetEndpoint] = useState<string | null>(null);
   const [aiTestEndpoint, setAiTestEndpoint] = useState<string | null>(null);
@@ -92,6 +95,16 @@ export const App: React.FC = () => {
     return localStorage.getItem('apidocs_sidebar_collapsed') === 'true';
   });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+
+  const applyTheme = (theme: TenantTheme) => {
+    setTenantTheme(theme);
+    if (theme.primary_color) {
+      document.documentElement.style.setProperty('--color-primary', theme.primary_color);
+    }
+    if (theme.accent_color) {
+      document.documentElement.style.setProperty('--color-accent', theme.accent_color);
+    }
+  };
   const [activeEnv, setActiveEnv] = useState<string>('default');
   const [maskPII, setMaskPII] = useState<boolean>(() => {
     return localStorage.getItem('apidocs_mask_pii') === 'true';
@@ -525,6 +538,7 @@ export const App: React.FC = () => {
           onOpenImporter={() => setIsImporterModalOpen(true)}
           onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
           onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
+          onOpenTenantSettings={() => setIsTenantModalOpen(true)}
           onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
           onOpenSearch={() => setIsSearchModalOpen(true)}
           onOpenCredentials={() => setIsCredsModalOpen(true)}
@@ -705,6 +719,13 @@ export const App: React.FC = () => {
           }
           handleNavigate('/docs');
         }}
+      />
+
+      {/* SaaS Tenant Settings & Theme Customizer Modal */}
+      <TenantSettingsModal
+        isOpen={isTenantModalOpen}
+        onClose={() => setIsTenantModalOpen(false)}
+        onThemeSaved={applyTheme}
       />
     </div>
   );

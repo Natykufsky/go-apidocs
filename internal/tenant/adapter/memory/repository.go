@@ -31,6 +31,8 @@ func NewMemoryTenantRepository() *MemoryTenantRepository {
 		Name:      "Demo Organization",
 		Plan:      domain.PlanEnterprise,
 		APIKey:    "ak_live_default_demo_key",
+		Status:    "active",
+		Theme:     tenantDomain.DefaultTheme(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 		Limits:    tenantDomain.DefaultLimitsForPlan(domain.PlanEnterprise),

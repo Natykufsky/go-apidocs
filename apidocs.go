@@ -61,14 +61,30 @@ type (
 	LLMClientPort       = aiPort.LLMClientPort
 )
 
-// NVIDIAConfig configures the NVIDIA NIM DeepSeek LLM for QA test generation.
-type NVIDIAConfig struct {
+// AIProviderConfig configures an individual LLM inference provider.
+type AIProviderConfig struct {
 	APIKey      string        `json:"api_key"`
 	BaseURL     string        `json:"base_url"`
 	Model       string        `json:"model"`
 	Timeout     time.Duration `json:"timeout"`
 	Temperature float64       `json:"temperature"`
 	MaxTokens   int           `json:"max_tokens"`
+}
+
+// NVIDIAConfig configures the NVIDIA NIM DeepSeek LLM for QA test generation.
+type NVIDIAConfig = AIProviderConfig
+
+// OpenAIConfig configures OpenAI GPT-4o / GPT-4o-mini.
+type OpenAIConfig = AIProviderConfig
+
+// AnthropicConfig configures Anthropic Claude 3.5 Sonnet.
+type AnthropicConfig = AIProviderConfig
+
+// OllamaConfig configures local / self-hosted Ollama inference.
+type OllamaConfig struct {
+	BaseURL string        `json:"base_url"`
+	Model   string        `json:"model"`
+	Timeout time.Duration `json:"timeout"`
 }
 
 // Public session and auth function re-exports delegating to internal/auth
@@ -227,6 +243,41 @@ type Config struct {
 
 	// NVIDIA configures NVIDIA NIM DeepSeek LLM for automated QA test case generation.
 	NVIDIA NVIDIAConfig
+
+	// OpenAI configures OpenAI GPT-4o test synthesis.
+	OpenAI OpenAIConfig
+
+	// Anthropic configures Claude 3.5 Sonnet test synthesis.
+	Anthropic AnthropicConfig
+
+	// Ollama configures local self-hosted test synthesis.
+	Ollama OllamaConfig
+
+	// DefaultAIProvider specifies default provider ("nvidia" | "openai" | "anthropic" | "ollama").
+	DefaultAIProvider string
+}
+
+// buildAIDispatcher initializes registered AI LLM clients into a multi-provider dispatcher.
+func buildAIDispatcher(cfg Config) aiPort.LLMClientPort {
+	dispatcher := aiAdapter.NewMultiProviderDispatcher(cfg.DefaultAIProvider)
+
+	// 1. NVIDIA NIM (DeepSeek v4.1)
+	nvidia := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	dispatcher.RegisterProvider(nvidia)
+
+	// 2. OpenAI (GPT-4o)
+	openai := aiAdapter.NewOpenAIAdapter(cfg.OpenAI.APIKey, cfg.OpenAI.BaseURL, cfg.OpenAI.Model, cfg.OpenAI.Timeout)
+	dispatcher.RegisterProvider(openai)
+
+	// 3. Anthropic (Claude 3.5)
+	anthropic := aiAdapter.NewAnthropicAdapter(cfg.Anthropic.APIKey, cfg.Anthropic.BaseURL, cfg.Anthropic.Model, cfg.Anthropic.Timeout)
+	dispatcher.RegisterProvider(anthropic)
+
+	// 4. Local Ollama
+	ollama := aiAdapter.NewOllamaAdapter(cfg.Ollama.BaseURL, cfg.Ollama.Model, cfg.Ollama.Timeout)
+	dispatcher.RegisterProvider(ollama)
+
+	return dispatcher
 }
 
 // ValidateConfig checks for configuration consistency.
@@ -383,7 +434,7 @@ func MountFiber(app *fiber.App, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	aiClient := buildAIDispatcher(cfg)
 	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 
@@ -697,7 +748,7 @@ func MountChi(r chi.Router, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	aiClient := buildAIDispatcher(cfg)
 	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 	authGuard := HTTPAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
@@ -781,7 +832,7 @@ func MountGin(r gin.IRoutes, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	aiClient := buildAIDispatcher(cfg)
 	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 	authGuard := GinAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)
@@ -855,7 +906,7 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 		panic(fmt.Sprintf("go-apidocs initialization failed: %v", err))
 	}
 
-	aiClient := aiAdapter.NewNVIDIAAdapter(cfg.NVIDIA.APIKey, cfg.NVIDIA.BaseURL, cfg.NVIDIA.Model, cfg.NVIDIA.Timeout)
+	aiClient := buildAIDispatcher(cfg)
 	defaultFilter := schema.NewSpecFilter(cfg.SpecFilePath, cfg.DocsDir, cfg.PathsDir, cfg.ModuleTagMap, nil)
 	defaultQA := qa.NewQATracker(cfg.QAStoragePath, cfg.Title, aiClient)
 	authGuard := HTTPAuthMiddleware(authEnabled, cfg.AuthUser, cfg.AuthPassword, cfg.JWTSecret)

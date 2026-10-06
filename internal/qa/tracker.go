@@ -341,6 +341,9 @@ func (q *QATracker) HandleGetReport(c *fiber.Ctx) error {
 }
 
 type AIGenerateRequest struct {
+	Provider     string `json:"provider,omitempty"`
+	Model        string `json:"model,omitempty"`
+	BaseURL      string `json:"base_url,omitempty"`
 	EndpointKey  string `json:"endpoint_key"`
 	SpecJSON     string `json:"spec_json"`
 	CustomPrompt string `json:"custom_prompt,omitempty"`
@@ -353,7 +356,7 @@ func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Req
 	if q.llmClient == nil || !q.llmClient.IsAvailable() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"error": "NVIDIA AI service is not configured. Please set the NVIDIA_API_KEY environment variable or configure Config.NVIDIA.APIKey.",
+			"error": "AI service is not configured. Please set NVIDIA_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY or configure local Ollama.",
 		})
 		return
 	}
@@ -371,10 +374,13 @@ func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
 	suite, err := q.llmClient.GenerateTests(ctx, aiPort.GenerateOptions{
+		Provider:     req.Provider,
+		Model:        req.Model,
+		BaseURL:      req.BaseURL,
 		EndpointKey:  req.EndpointKey,
 		SpecJSON:     req.SpecJSON,
 		CustomPrompt: req.CustomPrompt,
@@ -392,7 +398,7 @@ func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Req
 		rec.EndpointKey = req.EndpointKey
 		rec.Status = "untested"
 		rec.TestedAt = time.Now().Format("2006-01-02 15:04:05")
-		rec.Tester = "DeepSeek AI (NVIDIA NIM)"
+		rec.Tester = "AI QA Generator (" + suite.ModelUsed + ")"
 	}
 	rec.AISuite = suite
 	data[req.EndpointKey] = rec
@@ -410,7 +416,7 @@ func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Req
 func (q *QATracker) HandleGenerateAITests(c *fiber.Ctx) error {
 	if q.llmClient == nil || !q.llmClient.IsAvailable() {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-			"error": "NVIDIA AI service is not configured. Please set the NVIDIA_API_KEY environment variable or configure Config.NVIDIA.APIKey.",
+			"error": "AI service is not configured. Please configure an AI provider.",
 		})
 	}
 
@@ -423,10 +429,13 @@ func (q *QATracker) HandleGenerateAITests(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "endpoint_key is required"})
 	}
 
-	ctx, cancel := context.WithTimeout(c.Context(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(c.Context(), 120*time.Second)
 	defer cancel()
 
 	suite, err := q.llmClient.GenerateTests(ctx, aiPort.GenerateOptions{
+		Provider:     req.Provider,
+		Model:        req.Model,
+		BaseURL:      req.BaseURL,
 		EndpointKey:  req.EndpointKey,
 		SpecJSON:     req.SpecJSON,
 		CustomPrompt: req.CustomPrompt,
@@ -442,7 +451,7 @@ func (q *QATracker) HandleGenerateAITests(c *fiber.Ctx) error {
 		rec.EndpointKey = req.EndpointKey
 		rec.Status = "untested"
 		rec.TestedAt = time.Now().Format("2006-01-02 15:04:05")
-		rec.Tester = "DeepSeek AI (NVIDIA NIM)"
+		rec.Tester = "AI QA Generator (" + suite.ModelUsed + ")"
 	}
 	rec.AISuite = suite
 	data[req.EndpointKey] = rec

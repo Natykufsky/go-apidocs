@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	DefaultDeepSeekModel = "deepseek-ai/deepseek-v4.1-flash"
-	DefaultNVIDIABaseURL = "https://integrate.api.nvidia.com/v1"
+	DefaultOpenAIModel   = "gpt-4o-mini"
+	DefaultOpenAIBaseURL = "https://api.openai.com/v1"
 )
 
-// NVIDIAAdapter implements port.LLMClientPort targeting NVIDIA NIM API.
-type NVIDIAAdapter struct {
+// OpenAIAdapter implements port.LLMClientPort for OpenAI API (GPT-4o, GPT-4o-mini, o1).
+type OpenAIAdapter struct {
 	apiKey      string
 	baseURL     string
 	model       string
@@ -31,28 +31,28 @@ type NVIDIAAdapter struct {
 	httpClient  *http.Client
 }
 
-// NewNVIDIAAdapter creates a new NVIDIA NIM adapter.
-func NewNVIDIAAdapter(apiKey, baseURL, model string, timeout time.Duration) *NVIDIAAdapter {
+// NewOpenAIAdapter creates a new OpenAI LLM adapter.
+func NewOpenAIAdapter(apiKey, baseURL, model string, timeout time.Duration) *OpenAIAdapter {
 	if apiKey == "" {
-		apiKey = os.Getenv("NVIDIA_API_KEY")
+		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
 	if baseURL == "" {
-		baseURL = os.Getenv("NVIDIA_BASE_URL")
+		baseURL = os.Getenv("OPENAI_BASE_URL")
 		if baseURL == "" {
-			baseURL = DefaultNVIDIABaseURL
+			baseURL = DefaultOpenAIBaseURL
 		}
 	}
 	if model == "" {
-		model = os.Getenv("NVIDIA_MODEL")
+		model = os.Getenv("OPENAI_MODEL")
 		if model == "" {
-			model = DefaultDeepSeekModel
+			model = DefaultOpenAIModel
 		}
 	}
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
 
-	return &NVIDIAAdapter{
+	return &OpenAIAdapter{
 		apiKey:      apiKey,
 		baseURL:     baseURL,
 		model:       model,
@@ -63,20 +63,20 @@ func NewNVIDIAAdapter(apiKey, baseURL, model string, timeout time.Duration) *NVI
 	}
 }
 
-// ProviderName returns the identifier for this inference adapter.
-func (a *NVIDIAAdapter) ProviderName() string {
-	return "nvidia"
+// ProviderName returns the adapter identifier.
+func (a *OpenAIAdapter) ProviderName() string {
+	return "openai"
 }
 
-// IsAvailable checks if the adapter has valid credentials.
-func (a *NVIDIAAdapter) IsAvailable() bool {
+// IsAvailable checks if the OpenAI adapter has configured credentials.
+func (a *OpenAIAdapter) IsAvailable() bool {
 	return a != nil && strings.TrimSpace(a.apiKey) != ""
 }
 
-// GenerateTests queries NVIDIA NIM DeepSeek endpoint.
-func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOptions) (*domain.TestSuite, error) {
+// GenerateTests queries OpenAI chat completions.
+func (a *OpenAIAdapter) GenerateTests(ctx context.Context, opts port.GenerateOptions) (*domain.TestSuite, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("NVIDIA AI adapter is not configured: missing API key")
+		return nil, fmt.Errorf("OpenAI adapter is not configured: missing API key")
 	}
 
 	modelToUse := a.model
@@ -120,7 +120,7 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal AI request: %w", err)
+		return nil, fmt.Errorf("failed to marshal OpenAI request: %w", err)
 	}
 
 	apiURL := strings.TrimRight(a.baseURL, "/") + "/chat/completions"
@@ -135,7 +135,7 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 
 	resp, err := a.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("nvidia nim request failed: %w", err)
+		return nil, fmt.Errorf("openai request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -145,7 +145,7 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("nvidia nim API returned error (status %d): %s", resp.StatusCode, string(respBytes))
+		return nil, fmt.Errorf("openai API returned error (status %d): %s", resp.StatusCode, string(respBytes))
 	}
 
 	type openAIChoice struct {
@@ -163,11 +163,11 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 
 	var chatResp openAIResponse
 	if err := json.Unmarshal(respBytes, &chatResp); err != nil {
-		return nil, fmt.Errorf("failed to decode NVIDIA API response envelope: %w", err)
+		return nil, fmt.Errorf("failed to decode OpenAI API response: %w", err)
 	}
 
 	if len(chatResp.Choices) == 0 || chatResp.Choices[0].Message.Content == "" {
-		return nil, fmt.Errorf("received empty completion from deepseek model")
+		return nil, fmt.Errorf("received empty completion from OpenAI model")
 	}
 
 	rawContent := strings.TrimSpace(chatResp.Choices[0].Message.Content)
@@ -182,11 +182,11 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 
 	var suite domain.TestSuite
 	if err := json.Unmarshal([]byte(rawContent), &suite); err != nil {
-		return nil, fmt.Errorf("failed to parse DeepSeek test suite JSON: %w (raw response: %s)", err, rawContent)
+		return nil, fmt.Errorf("failed to parse OpenAI test suite JSON: %w (raw response: %s)", err, rawContent)
 	}
 
 	suite.EndpointKey = opts.EndpointKey
-	suite.ModelUsed = a.model
+	suite.ModelUsed = modelToUse
 	suite.GeneratedAt = time.Now().UTC()
 
 	for i := range suite.TestCases {
@@ -198,7 +198,7 @@ func (a *NVIDIAAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 	return &suite, nil
 }
 
-func (a *NVIDIAAdapter) buildPrompt(opts port.GenerateOptions) string {
+func (a *OpenAIAdapter) buildPrompt(opts port.GenerateOptions) string {
 	specContent := opts.SpecJSON
 	if specContent == "" {
 		specContent = "Endpoint: " + opts.EndpointKey

@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/Natykufsky/go-apidocs"
+	tenantAdapter "github.com/Natykufsky/go-apidocs/internal/tenant/adapter"
 	tenantMemory "github.com/Natykufsky/go-apidocs/internal/tenant/adapter/memory"
 	tenantUsecase "github.com/Natykufsky/go-apidocs/internal/tenant/usecase"
 )
@@ -80,6 +82,8 @@ func main() {
 		})
 	})
 
+	stripeAdapter := tenantAdapter.NewStripeBillingAdapter(os.Getenv("STRIPE_WEBHOOK_SECRET"))
+
 	mux.HandleFunc("/api/v1/saas/tenant", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		tenant, err := saasService.ResolveTenantFromRequest(r)
@@ -89,6 +93,76 @@ func main() {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(tenant)
+	})
+
+	// SaaS Tenant Theme Update API
+	mux.HandleFunc("/api/v1/saas/tenant/theme", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if r.Method != http.MethodPut && r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenant, err := saasService.ResolveTenantFromRequest(r)
+		if err != nil || tenant == nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+
+		var req tenantUsecase.UpdateThemeRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid json payload"})
+			return
+		}
+
+		updated, err := saasService.UpdateTenantTheme(r.Context(), tenant.ID, req)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"theme":   updated.Theme,
+		})
+	})
+
+	// SaaS Stripe/Billing Webhook API
+	mux.HandleFunc("/api/v1/saas/webhooks/billing", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to read body"})
+			return
+		}
+
+		sig := r.Header.Get("Stripe-Signature")
+		event, err := stripeAdapter.ProcessWebhook(r.Context(), bodyBytes, sig)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		if err := saasService.ApplyBillingEvent(r.Context(), event); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"received": true,
+			"event_id": event.EventID,
+		})
 	})
 
 	// Mount core API documentation & sandbox UI

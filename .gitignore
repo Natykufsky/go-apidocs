@@ -13,3 +13,8 @@ bin/
 *.test
 *.out
 .wakatime-project
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example

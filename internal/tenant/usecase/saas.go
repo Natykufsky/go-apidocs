@@ -123,6 +123,58 @@ func (s *Service) ResolveTenantFromRequest(r *http.Request) (*tenantDomain.Tenan
 	return s.repo.GetByID(ctx, "default")
 }
 
+// UpdateThemeRequest represents custom branding payload.
+type UpdateThemeRequest struct {
+	PrimaryColor string `json:"primary_color"`
+	AccentColor  string `json:"accent_color"`
+	LogoURL      string `json:"logo_url"`
+	CustomCSS    string `json:"custom_css"`
+	DarkMode     bool   `json:"dark_mode"`
+}
+
+// UpdateTenantTheme updates the visual theme for a tenant.
+func (s *Service) UpdateTenantTheme(ctx context.Context, tenantID domain.TenantID, req UpdateThemeRequest) (*tenantDomain.Tenant, error) {
+	tenant, err := s.repo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if req.PrimaryColor != "" {
+		tenant.Theme.PrimaryColor = req.PrimaryColor
+	}
+	if req.AccentColor != "" {
+		tenant.Theme.AccentColor = req.AccentColor
+	}
+	tenant.Theme.LogoURL = req.LogoURL
+	tenant.Theme.CustomCSS = req.CustomCSS
+	tenant.Theme.DarkMode = req.DarkMode
+	tenant.UpdatedAt = time.Now().UTC()
+
+	if err := s.repo.Save(ctx, tenant); err != nil {
+		return nil, fmt.Errorf("failed to update tenant theme: %w", err)
+	}
+	return tenant, nil
+}
+
+// ApplyBillingEvent updates tenant plan and status from a processed billing webhook.
+func (s *Service) ApplyBillingEvent(ctx context.Context, event *tenantPort.WebhookEvent) error {
+	if event == nil || event.TenantID == "" {
+		return fmt.Errorf("invalid billing event: missing tenant ID")
+	}
+
+	tenant, err := s.repo.GetByID(ctx, event.TenantID)
+	if err != nil {
+		return fmt.Errorf("tenant lookup failed: %w", err)
+	}
+
+	tenant.Plan = event.Plan
+	tenant.Status = event.Status
+	tenant.BillingID = event.CustomerID
+	tenant.Limits = tenantDomain.DefaultLimitsForPlan(event.Plan)
+	tenant.UpdatedAt = time.Now().UTC()
+
+	return s.repo.Save(ctx, tenant)
+}
+
 // Middleware returns an HTTP middleware that extracts and sets Tenant in request context.
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,3 +187,4 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
