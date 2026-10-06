@@ -13,6 +13,7 @@ import (
 
 	"github.com/Natykufsky/go-apidocs/internal/ai/domain"
 	"github.com/Natykufsky/go-apidocs/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/internal/env"
 )
 
 const (
@@ -33,6 +34,8 @@ type NVIDIAAdapter struct {
 
 // NewNVIDIAAdapter creates a new NVIDIA NIM adapter.
 func NewNVIDIAAdapter(apiKey, baseURL, model string, timeout time.Duration) *NVIDIAAdapter {
+	env.LoadDotEnv()
+
 	if apiKey == "" {
 		apiKey = os.Getenv("NVIDIA_API_KEY")
 		if apiKey == "" {

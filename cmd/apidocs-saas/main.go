@@ -11,12 +11,15 @@ import (
 	"time"
 
 	"github.com/Natykufsky/go-apidocs"
+	"github.com/Natykufsky/go-apidocs/internal/env"
 	tenantAdapter "github.com/Natykufsky/go-apidocs/internal/tenant/adapter"
 	tenantMemory "github.com/Natykufsky/go-apidocs/internal/tenant/adapter/memory"
 	tenantUsecase "github.com/Natykufsky/go-apidocs/internal/tenant/usecase"
 )
 
 func main() {
+	env.LoadDotEnv()
+
 	port := flag.Int("port", 8080, "Port for SaaS platform gateway server")
 	specFile := flag.String("spec", "./docs/swagger.json", "Default fallback OpenAPI specification file")
 	flag.Parse()

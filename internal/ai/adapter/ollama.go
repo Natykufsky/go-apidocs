@@ -64,8 +64,12 @@ func (a *OllamaAdapter) IsAvailable() bool {
 	if a == nil || a.baseURL == "" {
 		return false
 	}
-	// Permissive in local dev
-	return true
+	// If explicit OLLAMA_API_KEY or OLLAMA_ENABLED is true, or check quick ping
+	if os.Getenv("OLLAMA_ENABLED") == "true" {
+		return true
+	}
+	// Do not intercept if user didn't explicitly request or enable Ollama
+	return false
 }
 
 // GenerateTests queries Ollama /api/generate or /api/chat.

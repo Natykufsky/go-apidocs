@@ -13,6 +13,7 @@ import (
 
 	"github.com/Natykufsky/go-apidocs/internal/ai/domain"
 	"github.com/Natykufsky/go-apidocs/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/internal/env"
 )
 
 const (
@@ -34,6 +35,7 @@ type AnthropicAdapter struct {
 
 // NewAnthropicAdapter creates a new Anthropic Claude adapter.
 func NewAnthropicAdapter(apiKey, baseURL, model string, timeout time.Duration) *AnthropicAdapter {
+	env.LoadDotEnv()
 	if apiKey == "" {
 		apiKey = os.Getenv("ANTHROPIC_API_KEY")
 	}

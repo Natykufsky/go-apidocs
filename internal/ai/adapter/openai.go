@@ -13,6 +13,7 @@ import (
 
 	"github.com/Natykufsky/go-apidocs/internal/ai/domain"
 	"github.com/Natykufsky/go-apidocs/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/internal/env"
 )
 
 const (
@@ -33,6 +34,7 @@ type OpenAIAdapter struct {
 
 // NewOpenAIAdapter creates a new OpenAI LLM adapter.
 func NewOpenAIAdapter(apiKey, baseURL, model string, timeout time.Duration) *OpenAIAdapter {
+	env.LoadDotEnv()
 	if apiKey == "" {
 		apiKey = os.Getenv("OPENAI_API_KEY")
 	}

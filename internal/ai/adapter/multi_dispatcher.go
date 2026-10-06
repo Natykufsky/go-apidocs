@@ -66,13 +66,21 @@ func (d *MultiProviderDispatcher) GenerateTests(ctx context.Context, opts port.G
 		targetProvider = d.defaultP
 	}
 
+	var lastErr error
+
 	// 1. Try explicitly requested provider
-	if p, exists := d.providers[targetProvider]; exists && p.IsAvailable() {
-		suite, err := p.GenerateTests(ctx, opts)
-		if err == nil {
-			return suite, nil
+	if p, exists := d.providers[targetProvider]; exists {
+		if !p.IsAvailable() {
+			lastErr = fmt.Errorf("provider '%s' is not configured: missing credentials or service unreachable", targetProvider)
+		} else {
+			suite, err := p.GenerateTests(ctx, opts)
+			if err == nil {
+				return suite, nil
+			}
+			lastErr = fmt.Errorf("%s inference error: %w", targetProvider, err)
 		}
-		// If explicit failed, try fallback
+	} else {
+		lastErr = fmt.Errorf("unknown AI provider '%s'", targetProvider)
 	}
 
 	// 2. Fallback cascade: nvidia -> openai -> anthropic -> ollama
@@ -91,5 +99,8 @@ func (d *MultiProviderDispatcher) GenerateTests(ctx context.Context, opts port.G
 		}
 	}
 
+	if lastErr != nil {
+		return nil, lastErr
+	}
 	return nil, fmt.Errorf("no available AI providers succeeded in generating test suite")
 }
