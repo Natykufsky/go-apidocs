@@ -332,14 +332,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={m}
                   type="button"
                   onClick={() => onSelectModule(m)}
-                  title={m}
+                  title={`Filter by module: ${m}`}
                   className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${collapsed ? 'justify-center' : 'justify-between'
                     } ${activeModule === m
                       ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                 >
-                  <span className="truncate">📁 {!collapsed && m}</span>
+                  <span className="truncate max-w-full text-left" title={m}>
+                    📁 {!collapsed && m}
+                  </span>
                 </button>
               ))}
             </div>
@@ -533,7 +535,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* Desktop Sticky Sidebar */}
       <aside
-        className={`hidden lg:flex flex-col shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 transition-all duration-300 ease-in-out z-30 sticky top-0 h-screen overflow-hidden ${collapsed ? 'w-20' : 'w-64'
+        className={`hidden lg:flex flex-col shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 transition-all duration-300 ease-in-out z-40 sticky top-0 h-screen ${collapsed ? 'w-20' : 'w-64'
           }`}
       >
         {sidebarContent}
