@@ -66,21 +66,21 @@ func (d *MultiProviderDispatcher) GenerateTests(ctx context.Context, opts port.G
 		targetProvider = d.defaultP
 	}
 
-	var lastErr error
+	var attemptedErrors []string
 
 	// 1. Try explicitly requested provider
 	if p, exists := d.providers[targetProvider]; exists {
 		if !p.IsAvailable() {
-			lastErr = fmt.Errorf("provider '%s' is not configured: missing credentials or service unreachable", targetProvider)
+			attemptedErrors = append(attemptedErrors, fmt.Sprintf("%s (not configured / missing credentials)", targetProvider))
 		} else {
 			suite, err := p.GenerateTests(ctx, opts)
 			if err == nil {
 				return suite, nil
 			}
-			lastErr = fmt.Errorf("%s inference error: %w", targetProvider, err)
+			attemptedErrors = append(attemptedErrors, fmt.Sprintf("%s error: %v", targetProvider, err))
 		}
 	} else {
-		lastErr = fmt.Errorf("unknown AI provider '%s'", targetProvider)
+		attemptedErrors = append(attemptedErrors, fmt.Sprintf("%s (unknown provider)", targetProvider))
 	}
 
 	// 2. Fallback cascade: nvidia -> openai -> anthropic -> ollama
@@ -96,11 +96,12 @@ func (d *MultiProviderDispatcher) GenerateTests(ctx context.Context, opts port.G
 			if err == nil {
 				return suite, nil
 			}
+			attemptedErrors = append(attemptedErrors, fmt.Sprintf("%s error: %v", name, err))
 		}
 	}
 
-	if lastErr != nil {
-		return nil, lastErr
+	if len(attemptedErrors) > 0 {
+		return nil, fmt.Errorf("no AI providers succeeded: %s", strings.Join(attemptedErrors, "; "))
 	}
-	return nil, fmt.Errorf("no available AI providers succeeded in generating test suite")
+	return nil, fmt.Errorf("no available AI providers configured. Please check your API keys in .env")
 }
