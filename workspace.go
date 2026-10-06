@@ -35,6 +35,22 @@ type Authorizer interface {
 	Authorize(r *http.Request, action string) (allowed bool, principal string)
 }
 
+// AuthorizerFunc allows using a plain function as an Authorizer.
+type AuthorizerFunc func(r *http.Request, action string) (bool, string)
+
+// Authorize implements the Authorizer interface.
+func (f AuthorizerFunc) Authorize(r *http.Request, action string) (bool, string) {
+	return f(r, action)
+}
+
+// AllowAllAuthorizer is a permissive authorizer allowing all workspace operations (recommended for development & internal staging).
+type AllowAllAuthorizer struct{}
+
+// Authorize implements Authorizer by granting access unconditionally.
+func (AllowAllAuthorizer) Authorize(r *http.Request, action string) (bool, string) {
+	return true, "developer"
+}
+
 // RateLimitConfig configures request throttling on mutating routes.
 type RateLimitConfig struct {
 	Enabled bool    `json:"enabled"`

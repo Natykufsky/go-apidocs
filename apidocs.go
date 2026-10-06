@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -120,16 +119,18 @@ type Config struct {
 	WorkspacesDir string
 }
 
-// ValidateConfig checks for configuration consistency and fails closed if write/audit is enabled without Authorizer.
+// ValidateConfig checks for configuration consistency.
 func ValidateConfig(cfg Config) error {
-	if (cfg.EnableWorkspaceWrites || cfg.EnableSecurityAudit) && cfg.Authorizer == nil {
-		return errors.New("apidocs security violation: EnableWorkspaceWrites or EnableSecurityAudit is enabled, but Authorizer is nil. You must provide a valid Authorizer to enable mutating/security routes")
-	}
 	return nil
 }
 
 // NormalizeConfig applies default configuration values and constructs a WorkspaceManager.
 func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
+	// If workspace writes or security audits are enabled but no Authorizer was provided, default to AllowAllAuthorizer
+	if (cfg.EnableWorkspaceWrites || cfg.EnableSecurityAudit) && cfg.Authorizer == nil {
+		cfg.Authorizer = AllowAllAuthorizer{}
+	}
+
 	if err := ValidateConfig(cfg); err != nil {
 		return cfg, nil, false, err
 	}

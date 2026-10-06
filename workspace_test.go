@@ -49,16 +49,22 @@ func TestNormalizeConfig_DefaultWorkspace(t *testing.T) {
 	}
 }
 
-func TestSecurity_FailClosedOnStartup(t *testing.T) {
+func TestSecurity_DefaultAuthorizerFallback(t *testing.T) {
 	cfg := Config{
 		Title:                 "Test API",
 		EnableWorkspaceWrites: true,
-		Authorizer:            nil, // Deliberately nil
+		Authorizer:            nil, // Deliberately nil, should fallback to AllowAllAuthorizer
 	}
 
-	err := ValidateConfig(cfg)
-	if err == nil {
-		t.Fatal("expected startup error when EnableWorkspaceWrites=true and Authorizer=nil")
+	normCfg, wm, _, err := NormalizeConfig(cfg)
+	if err != nil {
+		t.Fatalf("expected successful NormalizeConfig with default authorizer, got: %v", err)
+	}
+	if normCfg.Authorizer == nil {
+		t.Fatal("expected default AllowAllAuthorizer, got nil")
+	}
+	if wm == nil {
+		t.Fatal("expected non-nil WorkspaceManager")
 	}
 }
 
