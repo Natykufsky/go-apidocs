@@ -27,6 +27,12 @@ func main() {
 
 	// 2. Initialize Core Docs Configuration
 	nvidiaKey := os.Getenv("NVIDIA_API_KEY")
+	if nvidiaKey == "" {
+		nvidiaKey = os.Getenv("Nvidia_key")
+	}
+	if nvidiaKey == "" {
+		nvidiaKey = os.Getenv("NVIDIA_KEY")
+	}
 	cfg := apidocs.Config{
 		Title:                 "API Docs Cloud Platform (SaaS)",
 		Subtitle:              "Multi-Tenant Developer Hub & DeepSeek AI Testing",

@@ -35,6 +35,12 @@ type NVIDIAAdapter struct {
 func NewNVIDIAAdapter(apiKey, baseURL, model string, timeout time.Duration) *NVIDIAAdapter {
 	if apiKey == "" {
 		apiKey = os.Getenv("NVIDIA_API_KEY")
+		if apiKey == "" {
+			apiKey = os.Getenv("Nvidia_key")
+		}
+		if apiKey == "" {
+			apiKey = os.Getenv("NVIDIA_KEY")
+		}
 	}
 	if baseURL == "" {
 		baseURL = os.Getenv("NVIDIA_BASE_URL")

@@ -38,9 +38,10 @@ func (s *StripeBillingAdapter) VerifySignature(payload []byte, header string) bo
 	for _, part := range parts {
 		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
 		if len(kv) == 2 {
-			if kv[0] == "t" {
+			switch kv[0] {
+			case "t":
 				timestamp = kv[1]
-			} else if kv[0] == "v1" {
+			case "v1":
 				signatures = append(signatures, kv[1])
 			}
 		}
