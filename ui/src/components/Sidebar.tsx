@@ -23,6 +23,8 @@ import {
   Filter,
   Eye,
   EyeOff,
+  Sliders,
+  CheckCircle2,
 } from 'lucide-react';
 import { NavItem, NavConfig } from './Navbar';
 import { Workspace, WorkspaceSwitcher } from './WorkspaceSwitcher';
@@ -91,18 +93,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       document.documentElement.classList.add('dark');
       try {
         localStorage.setItem('apidocs_theme', 'dark');
-      } catch (e) {}
+      } catch (e) { }
     } else {
       document.documentElement.classList.remove('dark');
       try {
         localStorage.setItem('apidocs_theme', 'light');
-      } catch (e) {}
+      } catch (e) { }
     }
   }, [isDarkMode]);
 
   const toggleTheme = () => {
     setIsDarkMode((prev) => !prev);
   };
+
   const isCurrentActive = (url: string) => {
     if (url === '/' && (currentPath === '/' || currentPath === '' || currentPath === '/landing')) return true;
     if (url === '/docs' && (currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger')) return true;
@@ -142,24 +145,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarContent = (
     <div className="h-full flex flex-col justify-between select-none overflow-y-auto">
       {/* Top Header & Branding */}
-      <div className="p-4 space-y-4">
+      <div className="p-3.5 space-y-3.5">
         {/* Brand & Workspace Hub */}
         <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : 'justify-between'}`}>
           <a
             href="/"
             onClick={(e) => handleLinkClick(e, { label: 'Home', url: '/' })}
-            className="flex items-center gap-2.5 group cursor-pointer shrink-0"
+            className="flex items-center gap-2.5 group cursor-pointer shrink-0 min-w-0"
             title={config.title || 'API Documentation'}
           >
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-lg shadow-md shadow-emerald-600/25 text-white group-hover:scale-105 transition-transform shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-lg shadow-md shadow-emerald-600/25 text-white group-hover:scale-105 transition-transform shrink-0">
               {config.icon || '⚡'}
             </div>
             {!collapsed && (
-              <div className="flex flex-col truncate">
-                <h1 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-colors truncate">
+              <div className="flex flex-col truncate min-w-0">
+                <h1 className="text-sm font-extrabold text-slate-900 dark:text-white tracking-tight leading-none group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors truncate">
                   {config.title || 'API Documentation'}
                 </h1>
-                <p className="text-[10px] font-semibold text-slate-500 leading-none mt-1 truncate">
+                <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 leading-none mt-1 truncate">
                   {config.subtitle || 'Developer & QA Suite'}
                 </p>
               </div>
@@ -169,8 +172,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!collapsed && (
             <button
               onClick={onToggleCollapse}
-              className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
               title="Collapse Sidebar"
+              aria-label="Collapse Sidebar"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -179,20 +183,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Workspace Switcher in Sidebar */}
         {workspaces.length > 0 && onSelectService && (
-          <div className="pt-1">
+          <div className="pt-0.5">
             {!collapsed ? (
-              <WorkspaceSwitcher
-                workspaces={workspaces}
-                activeWorkspaceId={activeWorkspaceId}
-                activeServiceId={activeServiceId}
-                writesEnabled={writesEnabled}
-                onSelectService={onSelectService}
-                onOpenImporter={onOpenImporter}
-                onOpenSecurityAudit={onOpenSecurityAudit}
-              />
+              <div className="w-full">
+                <WorkspaceSwitcher
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                  activeServiceId={activeServiceId}
+                  writesEnabled={writesEnabled}
+                  onSelectService={onSelectService}
+                  onOpenImporter={onOpenImporter}
+                  onOpenSecurityAudit={onOpenSecurityAudit}
+                />
+              </div>
             ) : (
               <div className="flex justify-center" title={`${activeWs?.name} - ${activeSvc?.title}`}>
-                <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-700">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm font-bold text-slate-700 dark:text-slate-300 shadow-2xs">
                   {activeWs?.icon || '📁'}
                 </div>
               </div>
@@ -200,33 +206,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Quick Spotlight Search Button */}
+        {/* Quick Spotlight Search Trigger */}
         {onOpenSearch && (
           <button
             onClick={onOpenSearch}
             title="Global Search (⌘K / Ctrl+K)"
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
-              collapsed
-                ? 'justify-center bg-slate-100/90 border-slate-200 text-slate-600 hover:bg-slate-200'
-                : 'bg-slate-100/80 hover:bg-slate-100 border-slate-200/90 text-slate-600 hover:text-slate-900 justify-between'
-            }`}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${collapsed
+                ? 'justify-center bg-slate-100/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                : 'bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200/90 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white justify-between'
+              }`}
           >
             <div className="flex items-center gap-2 truncate">
-              <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
               {!collapsed && <span className="truncate">Search API...</span>}
             </div>
             {!collapsed && (
-              <kbd className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-slate-200 text-slate-500 shadow-2xs">
+              <kbd className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-2xs">
                 ⌘K
               </kbd>
             )}
           </button>
         )}
 
-        {/* Navigation Items */}
-        <div className="pt-2">
+        {/* Main Navigation Section */}
+        <div className="pt-1">
           {!collapsed && (
-            <div className="px-2 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="px-2 pb-1.5 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               Navigation
             </div>
           )}
@@ -241,22 +246,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   target={item.external ? '_blank' : undefined}
                   rel={item.external ? 'noopener noreferrer' : undefined}
                   title={item.label}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    collapsed ? 'justify-center' : 'justify-between'
-                  } ${
-                    item.is_button
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${collapsed ? 'justify-center' : 'justify-between'
+                    } ${item.is_button
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-bold'
                       : active
-                      ? 'bg-emerald-50/90 text-emerald-800 font-bold border border-emerald-200/70 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
+                        ? 'bg-emerald-50/90 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-200/80 dark:border-emerald-800/80 shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800/80'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5 truncate">
                     {getNavIcon(item)}
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </div>
                   {!collapsed && item.badge && (
-                    <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-slate-200 text-slate-700 font-bold">
+                    <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
                       {item.badge}
                     </span>
                   )}
@@ -269,9 +272,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Live Environments Switcher */}
         {activeSvc?.environments && Object.keys(activeSvc.environments).length > 0 && onSelectEnv && (
-          <div className="pt-2">
+          <div className="pt-1">
             {!collapsed && (
-              <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center justify-between">
+              <div className="px-2 pb-1.5 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center justify-between">
                 <span>Environment</span>
                 <Globe className="w-3 h-3 text-slate-400" />
               </div>
@@ -285,11 +288,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       type="button"
                       onClick={() => onSelectEnv(envKey)}
                       title={envUrl}
-                      className={`flex-1 py-1 px-1.5 rounded-lg text-[10px] font-bold uppercase transition-all truncate cursor-pointer ${
-                        activeEnv === envKey
+                      className={`flex-1 py-1 px-1.5 rounded-lg text-[10px] font-bold uppercase transition-all truncate cursor-pointer ${activeEnv === envKey
                           ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-2xs'
                           : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
+                        }`}
                     >
                       {envKey}
                     </button>
@@ -306,9 +308,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Live Active Modules (When on Docs or Guide) */}
         {availableModules.length > 0 && onSelectModule && (
-          <div className="pt-2">
+          <div className="pt-1">
             {!collapsed && (
-              <div className="px-2 pb-1.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center justify-between">
+              <div className="px-2 pb-1.5 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center justify-between">
                 <span>Modules ({availableModules.length})</span>
                 <Filter className="w-3 h-3 text-slate-400" />
               </div>
@@ -317,13 +319,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectModule('all')}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  collapsed ? 'justify-center' : 'justify-between'
-                } ${
-                  activeModule === 'all'
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${collapsed ? 'justify-center' : 'justify-between'
+                  } ${activeModule === 'all'
                     ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
+                  }`}
               >
                 <span>🌟 {!collapsed && 'All Endpoints'}</span>
               </button>
@@ -333,13 +333,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   type="button"
                   onClick={() => onSelectModule(m)}
                   title={m}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    collapsed ? 'justify-center' : 'justify-between'
-                  } ${
-                    activeModule === m
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${collapsed ? 'justify-center' : 'justify-between'
+                    } ${activeModule === m
                       ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
+                    }`}
                 >
                   <span className="truncate">📁 {!collapsed && m}</span>
                 </button>
@@ -348,25 +346,88 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Tools & Utilities Section */}
-        <div className="pt-2">
+        {/* Tools & Security Utilities Section */}
+        <div className="pt-1">
           {!collapsed && (
-            <div className="px-2 pb-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-              Tools & Security
+            <div className="px-2 pb-1.5 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+              Developer Tools
             </div>
           )}
           <div className="space-y-1">
+            {/* Credentials / Auth Manager */}
+            {onOpenCredentials && (
+              <button
+                type="button"
+                onClick={onOpenCredentials}
+                title="Manage Tokens & Tenant Headers"
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${collapsed ? 'justify-center' : 'justify-between'
+                  } ${hasCredentials
+                    ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-800 text-amber-900 dark:text-amber-300 font-bold'
+                    : 'bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <KeyRound
+                    className={`w-4 h-4 shrink-0 ${hasCredentials ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}
+                  />
+                  {!collapsed && <span className="truncate">Auth & Headers</span>}
+                </div>
+                {!collapsed && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${hasCredentials
+                        ? 'bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-200'
+                        : 'bg-slate-200/60 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                  >
+                    {hasCredentials ? 'Active 🔐' : 'None'}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* PII / Secret Masking Toggle */}
+            {onToggleMaskPII && (
+              <button
+                type="button"
+                onClick={onToggleMaskPII}
+                title="Toggle Real-time PII & Secrets Masking"
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${collapsed ? 'justify-center' : 'justify-between'
+                  } ${maskPII
+                    ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800 text-purple-800 dark:text-purple-300 font-bold'
+                    : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  {maskPII ? (
+                    <EyeOff className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-slate-500 shrink-0" />
+                  )}
+                  {!collapsed && <span className="truncate">Mask PII / Data</span>}
+                </div>
+                {!collapsed && (
+                  <span
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${maskPII
+                        ? 'bg-purple-200 dark:bg-purple-900 text-purple-900 dark:text-purple-200'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                  >
+                    {maskPII ? 'ON' : 'OFF'}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Security Audit Launcher */}
             {securityAuditEnabled && onOpenSecurityAudit && (
               <button
                 type="button"
                 onClick={onOpenSecurityAudit}
                 title="Run Cybersecurity & Compliance Audit"
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  collapsed
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${collapsed
                     ? 'justify-center bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 text-emerald-700 dark:text-emerald-400 border border-slate-200/80 dark:border-slate-700'
                     : 'bg-emerald-50/60 dark:bg-emerald-950/40 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
-                }`}
+                  }`}
               >
                 <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 {!collapsed && <span className="truncate">Security Audit</span>}
@@ -379,11 +440,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={onOpenImporter}
                 title="Import OpenAPI / Swagger Spec"
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  collapsed
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${collapsed
                     ? 'justify-center bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 text-emerald-700 dark:text-emerald-400 border border-slate-200/80 dark:border-slate-700'
                     : 'bg-emerald-50/60 dark:bg-emerald-950/40 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
-                }`}
+                  }`}
               >
                 <UploadCloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 {!collapsed && <span className="truncate">Import Schema</span>}
@@ -395,86 +455,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               href={`/docs/swagger.json?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`}
               download={`${activeSvc?.title || 'api'}-spec.json`}
               title="Download OpenAPI / Postman Schema"
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 ${
-                collapsed ? 'justify-center' : 'justify-between'
-              }`}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 ${collapsed ? 'justify-center' : 'justify-between'
+                }`}
             >
               <div className="flex items-center gap-2.5 truncate">
                 <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                {!collapsed && <span className="truncate">Export Postman/JSON</span>}
+                {!collapsed && <span className="truncate">Export JSON Spec</span>}
               </div>
               {!collapsed && <ExternalLink className="w-3 h-3 text-slate-400" />}
             </a>
-
-            {/* PII / Secret Masking Toggle */}
-            {onToggleMaskPII && (
-              <button
-                type="button"
-                onClick={onToggleMaskPII}
-                title="Toggle Real-time PII & Secrets Masking"
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
-                  collapsed ? 'justify-center' : 'justify-between'
-                } ${
-                  maskPII
-                    ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800 text-purple-800 dark:text-purple-300 font-bold'
-                    : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  {maskPII ? (
-                    <EyeOff className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                  ) : (
-                    <Eye className="w-4 h-4 text-slate-500 shrink-0" />
-                  )}
-                  {!collapsed && <span className="truncate">Mask PII & Secrets</span>}
-                </div>
-                {!collapsed && (
-                  <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                      maskPII
-                        ? 'bg-purple-200 dark:bg-purple-900 text-purple-900 dark:text-purple-200'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    {maskPII ? 'ON' : 'OFF'}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {/* Credentials / Auth Manager */}
-            {onOpenCredentials && (
-              <button
-                type="button"
-                onClick={onOpenCredentials}
-                title="Manage Tokens & Tenant Headers"
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  collapsed ? 'justify-center' : 'justify-between'
-                } ${
-                  hasCredentials
-                    ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-800 text-amber-900 dark:text-amber-300 font-bold'
-                    : 'bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <KeyRound
-                    className={`w-4 h-4 shrink-0 ${hasCredentials ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}
-                  />
-                  {!collapsed && <span className="truncate">Auth & Tokens</span>}
-                </div>
-                {!collapsed && (
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
-                      hasCredentials
-                        ? 'bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-200'
-                        : 'bg-slate-200/60 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    {hasCredentials ? 'Active 🔐' : 'None'}
-                  </span>
-                )}
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -485,7 +474,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium px-1">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>v1.6.0 Suite</span>
+              <span className="font-bold text-slate-700 dark:text-slate-300">v1.6 Suite</span>
             </span>
 
             <div className="flex items-center gap-1">
@@ -501,7 +490,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
               <a
                 href="/docs/logout"
-                title="Lock Session"
+                title="Lock Session / Logout"
                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
               >
                 <Lock className="w-3.5 h-3.5" />
@@ -544,9 +533,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* Desktop Sticky Sidebar */}
       <aside
-        className={`hidden lg:flex flex-col shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 transition-all duration-300 ease-in-out z-30 sticky top-0 h-screen overflow-hidden ${
-          collapsed ? 'w-20' : 'w-64'
-        }`}
+        className={`hidden lg:flex flex-col shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 transition-all duration-300 ease-in-out z-30 sticky top-0 h-screen overflow-hidden ${collapsed ? 'w-20' : 'w-64'
+          }`}
       >
         {sidebarContent}
       </aside>

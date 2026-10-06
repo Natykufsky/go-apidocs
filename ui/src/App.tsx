@@ -522,6 +522,8 @@ export const App: React.FC = () => {
           onOpenSearch={() => setIsSearchModalOpen(true)}
           onOpenCredentials={() => setIsCredsModalOpen(true)}
           hasCredentials={hasCredentials}
+          activeEnv={activeEnv}
+          maskPII={maskPII}
         />
 
         {/* View Router */}
