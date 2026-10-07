@@ -474,9 +474,12 @@ export const App: React.FC = () => {
     } catch (e) {}
   };
 
-  // Route: Login View
+  // Route: Login & Registration View
   if (currentPath === '/docs/login' || currentPath === '/login') {
-    return <LoginView config={navConfig} />;
+    return <LoginView config={navConfig} initialMode="login" onNavigate={handleNavigate} />;
+  }
+  if (currentPath === '/register' || currentPath === '/docs/register') {
+    return <LoginView config={navConfig} initialMode="register" onNavigate={handleNavigate} />;
   }
 
   const isSandbox = currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger';
