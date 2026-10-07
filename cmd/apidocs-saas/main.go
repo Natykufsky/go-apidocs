@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Natykufsky/go-apidocs"
+	"github.com/Natykufsky/go-apidocs/internal/auth"
 	"github.com/Natykufsky/go-apidocs/internal/env"
 	tenantAdapter "github.com/Natykufsky/go-apidocs/internal/tenant/adapter"
 	tenantMemory "github.com/Natykufsky/go-apidocs/internal/tenant/adapter/memory"
@@ -60,6 +61,10 @@ func main() {
 
 	// 3. Construct Root Multi-Tenant Multiplexer
 	mux := http.NewServeMux()
+
+	// Developer OAuth 2.0 Single Sign-On Endpoints
+	mux.HandleFunc("/docs/oauth/github", auth.GitHubOAuthHandler)
+	mux.HandleFunc("/docs/oauth/google", auth.GoogleOAuthHandler)
 
 	// SaaS Tenant Onboarding & Management APIs
 	mux.HandleFunc("/api/v1/saas/tenants/register", func(w http.ResponseWriter, r *http.Request) {
