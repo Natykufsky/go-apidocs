@@ -940,6 +940,11 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	mux.HandleFunc("/docs/qa/report", defaultQA.HandleGetReportHTTP)
 	mux.HandleFunc("/docs/qa/ai-generate", defaultQA.HandleGenerateAITestsHTTP)
 
+	// Live Dynamic Mock API Server (synthesized directly from OpenAPI schemas)
+	mockServer := schema.NewMockServer(defaultFilter)
+	mux.Handle("/docs/mock/", http.StripPrefix("/docs/mock", mockServer))
+	mux.Handle("/docs/mock", mockServer)
+
 	// Workspace APIs
 	if cfg.EnableWorkspaces {
 		mux.HandleFunc("/docs/workspaces", WorkspacesListHandler(wm))

@@ -4,7 +4,7 @@ import 'swagger-ui-react/swagger-ui.css';
 import { QABar, QAStats } from './QABar';
 import { QARecord } from './QAReportModal';
 import { StoredCredentials } from './CredentialManagerModal';
-import { Filter, FlaskConical, FileSpreadsheet, KeyRound, CheckCircle2, X, ShieldAlert, Flame } from 'lucide-react';
+import { Filter, FlaskConical, FileSpreadsheet, KeyRound, CheckCircle2, X, ShieldAlert, Sparkles } from 'lucide-react';
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
@@ -44,6 +44,27 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'warning'>('success');
+  const [mockMode, setMockMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('apidocs_mock_mode') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const toggleMockMode = () => {
+    const next = !mockMode;
+    setMockMode(next);
+    try {
+      localStorage.setItem('apidocs_mock_mode', String(next));
+    } catch (e) {}
+    showToast(
+      next
+        ? '✨ Live Mock Engine Activated: Requests will simulate OpenAPI dynamic payloads at /docs/mock'
+        : '⚡ Live API Mode: Requests will execute directly against live endpoints',
+      'success'
+    );
+  };
 
   const showToast = (msg: string, type: 'success' | 'warning' = 'success') => {
     setToastMessage(msg);
@@ -185,6 +206,21 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
   const handleRequestInterceptor = (req: any) => {
     if (!req.headers) {
       req.headers = {};
+    }
+
+    // Live Mock Server rerouting
+    if (mockMode && req.url) {
+      try {
+        const parsed = new URL(req.url, window.location.origin);
+        if (!parsed.pathname.startsWith('/docs/mock')) {
+          parsed.pathname = `/docs/mock${parsed.pathname.startsWith('/') ? parsed.pathname : '/' + parsed.pathname}`;
+          req.url = parsed.toString();
+        }
+      } catch (e) {
+        if (!req.url.startsWith('/docs/mock')) {
+          req.url = `/docs/mock${req.url.startsWith('/') ? req.url : '/' + req.url}`;
+        }
+      }
     }
 
     const { accessToken, refreshToken, tenantId, entityId, customHeaders } = credentials;
@@ -358,6 +394,23 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
                   {credentials.tenantId}
                 </span>
               )}
+            </button>
+
+            {/* Live Mock Server Toggle */}
+            <button
+              onClick={toggleMockMode}
+              title={mockMode ? "Live Mock Server active: Rerouting Try-It-Out requests to /docs/mock" : "Click to activate Live Mock Server"}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                mockMode
+                  ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100 shadow-xs'
+                  : 'bg-slate-100/80 border-slate-200 text-slate-600 hover:bg-slate-200/80'
+              }`}
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${mockMode ? 'text-violet-600 animate-pulse' : 'text-slate-400'}`} />
+              <span>Mock Engine:</span>
+              <span className={mockMode ? 'text-violet-800 font-black' : 'text-slate-500'}>
+                {mockMode ? 'Live ✨' : 'Off'}
+              </span>
             </button>
 
             {/* QA Suite Mode Toggle */}
