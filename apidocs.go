@@ -998,10 +998,16 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	mux.HandleFunc("/docs/logout", LogoutHandler())
 	mux.HandleFunc("/swagger", SwaggerRedirectHandler())
 
-	// Protected React SPA portals
+	// Protected React SPA portals & Client Routes
 	spa := authGuard(SPAHandler(cfg))
 	mux.Handle("/", authGuard(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path == "/" {
+		p := req.URL.Path
+		if p == "/" || p == "/landing" || p == "/login" || p == "/register" || p == "/guide" || p == "/pricing" || p == "/dashboard" || p == "/docs" {
+			SPAHandler(cfg)(w, req)
+			return
+		}
+		// If path doesn't look like a static asset file with an extension, fallback to React SPA router
+		if !strings.Contains(filepath.Base(p), ".") {
 			SPAHandler(cfg)(w, req)
 			return
 		}
@@ -1009,12 +1015,14 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	})))
 	mux.Handle("/docs", spa)
 	mux.Handle("/docs/", authGuard(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path == "/docs/" || req.URL.Path == "/docs/index.html" {
+		if req.URL.Path == "/docs/" || req.URL.Path == "/docs/index.html" || req.URL.Path == "/docs/login" || req.URL.Path == "/docs/register" {
 			SPAHandler(cfg)(w, req)
 			return
 		}
 		assetServer.ServeHTTP(w, req)
 	})))
+	mux.Handle("/login", spa)
+	mux.Handle("/register", spa)
 	mux.Handle("/guide", spa)
 	mux.Handle("/pricing", spa)
 	mux.Handle("/dashboard", spa)
