@@ -498,35 +498,37 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans">
-      {/* Collapsible Left Sidebar Navigation Hub */}
-      <Sidebar
-        config={navConfig}
-        currentPath={currentPath}
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        activeServiceId={activeServiceId}
-        writesEnabled={capabilities.workspace_writes_enabled}
-        securityAuditEnabled={capabilities.security_audit_enabled}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={toggleSidebarCollapse}
-        mobileOpen={mobileSidebarOpen}
-        onCloseMobile={() => setMobileSidebarOpen(false)}
-        onSelectService={handleSelectService}
-        onOpenImporter={() => setIsImporterModalOpen(true)}
-        onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
-        onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
-        onNavigate={handleNavigate}
-        onOpenSearch={() => setIsSearchModalOpen(true)}
-        onOpenCredentials={() => setIsCredsModalOpen(true)}
-        hasCredentials={hasCredentials}
-        activeModule={activeModule}
-        availableModules={availableModules}
-        onSelectModule={handleModuleChange}
-        activeEnv={activeEnv}
-        onSelectEnv={(env) => setActiveEnv(env)}
-        maskPII={maskPII}
-        onToggleMaskPII={toggleMaskPII}
-      />
+      {/* Collapsible Left Sidebar Navigation Hub (Visible in App views: /docs, /guide, /dashboard) */}
+      {!isHome && (
+        <Sidebar
+          config={navConfig}
+          currentPath={currentPath}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          activeServiceId={activeServiceId}
+          writesEnabled={capabilities.workspace_writes_enabled}
+          securityAuditEnabled={capabilities.security_audit_enabled}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapse}
+          mobileOpen={mobileSidebarOpen}
+          onCloseMobile={() => setMobileSidebarOpen(false)}
+          onSelectService={handleSelectService}
+          onOpenImporter={() => setIsImporterModalOpen(true)}
+          onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
+          onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
+          onNavigate={handleNavigate}
+          onOpenSearch={() => setIsSearchModalOpen(true)}
+          onOpenCredentials={() => setIsCredsModalOpen(true)}
+          hasCredentials={hasCredentials}
+          activeModule={activeModule}
+          availableModules={availableModules}
+          onSelectModule={handleModuleChange}
+          activeEnv={activeEnv}
+          onSelectEnv={(env) => setActiveEnv(env)}
+          maskPII={maskPII}
+          onToggleMaskPII={toggleMaskPII}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
