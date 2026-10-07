@@ -46,6 +46,7 @@ interface NavbarProps {
   onOpenImporter?: () => void;
   onOpenSecurityAudit?: () => void;
   onOpenAITests?: () => void;
+  onOpenSDKGenerator?: () => void;
   onOpenTenantSettings?: () => void;
   onToggleMobileSidebar: () => void;
   onOpenSearch?: () => void;
@@ -67,6 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenImporter,
   onOpenSecurityAudit,
   onOpenAITests,
+  onOpenSDKGenerator,
   onOpenTenantSettings,
   onToggleMobileSidebar,
   onOpenSearch,
@@ -272,6 +274,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <div>
                         <div className="font-semibold text-slate-900 dark:text-white">AI Test Studio</div>
                         <div className="text-[10px] text-slate-500">DeepSeek v4.1 & Multi-LLM test synthesis</div>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Export Client SDK */}
+                  {onOpenSDKGenerator && (
+                    <button
+                      onClick={() => {
+                        setIsSettingsMenuOpen(false);
+                        onOpenSDKGenerator();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
+                    >
+                      <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-white">Export Client SDK</div>
+                        <div className="text-[10px] text-slate-500">Generate TypeScript, Go, Python packages</div>
                       </div>
                     </button>
                   )}

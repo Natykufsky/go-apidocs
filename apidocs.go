@@ -945,6 +945,42 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	mux.Handle("/docs/mock/", http.StripPrefix("/docs/mock", mockServer))
 	mux.Handle("/docs/mock", mockServer)
 
+	// Client SDK Generator (TypeScript, Go, Python)
+	mux.HandleFunc("/docs/sdk", func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		specMap, err := defaultFilter.FilterSpec("", "")
+		if err != nil {
+			http.Error(w, "Failed to load OpenAPI spec: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		lang := schema.SDKLanguage(r.URL.Query().Get("lang"))
+		if lang == "" {
+			lang = schema.SDKTypeScript
+		}
+		baseURL := r.URL.Query().Get("base_url")
+
+		code, filename, err := schema.GenerateClientSDK(specMap, lang, baseURL)
+		if err != nil {
+			http.Error(w, "SDK generation error: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if r.URL.Query().Get("download") == "1" {
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte(code))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"language": lang,
+			"filename": filename,
+			"code":     code,
+		})
+	})
+
 	// Workspace APIs
 	if cfg.EnableWorkspaces {
 		mux.HandleFunc("/docs/workspaces", WorkspacesListHandler(wm))

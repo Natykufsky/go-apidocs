@@ -51,6 +51,21 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       return false;
     }
   });
+  const [mockScenario, setMockScenario] = useState<string>(() => {
+    try {
+      return localStorage.getItem('apidocs_mock_scenario') || '200';
+    } catch (e) {
+      return '200';
+    }
+  });
+
+  const handleScenarioChange = (scenario: string) => {
+    setMockScenario(scenario);
+    try {
+      localStorage.setItem('apidocs_mock_scenario', scenario);
+    } catch (e) {}
+    showToast(`🧪 Mock Scenario set to: ${scenario}`, 'success');
+  };
 
   const toggleMockMode = () => {
     const next = !mockMode;
@@ -208,7 +223,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       req.headers = {};
     }
 
-    // Live Mock Server rerouting
+    // Live Mock Server rerouting & scenario injection
     if (mockMode && req.url) {
       try {
         const parsed = new URL(req.url, window.location.origin);
@@ -220,6 +235,10 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
         if (!req.url.startsWith('/docs/mock')) {
           req.url = `/docs/mock${req.url.startsWith('/') ? req.url : '/' + req.url}`;
         }
+      }
+
+      if (mockScenario && mockScenario !== '200') {
+        req.headers['X-Mock-Scenario'] = mockScenario;
       }
     }
 
@@ -397,21 +416,41 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
             </button>
 
             {/* Live Mock Server Toggle */}
-            <button
-              onClick={toggleMockMode}
-              title={mockMode ? "Live Mock Server active: Rerouting Try-It-Out requests to /docs/mock" : "Click to activate Live Mock Server"}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                mockMode
-                  ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100 shadow-xs'
-                  : 'bg-slate-100/80 border-slate-200 text-slate-600 hover:bg-slate-200/80'
-              }`}
-            >
-              <Sparkles className={`w-3.5 h-3.5 ${mockMode ? 'text-violet-600 animate-pulse' : 'text-slate-400'}`} />
-              <span>Mock Engine:</span>
-              <span className={mockMode ? 'text-violet-800 font-black' : 'text-slate-500'}>
-                {mockMode ? 'Live ✨' : 'Off'}
-              </span>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleMockMode}
+                title={mockMode ? "Live Mock Server active: Rerouting Try-It-Out requests to /docs/mock" : "Click to activate Live Mock Server"}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                  mockMode
+                    ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100 shadow-xs'
+                    : 'bg-slate-100/80 border-slate-200 text-slate-600 hover:bg-slate-200/80'
+                }`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${mockMode ? 'text-violet-600 animate-pulse' : 'text-slate-400'}`} />
+                <span>Mock Engine:</span>
+                <span className={mockMode ? 'text-violet-800 font-black' : 'text-slate-500'}>
+                  {mockMode ? 'Live ✨' : 'Off'}
+                </span>
+              </button>
+
+              {/* Scenario Preset Selector */}
+              {mockMode && (
+                <select
+                  value={mockScenario}
+                  onChange={(e) => handleScenarioChange(e.target.value)}
+                  className="bg-violet-50/80 border border-violet-300 text-violet-900 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none cursor-pointer hover:bg-violet-100 transition-colors shadow-2xs"
+                  title="Simulate specific edge case responses & status codes"
+                >
+                  <option value="200">✅ 200 OK (Success)</option>
+                  <option value="401">🔒 401 Unauthorized</option>
+                  <option value="403">🚫 403 Forbidden</option>
+                  <option value="429">⏳ 429 Rate Limit</option>
+                  <option value="500">💥 500 Server Error</option>
+                  <option value="503">🔌 503 Unavailable</option>
+                  <option value="slow">🐢 Slow Network (2s)</option>
+                </select>
+              )}
+            </div>
 
             {/* QA Suite Mode Toggle */}
             <button

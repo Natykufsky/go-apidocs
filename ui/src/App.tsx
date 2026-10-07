@@ -11,6 +11,7 @@ import { SchemaImporterModal } from './components/SchemaImporterModal';
 import { SecurityAuditModal } from './components/SecurityAuditModal';
 import { AITestGeneratorModal, AITestCase } from './components/AITestGeneratorModal';
 import { TenantSettingsModal, TenantTheme } from './components/TenantSettingsModal';
+import { SDKGeneratorModal } from './components/SDKGeneratorModal';
 import { Workspace } from './components/WorkspaceSwitcher';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
@@ -85,6 +86,7 @@ export const App: React.FC = () => {
   const [isImporterModalOpen, setIsImporterModalOpen] = useState<boolean>(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
   const [isTenantModalOpen, setIsTenantModalOpen] = useState<boolean>(false);
+  const [isSDKModalOpen, setIsSDKModalOpen] = useState<boolean>(false);
   const [tenantTheme, setTenantTheme] = useState<TenantTheme | null>(null);
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [snippetEndpoint, setSnippetEndpoint] = useState<string | null>(null);
@@ -541,6 +543,7 @@ export const App: React.FC = () => {
           onOpenImporter={() => setIsImporterModalOpen(true)}
           onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
           onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
+          onOpenSDKGenerator={() => setIsSDKModalOpen(true)}
           onOpenTenantSettings={() => setIsTenantModalOpen(true)}
           onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
           onOpenSearch={() => setIsSearchModalOpen(true)}
@@ -729,6 +732,12 @@ export const App: React.FC = () => {
         isOpen={isTenantModalOpen}
         onClose={() => setIsTenantModalOpen(false)}
         onThemeSaved={applyTheme}
+      />
+
+      {/* Client SDK Generator Modal */}
+      <SDKGeneratorModal
+        isOpen={isSDKModalOpen}
+        onClose={() => setIsSDKModalOpen(false)}
       />
     </div>
   );

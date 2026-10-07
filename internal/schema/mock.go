@@ -57,7 +57,59 @@ func (m *MockServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := strings.ToLower(r.Method)
 	paths, _ := spec["paths"].(map[string]any)
 
-	// 1. Locate matching path item (direct or parameterized e.g. /users/{id})
+	// 1. Check for explicit Mock Scenario Overrides (X-Mock-Scenario, X-Mock-Status, X-Mock-Latency, query ?mock_scenario=)
+	scenario := r.Header.Get("X-Mock-Scenario")
+	if scenario == "" {
+		scenario = r.URL.Query().Get("mock_scenario")
+	}
+
+	// Handle standard error scenarios
+	switch strings.ToLower(scenario) {
+	case "401", "unauthorized":
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":       "Unauthorized",
+			"message":     "Simulated 401 Unauthorized mock scenario: missing or invalid bearer token",
+			"status_code": 401,
+		})
+		return
+	case "403", "forbidden":
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":       "Forbidden",
+			"message":     "Simulated 403 Forbidden mock scenario: insufficient scope or permissions",
+			"status_code": 403,
+		})
+		return
+	case "429", "rate_limit":
+		w.Header().Set("Retry-After", "30")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":       "Too Many Requests",
+			"message":     "Simulated 429 Rate Limit scenario: quota exceeded, retry after 30 seconds",
+			"retry_after": 30,
+			"status_code": 429,
+		})
+		return
+	case "500", "server_error":
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":       "Internal Server Error",
+			"message":     "Simulated 500 Internal Server Error mock scenario",
+			"status_code": 500,
+		})
+		return
+	case "503", "unavailable":
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":       "Service Unavailable",
+			"message":     "Simulated 503 Service Unavailable scenario: upstream microservice timeout",
+			"status_code": 503,
+		})
+		return
+	}
+
+	// 2. Locate matching path item (direct or parameterized e.g. /users/{id})
 	matchedPath, pathItem := m.matchPath(paths, rawPath)
 	if pathItem == nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -80,15 +132,37 @@ func (m *MockServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Synthesize response payload based on declared responses (prefer 200/201, fallback to first defined)
+	// 3. Synthesize response payload based on declared responses or explicit scenario status
 	responses, _ := op["responses"].(map[string]any)
-	status, respSchema := m.findBestResponse(responses)
+
+	var status int
+	var respSchema map[string]any
+
+	if customStatus := r.Header.Get("X-Mock-Status"); customStatus != "" {
+		if c, err := strconv.Atoi(customStatus); err == nil && c >= 100 && c <= 599 {
+			status = c
+			if rMap, ok := responses[customStatus].(map[string]any); ok {
+				respSchema = rMap
+			}
+		}
+	}
+
+	if status == 0 {
+		status, respSchema = m.findBestResponse(responses)
+	}
 
 	mockBody := m.synthesizePayload(respSchema, spec)
 
-	// Simulate realistic API delay if requested via header (e.g. X-Mock-Latency: 150ms)
-	if latHeader := r.Header.Get("X-Mock-Latency"); latHeader != "" {
-		if dur, err := time.ParseDuration(latHeader); err == nil && dur <= 5*time.Second {
+	// Simulate latency (header or query or scenario)
+	latHeader := r.Header.Get("X-Mock-Latency")
+	if latHeader == "" {
+		latHeader = r.URL.Query().Get("mock_latency")
+	}
+	if scenario == "slow" || scenario == "slow_network" {
+		latHeader = "2s"
+	}
+	if latHeader != "" {
+		if dur, err := time.ParseDuration(latHeader); err == nil && dur <= 10*time.Second {
 			time.Sleep(dur)
 		}
 	}
