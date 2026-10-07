@@ -69,15 +69,25 @@ func main() {
 	// SaaS Tenant Onboarding & Management APIs
 	mux.HandleFunc("/api/v1/saas/tenants/register", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-ID")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		if r.Method != http.MethodPost {
-			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed: use POST"})
 			return
 		}
 
 		var req tenantUsecase.RegisterTenantRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid json payload"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid json payload: " + err.Error()})
 			return
 		}
 

@@ -30,26 +30,32 @@ func NewService(repo tenantPort.TenantRepository) *Service {
 
 // RegisterTenantRequest represents onboarding input payload.
 type RegisterTenantRequest struct {
-	ID   string          `json:"id"`
-	Name string          `json:"name"`
-	Plan domain.PlanTier `json:"plan"`
+	ID         string          `json:"id"`
+	Subdomain  string          `json:"subdomain"`
+	Name       string          `json:"name"`
+	AdminEmail string          `json:"admin_email"`
+	Plan       domain.PlanTier `json:"plan"`
 }
 
 // RegisterTenant provisions a new SaaS tenant with default plan limits and API keys.
 func (s *Service) RegisterTenant(ctx context.Context, req RegisterTenantRequest) (*tenantDomain.Tenant, error) {
-	if strings.TrimSpace(req.ID) == "" {
-		return nil, fmt.Errorf("tenant ID is required")
+	tenantID := strings.TrimSpace(req.ID)
+	if tenantID == "" {
+		tenantID = strings.TrimSpace(req.Subdomain)
+	}
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant ID or subdomain is required")
 	}
 	if strings.TrimSpace(req.Name) == "" {
-		req.Name = req.ID
+		req.Name = tenantID
 	}
 	if req.Plan == "" {
 		req.Plan = domain.PlanCommunity
 	}
 
 	// Check for existing ID
-	if existing, _ := s.repo.GetByID(ctx, domain.TenantID(req.ID)); existing != nil {
-		return nil, fmt.Errorf("tenant with ID '%s' already exists", req.ID)
+	if existing, _ := s.repo.GetByID(ctx, domain.TenantID(tenantID)); existing != nil {
+		return nil, fmt.Errorf("tenant with ID '%s' already exists", tenantID)
 	}
 
 	// Generate secure API Key
@@ -58,7 +64,7 @@ func (s *Service) RegisterTenant(ctx context.Context, req RegisterTenantRequest)
 	apiKey := fmt.Sprintf("ak_live_%s", hex.EncodeToString(rawKey))
 
 	tenant := &tenantDomain.Tenant{
-		ID:        domain.TenantID(strings.ToLower(req.ID)),
+		ID:        domain.TenantID(strings.ToLower(tenantID)),
 		Name:      req.Name,
 		Plan:      req.Plan,
 		APIKey:    apiKey,

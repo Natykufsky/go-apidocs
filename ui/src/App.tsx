@@ -532,28 +532,30 @@ export const App: React.FC = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-        {/* Sleek Minimal Top Navbar with Top-Level Workspace Switcher */}
-        <Navbar
-          config={navConfig}
-          currentPath={currentPath}
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          activeServiceId={activeServiceId}
-          writesEnabled={capabilities.workspace_writes_enabled}
-          securityAuditEnabled={capabilities.security_audit_enabled}
-          onSelectService={handleSelectService}
-          onOpenImporter={() => setIsImporterModalOpen(true)}
-          onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
-          onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
-          onOpenSDKGenerator={() => setIsSDKModalOpen(true)}
-          onOpenTenantSettings={() => setIsTenantModalOpen(true)}
-          onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-          onOpenSearch={() => setIsSearchModalOpen(true)}
-          onOpenCredentials={() => setIsCredsModalOpen(true)}
-          hasCredentials={hasCredentials}
-          activeEnv={activeEnv}
-          maskPII={maskPII}
-        />
+        {/* Sleek Minimal Top Navbar with Top-Level Workspace Switcher (Rendered in App views) */}
+        {!isHome && (
+          <Navbar
+            config={navConfig}
+            currentPath={currentPath}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            activeServiceId={activeServiceId}
+            writesEnabled={capabilities.workspace_writes_enabled}
+            securityAuditEnabled={capabilities.security_audit_enabled}
+            onSelectService={handleSelectService}
+            onOpenImporter={() => setIsImporterModalOpen(true)}
+            onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
+            onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
+            onOpenSDKGenerator={() => setIsSDKModalOpen(true)}
+            onOpenTenantSettings={() => setIsTenantModalOpen(true)}
+            onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            onOpenSearch={() => setIsSearchModalOpen(true)}
+            onOpenCredentials={() => setIsCredsModalOpen(true)}
+            hasCredentials={hasCredentials}
+            activeEnv={activeEnv}
+            maskPII={maskPII}
+          />
+        )}
 
         {/* View Router */}
         <div className="flex-1 flex flex-col">
