@@ -77,8 +77,18 @@ func (a *OpenAIAdapter) IsAvailable() bool {
 
 // GenerateTests queries OpenAI chat completions.
 func (a *OpenAIAdapter) GenerateTests(ctx context.Context, opts port.GenerateOptions) (*domain.TestSuite, error) {
-	if !a.IsAvailable() {
+	apiKeyToUse := a.apiKey
+	if opts.APIKey != "" {
+		apiKeyToUse = strings.TrimSpace(opts.APIKey)
+	}
+
+	if apiKeyToUse == "" {
 		return nil, fmt.Errorf("OpenAI adapter is not configured: missing API key")
+	}
+
+	baseURLToUse := a.baseURL
+	if opts.BaseURL != "" {
+		baseURLToUse = strings.TrimSpace(opts.BaseURL)
 	}
 
 	modelToUse := a.model
@@ -125,13 +135,13 @@ func (a *OpenAIAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 		return nil, fmt.Errorf("failed to marshal OpenAI request: %w", err)
 	}
 
-	apiURL := strings.TrimRight(a.baseURL, "/") + "/chat/completions"
+	apiURL := strings.TrimRight(baseURLToUse, "/") + "/chat/completions"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+a.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+apiKeyToUse)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 

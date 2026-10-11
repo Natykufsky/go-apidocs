@@ -11,6 +11,7 @@ type GenerateOptions struct {
 	Provider     string `json:"provider,omitempty"` // "nvidia", "openai", "anthropic", "ollama"
 	Model        string `json:"model,omitempty"`
 	BaseURL      string `json:"base_url,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
 	EndpointKey  string `json:"endpoint_key"`
 	SpecJSON     string `json:"spec_json"`
 	CustomPrompt string `json:"custom_prompt"`

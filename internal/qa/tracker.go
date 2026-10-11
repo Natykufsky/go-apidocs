@@ -344,6 +344,7 @@ type AIGenerateRequest struct {
 	Provider     string `json:"provider,omitempty"`
 	Model        string `json:"model,omitempty"`
 	BaseURL      string `json:"base_url,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
 	EndpointKey  string `json:"endpoint_key"`
 	SpecJSON     string `json:"spec_json"`
 	CustomPrompt string `json:"custom_prompt,omitempty"`
@@ -353,18 +354,18 @@ type AIGenerateRequest struct {
 func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if q.llmClient == nil || !q.llmClient.IsAvailable() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"error": "AI service is not configured. Please set NVIDIA_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY or configure local Ollama.",
-		})
-		return
-	}
-
 	var req AIGenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	if q.llmClient == nil || (!q.llmClient.IsAvailable() && strings.TrimSpace(req.APIKey) == "" && req.Provider != "ollama") {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": "AI service is not configured. Please set NVIDIA_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY or provide an API Key directly in the UI.",
+		})
 		return
 	}
 
@@ -381,6 +382,7 @@ func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Req
 		Provider:     req.Provider,
 		Model:        req.Model,
 		BaseURL:      req.BaseURL,
+		APIKey:       req.APIKey,
 		EndpointKey:  req.EndpointKey,
 		SpecJSON:     req.SpecJSON,
 		CustomPrompt: req.CustomPrompt,
@@ -414,15 +416,15 @@ func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Req
 
 // HandleGenerateAITests generates test cases using LLM for Fiber.
 func (q *QATracker) HandleGenerateAITests(c *fiber.Ctx) error {
-	if q.llmClient == nil || !q.llmClient.IsAvailable() {
-		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-			"error": "AI service is not configured. Please configure an AI provider.",
-		})
-	}
-
 	var req AIGenerateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body: " + err.Error()})
+	}
+
+	if q.llmClient == nil || (!q.llmClient.IsAvailable() && strings.TrimSpace(req.APIKey) == "" && req.Provider != "ollama") {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "AI service is not configured. Please set an API key in .env or provide an API Key directly.",
+		})
 	}
 
 	if req.EndpointKey == "" {
@@ -436,6 +438,7 @@ func (q *QATracker) HandleGenerateAITests(c *fiber.Ctx) error {
 		Provider:     req.Provider,
 		Model:        req.Model,
 		BaseURL:      req.BaseURL,
+		APIKey:       req.APIKey,
 		EndpointKey:  req.EndpointKey,
 		SpecJSON:     req.SpecJSON,
 		CustomPrompt: req.CustomPrompt,

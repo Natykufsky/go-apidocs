@@ -399,3 +399,8 @@ func (f *SpecFilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(filtered)
 }
+
+// LoadSpec returns the unmarshaled raw OpenAPI specification map.
+func (f *SpecFilter) LoadSpec() (map[string]interface{}, error) {
+	return f.loadSpec()
+}

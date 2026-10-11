@@ -70,7 +70,7 @@ func (d *MultiProviderDispatcher) GenerateTests(ctx context.Context, opts port.G
 
 	// 1. Try explicitly requested provider
 	if p, exists := d.providers[targetProvider]; exists {
-		if !p.IsAvailable() {
+		if !p.IsAvailable() && strings.TrimSpace(opts.APIKey) == "" && targetProvider != "ollama" {
 			attemptedErrors = append(attemptedErrors, fmt.Sprintf("%s (not configured / missing credentials)", targetProvider))
 		} else {
 			suite, err := p.GenerateTests(ctx, opts)

@@ -78,8 +78,18 @@ func (a *AnthropicAdapter) IsAvailable() bool {
 
 // GenerateTests queries Anthropic Messages API.
 func (a *AnthropicAdapter) GenerateTests(ctx context.Context, opts port.GenerateOptions) (*domain.TestSuite, error) {
-	if !a.IsAvailable() {
+	apiKeyToUse := a.apiKey
+	if opts.APIKey != "" {
+		apiKeyToUse = strings.TrimSpace(opts.APIKey)
+	}
+
+	if apiKeyToUse == "" {
 		return nil, fmt.Errorf("Anthropic adapter is not configured: missing API key")
+	}
+
+	baseURLToUse := a.baseURL
+	if opts.BaseURL != "" {
+		baseURLToUse = strings.TrimSpace(opts.BaseURL)
 	}
 
 	modelToUse := a.model
@@ -120,13 +130,13 @@ func (a *AnthropicAdapter) GenerateTests(ctx context.Context, opts port.Generate
 		return nil, fmt.Errorf("failed to marshal Anthropic request: %w", err)
 	}
 
-	apiURL := strings.TrimRight(a.baseURL, "/") + "/messages"
+	apiURL := strings.TrimRight(baseURLToUse, "/") + "/messages"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
 	}
 
-	httpReq.Header.Set("x-api-key", a.apiKey)
+	httpReq.Header.Set("x-api-key", apiKeyToUse)
 	httpReq.Header.Set("anthropic-version", AnthropicVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
