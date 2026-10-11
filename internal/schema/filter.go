@@ -167,7 +167,58 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 
 			data, err = os.ReadFile(f.specPath)
 			if err != nil {
-				return nil, err
+				// Graceful fallback: synthesize a default OpenAPI spec so the server can run out of the box
+				defaultSpec := map[string]interface{}{
+					"openapi": "3.0.0",
+					"info": map[string]interface{}{
+						"title":       "go-apidocs Default API",
+						"version":     "1.0.0",
+						"description": "Ready-to-use API sandbox. Upload your custom OpenAPI spec using the Schema Importer or place swagger.json in ./docs/",
+					},
+					"paths": map[string]interface{}{
+						"/api/v1/health": map[string]interface{}{
+							"get": map[string]interface{}{
+								"tags":        []interface{}{"System"},
+								"summary":     "Health check endpoint",
+								"description": "Returns operational system status and time.",
+								"responses": map[string]interface{}{
+									"200": map[string]interface{}{
+										"description": "Service is healthy and operational",
+										"content": map[string]interface{}{
+											"application/json": map[string]interface{}{
+												"example": map[string]interface{}{
+													"status": "healthy",
+													"time":   "2026-10-11T16:00:00Z",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"/api/v1/ping": map[string]interface{}{
+							"get": map[string]interface{}{
+								"tags":        []interface{}{"Diagnostics"},
+								"summary":     "Ping diagnostics probe",
+								"description": "Latency and connectivity probe.",
+								"responses": map[string]interface{}{
+									"200": map[string]interface{}{
+										"description": "Pong probe response",
+										"content": map[string]interface{}{
+											"application/json": map[string]interface{}{
+												"example": map[string]interface{}{
+													"pong": true,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				f.rawSpec = defaultSpec
+				return f.rawSpec, nil
 			}
 		}
 	}

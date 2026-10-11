@@ -175,6 +175,52 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
             </div>
           </div>
 
+          {/* AI Testing & Developer Tools Action Card */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/60 border border-indigo-200/80 shadow-xs">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-indigo-600/20">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    AI Test Synthesis & Automated Runner
+                    <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-mono font-bold border border-indigo-200">
+                      Multi-Vector
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Generate Happy Paths, Boundary Cases, Negative Errors & Security Probes for this endpoint.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              {onOpenAIGenerator && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAIGenerator(endpointKey)}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Synthesize & Run AI Tests</span>
+                </button>
+              )}
+
+              {onOpenSnippetGenerator && (
+                <button
+                  type="button"
+                  onClick={() => onOpenSnippetGenerator(endpointKey)}
+                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 active:scale-95 border border-slate-300 text-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                >
+                  <Code2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Code Snippets</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Test Status Radio Buttons */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">

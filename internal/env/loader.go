@@ -9,7 +9,7 @@ import (
 // LoadDotEnv loads key-value pairs from .env or .env.local into the process environment if they are not already set.
 func LoadDotEnv(paths ...string) {
 	if len(paths) == 0 {
-		paths = []string{".env", ".env.local"}
+		paths = []string{".env", ".env.local", "../.env", "../../.env", "../../../.env"}
 	}
 
 	for _, path := range paths {
