@@ -26,6 +26,7 @@ import (
 	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
 	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
 	"github.com/Natykufsky/go-apidocs/internal/auth"
+	"github.com/Natykufsky/go-apidocs/internal/env"
 	"github.com/Natykufsky/go-apidocs/internal/qa"
 	"github.com/Natykufsky/go-apidocs/internal/schema"
 	"github.com/Natykufsky/go-apidocs/internal/security"
@@ -298,6 +299,9 @@ func ValidateConfig(cfg Config) error {
 
 // NormalizeConfig applies default configuration values and constructs a WorkspaceManager.
 func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
+	// Automatically auto-discover and load .env / .env.local if present
+	env.LoadDotEnv()
+
 	// If workspace writes or security audits are enabled but no Authorizer was provided, default to AllowAllAuthorizer
 	if (cfg.EnableWorkspaceWrites || cfg.EnableSecurityAudit) && cfg.Authorizer == nil {
 		cfg.Authorizer = AllowAllAuthorizer{}

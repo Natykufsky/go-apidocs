@@ -8,9 +8,11 @@ import (
 	"os"
 
 	"github.com/Natykufsky/go-apidocs"
+	"github.com/Natykufsky/go-apidocs/internal/env"
 )
 
 func main() {
+	env.LoadDotEnv()
 	specPath := flag.String("spec", "./docs/swagger.json", "Path to OpenAPI / Swagger spec file (JSON)")
 	readmePath := flag.String("readme", "./README.md", "Path to project README markdown file")
 	docsDir := flag.String("docs-dir", "./docs", "Base documentation directory")
