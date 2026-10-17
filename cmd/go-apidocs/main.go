@@ -25,6 +25,7 @@ func main() {
 	storageRoot := flag.String("storage-root", "./apidocs-data", "Storage root directory for imported specs")
 	enableWorkspaces := flag.Bool("workspaces", true, "Enable multi-workspace catalog")
 	enableWrites := flag.Bool("allow-imports", true, "Allow uploading & importing custom specs")
+	enableLiveSpec := flag.Bool("live-spec", true, "Allow live in-browser OpenAPI spec editing and backups")
 	enableSecurity := flag.Bool("security-audit", true, "Enable static & live cybersecurity audit suite")
 	nvidiaKey := flag.String("nvidia-key", "", "NVIDIA API Key for DeepSeek test generation (or env NVIDIA_API_KEY)")
 	nvidiaModel := flag.String("nvidia-model", "deepseek-ai/deepseek-v4.1-flash", "NVIDIA NIM model identifier")
@@ -56,6 +57,7 @@ func main() {
 		StorageRoot:           *storageRoot,
 		EnableWorkspaces:      *enableWorkspaces,
 		EnableWorkspaceWrites: *enableWrites,
+		EnableLiveSpecEditing: *enableLiveSpec,
 		EnableSecurityAudit:   *enableSecurity,
 		NVIDIA: apidocs.NVIDIAConfig{
 			APIKey: *nvidiaKey,
