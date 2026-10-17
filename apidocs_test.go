@@ -422,3 +422,193 @@ func TestRootMountHelpers(t *testing.T) {
 	}
 }
 
+func TestWorkspace_LockUnlockInvite(t *testing.T) {
+	specPath := createTestSpecFile(t)
+	storageDir := t.TempDir()
+
+	cfg := apidocs.Config{
+		SpecFilePath:     specPath,
+		Title:            "Locked Workspace Test",
+		StorageRoot:      storageDir,
+		EnableWorkspaces: true,
+		JWTSecret:        "test-crypto-key-12345",
+		Workspaces: []apidocs.Workspace{
+			{
+				ID:         "finance",
+				Name:       "Finance Services",
+				Visibility: "locked",
+				Passcode:   "pin9988",
+				Services: []apidocs.APIService{
+					{
+						ID:           "billing",
+						Title:        "Billing API",
+						SpecFilePath: specPath,
+					},
+				},
+			},
+		},
+	}
+
+	r := chi.NewRouter()
+	apidocs.MountChi(r, cfg)
+
+	// 1. Verify list workspaces masks passcode and exposes is_locked
+	req := httptest.NewRequest(http.MethodGet, "/docs/workspaces", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for workspaces list, got %d", rec.Code)
+	}
+	var wsList []apidocs.Workspace
+	_ = json.Unmarshal(rec.Body.Bytes(), &wsList)
+	if len(wsList) != 1 || !wsList[0].IsLocked || wsList[0].Passcode != "" {
+		t.Fatalf("expected locked workspace with masked passcode, got: %+v", wsList[0])
+	}
+
+	// 2. Test unlock with invalid passcode -> 401
+	unlockPayload, _ := json.Marshal(map[string]string{
+		"workspace_id": "finance",
+		"passcode":     "wrongpass",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/docs/workspaces/unlock", bytes.NewReader(unlockPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong passcode, got %d", rec.Code)
+	}
+
+	// 3. Test unlock with valid passcode -> 200 and session cookie
+	unlockPayload, _ = json.Marshal(map[string]string{
+		"workspace_id": "finance",
+		"passcode":     "pin9988",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/docs/workspaces/unlock", bytes.NewReader(unlockPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for correct passcode, got %d", rec.Code)
+	}
+	var sessCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == apidocs.DocsSessionCookieName {
+			sessCookie = c
+			break
+		}
+	}
+	if sessCookie == nil {
+		t.Fatal("expected session cookie upon unlocking workspace")
+	}
+
+	// 4. Test generate invitation link
+	invitePayload, _ := json.Marshal(map[string]any{
+		"workspace_id": "finance",
+		"duration_sec": 3600,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/docs/workspaces/invite", bytes.NewReader(invitePayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Apidocs-CSRF", "1")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for invite generation, got %d", rec.Code)
+	}
+	var inviteResp map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &inviteResp)
+	tokenStr, _ := inviteResp["token"].(string)
+	if tokenStr == "" {
+		t.Fatal("expected invite token in response")
+	}
+
+	// 5. Test accept invitation link
+	req = httptest.NewRequest(http.MethodGet, "/docs/workspaces/accept-invite?token="+tokenStr, nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect for accepted invite, got %d", rec.Code)
+	}
+}
+
+func TestWorkspace_LiveSpecEditing(t *testing.T) {
+	specPath := createTestSpecFile(t)
+	storageDir := t.TempDir()
+
+	cfg := apidocs.Config{
+		SpecFilePath:          specPath,
+		Title:                 "Live Spec Test",
+		StorageRoot:           storageDir,
+		EnableWorkspaces:      true,
+		EnableLiveSpecEditing: true,
+		Workspaces: []apidocs.Workspace{
+			{
+				ID:   "core",
+				Name: "Core API",
+				Services: []apidocs.APIService{
+					{
+						ID:           "user-service",
+						Title:        "User Service",
+						SpecFilePath: specPath,
+					},
+				},
+			},
+		},
+	}
+
+	r := chi.NewRouter()
+	apidocs.MountChi(r, cfg)
+
+	// 1. Get raw spec
+	req := httptest.NewRequest(http.MethodGet, "/docs/workspaces/spec/raw?ws=core&svc=user-service", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for spec/raw, got %d", rec.Code)
+	}
+
+	// 2. Put mutated spec
+	mutatedSpec := `{
+		"openapi": "3.0.0",
+		"info": {
+			"title": "Live Mutated User Service",
+			"version": "2.5.0"
+		},
+		"paths": {
+			"/users/v2": {
+				"get": {
+					"summary": "List Users V2",
+					"responses": {
+						"200": { "description": "OK" }
+					}
+				}
+			}
+		}
+	}`
+
+	savePayload, _ := json.Marshal(map[string]string{
+		"workspace_id": "core",
+		"service_id":   "user-service",
+		"content":      mutatedSpec,
+	})
+	req = httptest.NewRequest(http.MethodPut, "/docs/workspaces/spec", bytes.NewReader(savePayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Apidocs-CSRF", "1")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for spec save, got %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// 3. Verify swagger.json serves updated live spec
+	req = httptest.NewRequest(http.MethodGet, "/docs/swagger.json?ws=core&svc=user-service", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for swagger.json, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Live Mutated User Service") || !strings.Contains(rec.Body.String(), "/users/v2") {
+		t.Fatalf("expected updated live spec content, got: %s", rec.Body.String())
+	}
+}
+
+

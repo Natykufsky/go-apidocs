@@ -13,6 +13,10 @@ import { AITestGeneratorModal, AITestCase } from './components/AITestGeneratorMo
 import { TenantSettingsModal, TenantTheme } from './components/TenantSettingsModal';
 import { SDKGeneratorModal } from './components/SDKGeneratorModal';
 import { Workspace } from './components/WorkspaceSwitcher';
+import { WorkspaceManagerModal } from './components/WorkspaceManagerModal';
+import { WorkspaceUnlockModal } from './components/WorkspaceUnlockModal';
+import { WorkspaceInviteModal } from './components/WorkspaceInviteModal';
+import { LiveSpecEditorModal } from './components/LiveSpecEditorModal';
 import { LoginView } from './components/LoginView';
 import { GuideView } from './components/GuideView';
 import { LandingView } from './components/LandingView';
@@ -23,6 +27,7 @@ interface Capabilities {
   workspaces_enabled: boolean;
   workspace_writes_enabled: boolean;
   security_audit_enabled: boolean;
+  live_spec_editing_enabled: boolean;
   remote_fetch_enabled: boolean;
   max_spec_bytes: number;
 }
@@ -46,6 +51,7 @@ export const App: React.FC = () => {
     workspaces_enabled: true,
     workspace_writes_enabled: false,
     security_audit_enabled: false,
+    live_spec_editing_enabled: false,
     remote_fetch_enabled: false,
     max_spec_bytes: 5 * 1024 * 1024,
   });
@@ -84,6 +90,12 @@ export const App: React.FC = () => {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
   const [isCredsModalOpen, setIsCredsModalOpen] = useState<boolean>(false);
   const [isImporterModalOpen, setIsImporterModalOpen] = useState<boolean>(false);
+  const [isWorkspaceManagerOpen, setIsWorkspaceManagerOpen] = useState<boolean>(false);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
+  const [unlockTargetWs, setUnlockTargetWs] = useState<{ id: string; name: string } | null>(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState<boolean>(false);
+  const [inviteTargetWs, setInviteTargetWs] = useState<{ id: string; name: string } | null>(null);
+  const [isLiveSpecEditorOpen, setIsLiveSpecEditorOpen] = useState<boolean>(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
   const [isTenantModalOpen, setIsTenantModalOpen] = useState<boolean>(false);
   const [isSDKModalOpen, setIsSDKModalOpen] = useState<boolean>(false);
@@ -238,6 +250,13 @@ export const App: React.FC = () => {
 
   // Handle Workspace & Service Selection
   const handleSelectService = (wsId: string, svcId: string) => {
+    const targetWs = workspaces.find((w) => w.id === wsId);
+    if (targetWs && targetWs.is_locked) {
+      setUnlockTargetWs({ id: wsId, name: targetWs.name });
+      setIsUnlockModalOpen(true);
+      return;
+    }
+
     setActiveWorkspaceId(wsId);
     setActiveServiceId(svcId);
     try {
@@ -542,9 +561,12 @@ export const App: React.FC = () => {
             activeServiceId={activeServiceId}
             writesEnabled={capabilities.workspace_writes_enabled}
             securityAuditEnabled={capabilities.security_audit_enabled}
+            liveSpecEditingEnabled={capabilities.live_spec_editing_enabled}
             onSelectService={handleSelectService}
             onOpenImporter={() => setIsImporterModalOpen(true)}
+            onOpenWorkspaceManager={() => setIsWorkspaceManagerOpen(true)}
             onOpenSecurityAudit={() => setIsSecurityModalOpen(true)}
+            onOpenLiveSpec={() => setIsLiveSpecEditorOpen(true)}
             onOpenAITests={() => setAiTestEndpoint(allEndpointsList[0] || 'POST /api/v1/auth')}
             onOpenSDKGenerator={() => setIsSDKModalOpen(true)}
             onOpenTenantSettings={() => setIsTenantModalOpen(true)}
@@ -742,6 +764,74 @@ export const App: React.FC = () => {
       <SDKGeneratorModal
         isOpen={isSDKModalOpen}
         onClose={() => setIsSDKModalOpen(false)}
+      />
+
+      {/* Workspace CRUD Management Modal */}
+      <WorkspaceManagerModal
+        isOpen={isWorkspaceManagerOpen}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onClose={() => setIsWorkspaceManagerOpen(false)}
+        onRefreshWorkspaces={refreshWorkspaces}
+        onOpenInvite={(wsId, wsName) => {
+          setInviteTargetWs({ id: wsId, name: wsName });
+          setIsInviteModalOpen(true);
+        }}
+      />
+
+      {/* Workspace Unlock Modal */}
+      <WorkspaceUnlockModal
+        isOpen={isUnlockModalOpen}
+        workspaceId={unlockTargetWs?.id || ''}
+        workspaceName={unlockTargetWs?.name || ''}
+        onClose={() => {
+          setIsUnlockModalOpen(false);
+          setUnlockTargetWs(null);
+        }}
+        onSuccess={() => {
+          const unlockedId = unlockTargetWs?.id;
+          setIsUnlockModalOpen(false);
+          setUnlockTargetWs(null);
+          refreshWorkspaces();
+          if (unlockedId) {
+            const targetWs = workspaces.find((w) => w.id === unlockedId);
+            const firstSvcId = targetWs?.services?.[0]?.id || 'default';
+            setActiveWorkspaceId(unlockedId);
+            setActiveServiceId(firstSvcId);
+            try {
+              localStorage.setItem('apidocs_active_ws', unlockedId);
+              localStorage.setItem('apidocs_active_svc', firstSvcId);
+            } catch (e) {}
+            const url = new URL(window.location.href);
+            url.searchParams.set('ws', unlockedId);
+            url.searchParams.set('svc', firstSvcId);
+            window.history.pushState(null, '', url.toString());
+            updateSpecUrl(unlockedId, firstSvcId, activeModule);
+          }
+        }}
+      />
+
+      {/* Workspace Invite Modal */}
+      <WorkspaceInviteModal
+        isOpen={isInviteModalOpen}
+        workspaceId={inviteTargetWs?.id || ''}
+        workspaceName={inviteTargetWs?.name || ''}
+        onClose={() => {
+          setIsInviteModalOpen(false);
+          setInviteTargetWs(null);
+        }}
+      />
+
+      {/* Live OpenAPI Spec Editor Modal */}
+      <LiveSpecEditorModal
+        isOpen={isLiveSpecEditorOpen}
+        workspaceId={activeWorkspaceId}
+        serviceId={activeServiceId}
+        serviceTitle={workspaces.find((w) => w.id === activeWorkspaceId)?.services?.find((s) => s.id === activeServiceId)?.title || 'Current Service'}
+        onClose={() => setIsLiveSpecEditorOpen(false)}
+        onSpecSaved={() => {
+          updateSpecUrl(activeWorkspaceId, activeServiceId, activeModule);
+        }}
       />
     </div>
   );

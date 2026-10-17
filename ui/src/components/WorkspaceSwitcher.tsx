@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Layers, ChevronDown, Check, Plus, Upload, Box, ShieldCheck } from 'lucide-react';
+import { Layers, ChevronDown, Check, Plus, Upload, Box, ShieldCheck, Settings, Lock } from 'lucide-react';
 
 export interface APIService {
   id: string;
@@ -15,6 +15,9 @@ export interface Workspace {
   name: string;
   description?: string;
   icon?: string;
+  visibility?: 'public' | 'internal' | 'locked';
+  is_locked?: boolean;
+  passcode?: string;
   services: APIService[];
 }
 
@@ -26,6 +29,7 @@ interface WorkspaceSwitcherProps {
   onSelectService: (workspaceId: string, serviceId: string) => void;
   onOpenImporter?: () => void;
   onOpenSecurityAudit?: () => void;
+  onOpenManager?: () => void;
 }
 
 export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
@@ -36,6 +40,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   onSelectService,
   onOpenImporter,
   onOpenSecurityAudit,
+  onOpenManager,
 }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -125,9 +130,17 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
           <div className="max-h-64 overflow-y-auto p-2 space-y-3">
             {filteredWorkspaces.map((ws) => (
               <div key={ws.id} className="space-y-1">
-                <div className="px-2 py-1 flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  <span>{ws.icon || '📁'}</span>
-                  <span className="truncate">{ws.name}</span>
+                <div className="px-2 py-1 flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span>{ws.icon || '📁'}</span>
+                    <span className="truncate">{ws.name}</span>
+                  </div>
+                  {ws.is_locked && (
+                    <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider">
+                      <Lock className="w-2.5 h-2.5" />
+                      Locked
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-0.5">
                   {ws.services.map((svc) => {
@@ -183,6 +196,20 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Workspace</span>
+              </button>
+            )}
+            {onOpenManager && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onOpenManager();
+                }}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                title="Manage Workspaces (Edit / Delete)"
+              >
+                <Settings className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+                <span>Manage</span>
               </button>
             )}
             {onOpenSecurityAudit && (

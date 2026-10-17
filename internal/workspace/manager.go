@@ -86,6 +86,7 @@ type APIService struct {
 	DocsDir       string              `json:"docs_dir,omitempty"`
 	PathsDir      string              `json:"paths_dir,omitempty"`
 	ReadmePath    string              `json:"readme_path,omitempty"`
+	MarkdownFiles []MarkdownDoc       `json:"markdown_files,omitempty"` // Explicit or discovered list of documentation markdown files
 	QAStoragePath string              `json:"qa_storage_path,omitempty"`
 	Environments  map[string]string   `json:"environments,omitempty"` // e.g. {"Local": "http://localhost:8080", "Staging": "https://stg.api.com"}
 	ModuleTagMap  map[string][]string `json:"module_tag_map,omitempty"`
@@ -94,12 +95,22 @@ type APIService struct {
 	StoredFilename string `json:"stored_filename,omitempty"`
 }
 
+// MarkdownDoc represents a markdown file available for reading in the portal.
+type MarkdownDoc struct {
+	Name  string `json:"name"`  // Relative filename or title, e.g. "USER_MANUAL.md" or "Architecture"
+	Path  string `json:"path"`  // Absolute or relative path on disk
+	Title string `json:"title"` // Display title, e.g. "User Manual"
+}
+
 // Workspace represents a collection of related API services (e.g. "Billing Services", "Auth Microservices").
 type Workspace struct {
 	ID          string       `json:"id"`
 	Name        string       `json:"name"`
 	Description string       `json:"description,omitempty"`
 	Icon        string       `json:"icon,omitempty"`
+	Visibility  string       `json:"visibility,omitempty"` // "public", "internal", "locked"
+	Passcode    string       `json:"passcode,omitempty"`   // Plaintext or hashed passcode for locked workspaces
+	IsLocked    bool         `json:"is_locked,omitempty"`  // Computed flag for client UI
 	Services    []APIService `json:"services"`
 }
 
@@ -108,6 +119,7 @@ type Capabilities struct {
 	WorkspacesEnabled      bool                       `json:"workspaces_enabled"`
 	WorkspaceWritesEnabled bool                       `json:"workspace_writes_enabled"`
 	SecurityAuditEnabled   bool                       `json:"security_audit_enabled"`
+	LiveSpecEditingEnabled bool                       `json:"live_spec_editing_enabled"`
 	RemoteFetchEnabled     bool                       `json:"remote_fetch_enabled"`
 	RemoteFetchPolicy      security.RemoteFetchPolicy `json:"remote_fetch_policy"`
 	MaxSpecBytes           int64                      `json:"max_spec_bytes"`
@@ -285,7 +297,10 @@ func (wm *WorkspaceManager) ListWorkspaces() []Workspace {
 
 	result := make([]Workspace, 0, len(wm.workspaces))
 	for _, ws := range wm.workspaces {
-		result = append(result, *ws)
+		copied := *ws
+		copied.IsLocked = copied.Visibility == "locked" || copied.Passcode != ""
+		copied.Passcode = "" // Never leak secret passcode to client
+		result = append(result, copied)
 	}
 	return result
 }
@@ -320,6 +335,113 @@ func (wm *WorkspaceManager) GetService(wsID, svcID string) (*Workspace, *APIServ
 	return nil, nil, ErrServiceNotFound
 }
 
+// ListMarkdownDocs returns all discovered and configured markdown documents for a service.
+func (wm *WorkspaceManager) ListMarkdownDocs(wsID, svcID string) []MarkdownDoc {
+	_, svc, err := wm.GetService(wsID, svcID)
+	if err != nil {
+		return nil
+	}
+
+	docsMap := make(map[string]MarkdownDoc)
+
+	// 1. Check explicitly configured ReadmePath
+	if svc.ReadmePath != "" {
+		if _, err := os.Stat(svc.ReadmePath); err == nil {
+			base := filepath.Base(svc.ReadmePath)
+			docsMap[base] = MarkdownDoc{
+				Name:  base,
+				Path:  svc.ReadmePath,
+				Title: formatDocTitle(base),
+			}
+		}
+	}
+
+	// 2. Check explicitly configured MarkdownFiles
+	for _, doc := range svc.MarkdownFiles {
+		if doc.Name == "" && doc.Path != "" {
+			doc.Name = filepath.Base(doc.Path)
+		}
+		if doc.Title == "" {
+			doc.Title = formatDocTitle(doc.Name)
+		}
+		if doc.Name != "" {
+			docsMap[doc.Name] = doc
+		}
+	}
+
+	// 3. Auto-discover all *.md files in DocsDir
+	searchDirs := []string{svc.DocsDir}
+	if svc.DocsDir == "" {
+		searchDirs = append(searchDirs, "./docs", ".")
+	}
+	for _, d := range searchDirs {
+		if d == "" {
+			continue
+		}
+		if entries, err := os.ReadDir(d); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				name := entry.Name()
+				if strings.HasSuffix(strings.ToLower(name), ".md") {
+					if _, exists := docsMap[name]; !exists {
+						fullPath := filepath.Join(d, name)
+						docsMap[name] = MarkdownDoc{
+							Name:  name,
+							Path:  fullPath,
+							Title: formatDocTitle(name),
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Ensure README.md is always first if present
+	var result []MarkdownDoc
+	if r, ok := docsMap["README.md"]; ok {
+		result = append(result, r)
+		delete(docsMap, "README.md")
+	} else if r, ok := docsMap["readme.md"]; ok {
+		result = append(result, r)
+		delete(docsMap, "readme.md")
+	}
+
+	for _, doc := range docsMap {
+		result = append(result, doc)
+	}
+
+	return result
+}
+
+// GetMarkdownDocContent securely retrieves the content of a requested markdown document.
+func (wm *WorkspaceManager) GetMarkdownDocContent(wsID, svcID, docName string) ([]byte, error) {
+	docs := wm.ListMarkdownDocs(wsID, svcID)
+	cleanDocName := filepath.Base(docName)
+
+	for _, d := range docs {
+		if strings.EqualFold(d.Name, cleanDocName) || strings.EqualFold(d.Title, docName) {
+			cleanPath := filepath.Clean(d.Path)
+			// Read file from disk
+			b, err := os.ReadFile(cleanPath)
+			if err != nil {
+				return nil, err
+			}
+			return b, nil
+		}
+	}
+
+	return nil, os.ErrNotExist
+}
+
+func formatDocTitle(filename string) string {
+	raw := strings.TrimSuffix(filename, filepath.Ext(filename))
+	raw = strings.ReplaceAll(raw, "_", " ")
+	raw = strings.ReplaceAll(raw, "-", " ")
+	return strings.Title(strings.ToLower(raw))
+}
+
 // AddWorkspace registers a new workspace.
 func (wm *WorkspaceManager) AddWorkspace(ws Workspace) error {
 	wm.mu.Lock()
@@ -339,6 +461,83 @@ func (wm *WorkspaceManager) AddWorkspace(ws Workspace) error {
 	}
 
 	wm.workspaces[ws.ID] = &ws
+	return nil
+}
+
+// UpdateWorkspace modifies an existing workspace's metadata (name, description, icon).
+func (wm *WorkspaceManager) UpdateWorkspace(ws Workspace) error {
+	wm.mu.Lock()
+	defer wm.mu.Unlock()
+
+	existing, ok := wm.workspaces[ws.ID]
+	if !ok {
+		return ErrWorkspaceNotFound
+	}
+
+	if strings.TrimSpace(ws.Name) != "" {
+		existing.Name = ws.Name
+	}
+	if ws.Description != "" {
+		existing.Description = ws.Description
+	}
+	if ws.Icon != "" {
+		existing.Icon = ws.Icon
+	}
+	if ws.Visibility != "" {
+		existing.Visibility = ws.Visibility
+	}
+	if ws.Passcode != "" {
+		existing.Passcode = ws.Passcode
+	}
+	if len(ws.Services) > 0 {
+		existing.Services = ws.Services
+	}
+
+	return nil
+}
+
+// UnlockWorkspace verifies the passcode for a locked workspace.
+func (wm *WorkspaceManager) UnlockWorkspace(wsID, passcode string) (bool, error) {
+	wm.mu.RLock()
+	defer wm.mu.RUnlock()
+
+	ws, ok := wm.workspaces[wsID]
+	if !ok {
+		return false, ErrWorkspaceNotFound
+	}
+
+	if ws.Visibility != "locked" && ws.Passcode == "" {
+		return true, nil // Not locked
+	}
+
+	if ws.Passcode == "" {
+		return true, nil
+	}
+
+	valid := strings.TrimSpace(ws.Passcode) == strings.TrimSpace(passcode)
+	return valid, nil
+}
+
+// DeleteWorkspace removes a workspace by ID.
+func (wm *WorkspaceManager) DeleteWorkspace(id string) error {
+	wm.mu.Lock()
+	defer wm.mu.Unlock()
+
+	if _, ok := wm.workspaces[id]; !ok {
+		return ErrWorkspaceNotFound
+	}
+
+	delete(wm.workspaces, id)
+
+	// Clean associated caches
+	wm.cacheMu.Lock()
+	for k := range wm.cache {
+		if strings.HasPrefix(k, id+":") {
+			delete(wm.cache, k)
+		}
+	}
+	wm.cacheMu.Unlock()
+
 	return nil
 }
 
@@ -406,6 +605,59 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 
 	wm.putCache(wsID+":"+svc.ID, specData)
 	return &svc, nil
+}
+
+// SaveLiveSpec updates an existing service's OpenAPI spec with atomic write and automated backup history ring.
+func (wm *WorkspaceManager) SaveLiveSpec(wsID, svcID string, specData []byte) error {
+	if int64(len(specData)) > wm.maxSpecBytes {
+		return fmt.Errorf("%w: %d bytes (limit: %d)", ErrSpecTooLarge, len(specData), wm.maxSpecBytes)
+	}
+
+	_, svc, err := wm.GetService(wsID, svcID)
+	if err != nil {
+		return err
+	}
+
+	var targetPath string
+	if svc.StoredFilename != "" {
+		p, err := wm.SafeJoin(svc.StoredFilename)
+		if err != nil {
+			return err
+		}
+		targetPath = p
+	} else if svc.SpecFilePath != "" {
+		targetPath = svc.SpecFilePath
+	} else {
+		// Allocate a new stored spec file for this service
+		return fmt.Errorf("no spec file path configured for service: %s", svcID)
+	}
+
+	// 1. Maintain backup revision history in storageRoot/history/<wsID>-<svcID>/
+	historyDir, err := wm.SafeJoin(filepath.Join("history", wsID+"-"+svcID))
+	if err == nil {
+		_ = os.MkdirAll(historyDir, 0750)
+		if oldData, err := os.ReadFile(targetPath); err == nil && len(oldData) > 0 {
+			revFile := filepath.Join(historyDir, fmt.Sprintf("%d.json", time.Now().Unix()))
+			_ = os.WriteFile(revFile, oldData, 0600)
+		}
+	}
+
+	// 2. Atomic write to temporary file then rename
+	tempPath := targetPath + ".tmp"
+	if err := os.WriteFile(tempPath, specData, 0600); err != nil {
+		return fmt.Errorf("failed writing spec temp file: %w", err)
+	}
+	if err := os.Rename(tempPath, targetPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("failed replacing live spec file: %w", err)
+	}
+
+	// 3. Invalidate LRU cache
+	wm.cacheMu.Lock()
+	delete(wm.cache, wsID+":"+svcID)
+	wm.cacheMu.Unlock()
+
+	return nil
 }
 
 // GetSpecData retrieves spec JSON bytes, utilizing the bounded LRU cache.

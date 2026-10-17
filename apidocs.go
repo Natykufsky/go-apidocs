@@ -3,6 +3,7 @@ package apidocs
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -43,6 +44,7 @@ type (
 	RateLimitConfig     = workspace.RateLimitConfig
 	AuditEvent          = workspace.AuditEvent
 	APIService          = workspace.APIService
+	MarkdownDoc         = workspace.MarkdownDoc
 	Workspace           = workspace.Workspace
 	Capabilities        = workspace.Capabilities
 	WorkspaceManager    = workspace.WorkspaceManager
@@ -178,11 +180,17 @@ type Config struct {
 	// AuthPassword configures the HTTP password for docs protection (reads from DOCS_AUTH_PASS if empty)
 	AuthPassword string
 
+	// AuthPasswordHash configures the bcrypt hash of password (reads from DOCS_AUTH_PASS_HASH if empty)
+	AuthPasswordHash string
+
 	// AuthEnabled explicitly turns on/off authentication protection (defaults to true if AuthUser is set)
 	AuthEnabled *bool
 
-	// JWTSecret is used to cryptographically sign docs session cookies
+	// JWTSecret is used to cryptographically sign docs session cookies (reads from DOCS_JWT_SECRET if empty)
 	JWTSecret string
+
+	// EnableLiveSpecEditing allows modifying and committing OpenAPI JSON/YAML from the portal UI
+	EnableLiveSpecEditing bool
 
 	// QAStoragePath is where QA test reviews and bug notes are persisted (default: "./docs/qa_tracker.json")
 	QAStoragePath string
@@ -192,6 +200,9 @@ type Config struct {
 
 	// ReadmePath is the path to README.md (default: "<DocsDir>/README.md" or "./README.md")
 	ReadmePath string
+
+	// MarkdownFiles optionally configures explicit markdown files for documentation
+	MarkdownFiles []MarkdownDoc
 
 	// PathsDir is the directory containing modular endpoint definitions (default: "<DocsDir>/paths")
 	PathsDir string
@@ -340,8 +351,14 @@ func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 	if cfg.AuthPassword == "" {
 		cfg.AuthPassword = os.Getenv("DOCS_AUTH_PASS")
 	}
+	if cfg.AuthPasswordHash == "" {
+		cfg.AuthPasswordHash = os.Getenv("DOCS_AUTH_PASS_HASH")
+	}
 	if cfg.JWTSecret == "" {
-		cfg.JWTSecret = os.Getenv("JWT_SECRET")
+		cfg.JWTSecret = os.Getenv("DOCS_JWT_SECRET")
+		if cfg.JWTSecret == "" {
+			cfg.JWTSecret = os.Getenv("JWT_SECRET")
+		}
 		if cfg.JWTSecret == "" {
 			cfg.JWTSecret = "apidocs_super_secret_session_key"
 		}
@@ -357,7 +374,7 @@ func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 	if cfg.AuthEnabled != nil {
 		authEnabled = *cfg.AuthEnabled
 	} else {
-		authEnabled = os.Getenv("DOCS_AUTH_ENABLED") == "true" || (cfg.AuthUser != "" && cfg.AuthPassword != "")
+		authEnabled = os.Getenv("DOCS_AUTH_ENABLED") == "true" || (cfg.AuthUser != "" && (cfg.AuthPassword != "" || cfg.AuthPasswordHash != ""))
 	}
 
 	// Construct default workspace for seamless backward compatibility if none provided
@@ -378,6 +395,7 @@ func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 						DocsDir:       cfg.DocsDir,
 						PathsDir:      cfg.PathsDir,
 						ReadmePath:    cfg.ReadmePath,
+						MarkdownFiles: cfg.MarkdownFiles,
 						QAStoragePath: cfg.QAStoragePath,
 						ModuleTagMap:  cfg.ModuleTagMap,
 						Environments: map[string]string{
@@ -445,11 +463,226 @@ func MountFiber(app *fiber.App, cfg Config) {
 			WorkspacesEnabled:      cfg.EnableWorkspaces,
 			WorkspaceWritesEnabled: cfg.EnableWorkspaceWrites,
 			SecurityAuditEnabled:   cfg.EnableSecurityAudit,
+			LiveSpecEditingEnabled: cfg.EnableLiveSpecEditing,
 			RemoteFetchEnabled:     cfg.RemoteFetch.Enabled,
 			RemoteFetchPolicy:      cfg.RemoteFetch,
 			MaxSpecBytes:           cfg.MaxSpecBytes,
 		}
 		return c.JSON(caps)
+	})
+
+	// Workspace Unlock & Invitation APIs
+	app.Post("/docs/workspaces/unlock", func(c *fiber.Ctx) error {
+		setFiberSecurityHeaders(c)
+		var req struct {
+			WorkspaceID string `json:"workspace_id"`
+			Passcode    string `json:"passcode"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+		}
+		if req.WorkspaceID == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "workspace_id is required"})
+		}
+		unlocked, err := wm.UnlockWorkspace(req.WorkspaceID, req.Passcode)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
+		}
+		if !unlocked {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"success": false, "message": "Invalid passcode"})
+		}
+
+		var unlockedList []string
+		username := cfg.AuthUser
+		cookieVal := c.Cookies(DocsSessionCookieName)
+		if cookieVal != "" {
+			if sess, ok := auth.ParseAndVerifySessionToken(cookieVal, "", cfg.JWTSecret); ok && sess != nil {
+				unlockedList = sess.UnlockedWorkspaces
+				if sess.Username != "" {
+					username = sess.Username
+				}
+			}
+		}
+
+		already := false
+		for _, u := range unlockedList {
+			if u == req.WorkspaceID {
+				already = true
+				break
+			}
+		}
+		if !already {
+			unlockedList = append(unlockedList, req.WorkspaceID)
+		}
+
+		newToken := auth.GenerateDocsSessionToken(username, cfg.JWTSecret, unlockedList...)
+		c.Cookie(&fiber.Cookie{
+			Name:     DocsSessionCookieName,
+			Value:    newToken,
+			Path:     "/",
+			Expires:  time.Now().Add(24 * time.Hour),
+			HTTPOnly: true,
+			SameSite: "Lax",
+		})
+		return c.JSON(fiber.Map{"success": true, "message": "Workspace unlocked successfully", "workspace": req.WorkspaceID})
+	})
+
+	app.Post("/docs/workspaces/invite", func(c *fiber.Ctx) error {
+		setFiberSecurityHeaders(c)
+		if !checkCSRFHeaderFiber(c) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "missing or invalid CSRF header"})
+		}
+		var req struct {
+			WorkspaceID string `json:"workspace_id"`
+			DurationSec int64  `json:"duration_sec"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+		}
+		if req.WorkspaceID == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "workspace_id is required"})
+		}
+		if _, err := wm.GetWorkspace(req.WorkspaceID); err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "workspace not found"})
+		}
+
+		dur := time.Duration(req.DurationSec) * time.Second
+		if dur <= 0 {
+			dur = 7 * 24 * time.Hour
+		}
+
+		inviteToken := auth.GenerateInviteToken(req.WorkspaceID, cfg.JWTSecret, dur)
+		inviteLink := fmt.Sprintf("/docs/workspaces/accept-invite?token=%s", inviteToken)
+
+		return c.JSON(fiber.Map{
+			"success":      true,
+			"token":        inviteToken,
+			"invite_link":  inviteLink,
+			"expires_in":   int64(dur.Seconds()),
+			"workspace_id": req.WorkspaceID,
+		})
+	})
+
+	app.Get("/docs/workspaces/accept-invite", func(c *fiber.Ctx) error {
+		setFiberSecurityHeaders(c)
+		token := c.Query("token")
+		if token == "" {
+			return c.Status(fiber.StatusBadRequest).SendString("token is required")
+		}
+
+		wsID, valid := auth.VerifyInviteToken(token, cfg.JWTSecret)
+		if !valid || wsID == "" {
+			return c.Status(fiber.StatusUnauthorized).SendString("invalid or expired invitation token")
+		}
+
+		var unlockedList []string
+		username := cfg.AuthUser
+		cookieVal := c.Cookies(DocsSessionCookieName)
+		if cookieVal != "" {
+			if sess, ok := auth.ParseAndVerifySessionToken(cookieVal, "", cfg.JWTSecret); ok && sess != nil {
+				unlockedList = sess.UnlockedWorkspaces
+				if sess.Username != "" {
+					username = sess.Username
+				}
+			}
+		}
+
+		already := false
+		for _, u := range unlockedList {
+			if u == wsID {
+				already = true
+				break
+			}
+		}
+		if !already {
+			unlockedList = append(unlockedList, wsID)
+		}
+
+		newToken := auth.GenerateDocsSessionToken(username, cfg.JWTSecret, unlockedList...)
+		c.Cookie(&fiber.Cookie{
+			Name:     DocsSessionCookieName,
+			Value:    newToken,
+			Path:     "/",
+			Expires:  time.Now().Add(24 * time.Hour),
+			HTTPOnly: true,
+			SameSite: "Lax",
+		})
+
+		return c.Redirect(fmt.Sprintf("/docs?ws=%s", wsID))
+	})
+
+	// Live Spec Editing APIs
+	app.Get("/docs/workspaces/spec/raw", func(c *fiber.Ctx) error {
+		setFiberSecurityHeaders(c)
+		wsID := c.Query("ws", "default")
+		svcID := c.Query("svc", "default")
+
+		var specBytes []byte
+		var err error
+		if wm != nil {
+			specBytes, err = wm.GetSpecData(wsID, svcID)
+		}
+		if err != nil || len(specBytes) == 0 {
+			specBytes, err = os.ReadFile(cfg.SpecFilePath)
+		}
+		if err != nil || len(specBytes) == 0 {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "spec not found"})
+		}
+
+		c.Set("Content-Type", "application/json; charset=utf-8")
+		return c.Send(specBytes)
+	})
+
+	app.Put("/docs/workspaces/spec", func(c *fiber.Ctx) error {
+		setFiberSecurityHeaders(c)
+		if !checkCSRFHeaderFiber(c) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "missing or invalid CSRF header"})
+		}
+		if !cfg.EnableLiveSpecEditing {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "live spec editing is disabled"})
+		}
+
+		var req struct {
+			WorkspaceID string `json:"workspace_id"`
+			ServiceID   string `json:"service_id"`
+			Content     string `json:"content"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+		}
+		if req.WorkspaceID == "" {
+			req.WorkspaceID = "default"
+		}
+		if req.ServiceID == "" {
+			req.ServiceID = "default"
+		}
+		if strings.TrimSpace(req.Content) == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "spec content cannot be empty"})
+		}
+
+		parsed, standardizedJSON, err := ParseSpec(strings.NewReader(req.Content), cfg.MaxSpecBytes)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("spec validation failed: %v", err)})
+		}
+
+		if err := wm.SaveLiveSpec(req.WorkspaceID, req.ServiceID, standardizedJSON); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("failed saving live spec: %v", err)})
+		}
+
+		wm.LogAudit(AuditEvent{
+			Action:    "spec:live_edit",
+			Workspace: req.WorkspaceID,
+			Service:   req.ServiceID,
+			RemoteIP:  c.IP(),
+			Status:    "SUCCESS",
+			Details:   fmt.Sprintf("Saved live spec: %s (v%s)", parsed.Title, parsed.Version),
+		})
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"message": "Spec saved successfully",
+			"summary": parsed,
+		})
 	})
 
 	// Dynamic/Workspace-aware Swagger JSON handler
@@ -483,9 +716,36 @@ func MountFiber(app *fiber.App, cfg Config) {
 		})
 	})
 
-	// Markdown README content API
+	// Markdown Documents Catalog API
+	app.Get("/docs/markdown-docs", func(c *fiber.Ctx) error {
+		setFiberSecurityHeaders(c)
+		wsID := c.Query("ws", "default")
+		svcID := c.Query("svc", "default")
+		docs := wm.ListMarkdownDocs(wsID, svcID)
+		return c.JSON(docs)
+	})
+
+	// Markdown README / document content API
 	app.Get("/docs/readme", func(c *fiber.Ctx) error {
 		setFiberSecurityHeaders(c)
+		wsID := c.Query("ws", "default")
+		svcID := c.Query("svc", "default")
+		fileQuery := c.Query("file", "")
+
+		// If a specific file or custom markdown document is requested
+		if fileQuery != "" {
+			if b, err := wm.GetMarkdownDocContent(wsID, svcID, fileQuery); err == nil && len(b) > 0 {
+				c.Set("Content-Type", "text/markdown; charset=utf-8")
+				return c.Send(b)
+			}
+		}
+
+		// Check service-specific discovered markdown documents first
+		if b, err := wm.GetMarkdownDocContent(wsID, svcID, "README.md"); err == nil && len(b) > 0 {
+			c.Set("Content-Type", "text/markdown; charset=utf-8")
+			return c.Send(b)
+		}
+
 		candidates := []string{
 			cfg.ReadmePath,
 			filepath.Join(cfg.DocsDir, "README.md"),
@@ -543,6 +803,59 @@ func MountFiber(app *fiber.App, cfg Config) {
 				Status:    "SUCCESS",
 			})
 			return c.JSON(fiber.Map{"success": true, "workspace": ws})
+		})
+
+		app.Put("/docs/workspaces", func(c *fiber.Ctx) error {
+			setFiberSecurityHeaders(c)
+			if !checkCSRFHeaderFiber(c) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "missing or invalid CSRF header"})
+			}
+			var ws Workspace
+			if err := c.BodyParser(&ws); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid workspace json payload"})
+			}
+			if id := c.Query("id"); id != "" {
+				ws.ID = id
+			}
+			if err := wm.UpdateWorkspace(ws); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+			}
+			wm.LogAudit(AuditEvent{
+				Action:    "workspace:update",
+				Workspace: ws.ID,
+				RemoteIP:  c.IP(),
+				Status:    "SUCCESS",
+			})
+			return c.JSON(fiber.Map{"success": true, "workspace": ws})
+		})
+
+		app.Delete("/docs/workspaces", func(c *fiber.Ctx) error {
+			setFiberSecurityHeaders(c)
+			if !checkCSRFHeaderFiber(c) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "missing or invalid CSRF header"})
+			}
+			wsID := c.Query("id")
+			if wsID == "" {
+				var body struct {
+					ID string `json:"id"`
+				}
+				if err := c.BodyParser(&body); err == nil && body.ID != "" {
+					wsID = body.ID
+				}
+			}
+			if wsID == "" {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "workspace id is required"})
+			}
+			if err := wm.DeleteWorkspace(wsID); err != nil {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
+			}
+			wm.LogAudit(AuditEvent{
+				Action:    "workspace:delete",
+				Workspace: wsID,
+				RemoteIP:  c.IP(),
+				Status:    "SUCCESS",
+			})
+			return c.JSON(fiber.Map{"success": true, "message": "workspace deleted", "id": wsID})
 		})
 
 		app.Post("/docs/workspaces/import", func(c *fiber.Ctx) error {
@@ -682,7 +995,8 @@ func MountFiber(app *fiber.App, cfg Config) {
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "message": "Invalid payload"})
 		}
-		if req.Username != cfg.AuthUser || req.Password != cfg.AuthPassword {
+		if subtle.ConstantTimeCompare([]byte(req.Username), []byte(cfg.AuthUser)) != 1 ||
+			!auth.CheckPassword(req.Password, cfg.AuthPassword, cfg.AuthPasswordHash) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"success": false, "message": "Invalid username or password"})
 		}
 
@@ -762,20 +1076,31 @@ func MountChi(r chi.Router, cfg Config) {
 			WorkspacesEnabled:      cfg.EnableWorkspaces,
 			WorkspaceWritesEnabled: cfg.EnableWorkspaceWrites,
 			SecurityAuditEnabled:   cfg.EnableSecurityAudit,
+			LiveSpecEditingEnabled: cfg.EnableLiveSpecEditing,
 			RemoteFetchEnabled:     cfg.RemoteFetch.Enabled,
 			RemoteFetchPolicy:      cfg.RemoteFetch,
 			MaxSpecBytes:           cfg.MaxSpecBytes,
 		})
 	})
 
+	// Workspace Unlock & Invitation APIs
+	r.Post("/docs/workspaces/unlock", WorkspaceUnlockHandler(cfg, wm))
+	r.Post("/docs/workspaces/invite", WorkspaceInviteHandler(cfg, wm))
+	r.Get("/docs/workspaces/accept-invite", WorkspaceAcceptInviteHandler(cfg))
+
+	// Live Spec Editing APIs
+	r.Get("/docs/workspaces/spec/raw", SpecRawHandler(cfg, wm))
+	r.Put("/docs/workspaces/spec", SpecSaveHandler(cfg, wm))
+
 	// Swagger JSON routes
 	r.Get("/docs/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 	r.Get("/swagger/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 	r.Get("/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 
-	// Navigation & Readme APIs
+	// Navigation, Readme & Markdown Documents APIs
 	r.Get("/docs/nav", NavHandler(cfg))
-	r.Get("/docs/readme", ReadmeHandler(cfg))
+	r.Get("/docs/readme", ReadmeHandler(cfg, wm))
+	r.Get("/docs/markdown-docs", MarkdownDocsHandler(wm))
 
 	// Workspace Management APIs
 	if cfg.EnableWorkspaces {
@@ -783,6 +1108,8 @@ func MountChi(r chi.Router, cfg Config) {
 	}
 	if cfg.EnableWorkspaceWrites {
 		r.Post("/docs/workspaces", WorkspaceCreateHandler(wm))
+		r.Put("/docs/workspaces", WorkspaceUpdateHandler(wm))
+		r.Delete("/docs/workspaces", WorkspaceDeleteHandler(wm))
 		r.Post("/docs/workspaces/import", WorkspaceImportHandler(cfg, wm))
 	}
 	if cfg.EnableSecurityAudit {
@@ -846,20 +1173,31 @@ func MountGin(r gin.IRoutes, cfg Config) {
 			WorkspacesEnabled:      cfg.EnableWorkspaces,
 			WorkspaceWritesEnabled: cfg.EnableWorkspaceWrites,
 			SecurityAuditEnabled:   cfg.EnableSecurityAudit,
+			LiveSpecEditingEnabled: cfg.EnableLiveSpecEditing,
 			RemoteFetchEnabled:     cfg.RemoteFetch.Enabled,
 			RemoteFetchPolicy:      cfg.RemoteFetch,
 			MaxSpecBytes:           cfg.MaxSpecBytes,
 		})
 	}))
 
+	// Workspace Unlock & Invitation APIs
+	r.POST("/docs/workspaces/unlock", gin.WrapF(WorkspaceUnlockHandler(cfg, wm)))
+	r.POST("/docs/workspaces/invite", gin.WrapF(WorkspaceInviteHandler(cfg, wm)))
+	r.GET("/docs/workspaces/accept-invite", gin.WrapF(WorkspaceAcceptInviteHandler(cfg)))
+
+	// Live Spec Editing APIs
+	r.GET("/docs/workspaces/spec/raw", gin.WrapF(SpecRawHandler(cfg, wm)))
+	r.PUT("/docs/workspaces/spec", gin.WrapF(SpecSaveHandler(cfg, wm)))
+
 	// Swagger JSON routes
 	r.GET("/docs/swagger.json", gin.WrapF(SwaggerJSONHandler(cfg, wm, defaultFilter)))
 	r.GET("/swagger/swagger.json", gin.WrapF(SwaggerJSONHandler(cfg, wm, defaultFilter)))
 	r.GET("/swagger.json", gin.WrapF(SwaggerJSONHandler(cfg, wm, defaultFilter)))
 
-	// Navigation & Readme APIs
+	// Navigation, Readme & Markdown Documents APIs
 	r.GET("/docs/nav", gin.WrapF(NavHandler(cfg)))
-	r.GET("/docs/readme", gin.WrapF(ReadmeHandler(cfg)))
+	r.GET("/docs/readme", gin.WrapF(ReadmeHandler(cfg, wm)))
+	r.GET("/docs/markdown-docs", gin.WrapF(MarkdownDocsHandler(wm)))
 
 	// Workspace Management APIs
 	if cfg.EnableWorkspaces {
@@ -867,6 +1205,8 @@ func MountGin(r gin.IRoutes, cfg Config) {
 	}
 	if cfg.EnableWorkspaceWrites {
 		r.POST("/docs/workspaces", gin.WrapF(WorkspaceCreateHandler(wm)))
+		r.PUT("/docs/workspaces", gin.WrapF(WorkspaceUpdateHandler(wm)))
+		r.DELETE("/docs/workspaces", gin.WrapF(WorkspaceDeleteHandler(wm)))
 		r.POST("/docs/workspaces/import", gin.WrapF(WorkspaceImportHandler(cfg, wm)))
 	}
 	if cfg.EnableSecurityAudit {
@@ -920,20 +1260,31 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 			WorkspacesEnabled:      cfg.EnableWorkspaces,
 			WorkspaceWritesEnabled: cfg.EnableWorkspaceWrites,
 			SecurityAuditEnabled:   cfg.EnableSecurityAudit,
+			LiveSpecEditingEnabled: cfg.EnableLiveSpecEditing,
 			RemoteFetchEnabled:     cfg.RemoteFetch.Enabled,
 			RemoteFetchPolicy:      cfg.RemoteFetch,
 			MaxSpecBytes:           cfg.MaxSpecBytes,
 		})
 	})
 
+	// Workspace Unlock & Invitation APIs
+	mux.HandleFunc("/docs/workspaces/unlock", WorkspaceUnlockHandler(cfg, wm))
+	mux.HandleFunc("/docs/workspaces/invite", WorkspaceInviteHandler(cfg, wm))
+	mux.HandleFunc("/docs/workspaces/accept-invite", WorkspaceAcceptInviteHandler(cfg))
+
+	// Live Spec Editing APIs
+	mux.HandleFunc("/docs/workspaces/spec/raw", SpecRawHandler(cfg, wm))
+	mux.HandleFunc("/docs/workspaces/spec", SpecSaveHandler(cfg, wm))
+
 	// Swagger JSON
 	mux.HandleFunc("/docs/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 	mux.HandleFunc("/swagger/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 	mux.HandleFunc("/swagger.json", SwaggerJSONHandler(cfg, wm, defaultFilter))
 
-	// Nav, QA & AI Test Generation APIs
+	// Nav, Readme, Markdown Documents & QA APIs
 	mux.HandleFunc("/docs/nav", NavHandler(cfg))
-	mux.HandleFunc("/docs/readme", ReadmeHandler(cfg))
+	mux.HandleFunc("/docs/readme", ReadmeHandler(cfg, wm))
+	mux.HandleFunc("/docs/markdown-docs", MarkdownDocsHandler(wm))
 	mux.HandleFunc("/docs/qa/data", defaultQA.HandleGetDataHTTP)
 	mux.HandleFunc("/docs/qa/record", defaultQA.HandleSaveRecordHTTP)
 	mux.HandleFunc("/docs/qa/reset", defaultQA.HandleResetDataHTTP)
@@ -983,10 +1334,27 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 
 	// Workspace APIs
 	if cfg.EnableWorkspaces {
-		mux.HandleFunc("/docs/workspaces", WorkspacesListHandler(wm))
+		mux.HandleFunc("/docs/workspaces", func(w http.ResponseWriter, r *http.Request) {
+			if cfg.EnableWorkspaceWrites {
+				switch r.Method {
+				case http.MethodPost:
+					WorkspaceCreateHandler(wm)(w, r)
+					return
+				case http.MethodPut, http.MethodPatch:
+					WorkspaceUpdateHandler(wm)(w, r)
+					return
+				case http.MethodDelete:
+					WorkspaceDeleteHandler(wm)(w, r)
+					return
+				}
+			}
+			WorkspacesListHandler(wm)(w, r)
+		})
 	}
 	if cfg.EnableWorkspaceWrites {
 		mux.HandleFunc("/docs/workspaces/create", WorkspaceCreateHandler(wm))
+		mux.HandleFunc("/docs/workspaces/update", WorkspaceUpdateHandler(wm))
+		mux.HandleFunc("/docs/workspaces/delete", WorkspaceDeleteHandler(wm))
 		mux.HandleFunc("/docs/workspaces/import", WorkspaceImportHandler(cfg, wm))
 	}
 	if cfg.EnableSecurityAudit {
@@ -1091,6 +1459,70 @@ func WorkspaceCreateHandler(wm *WorkspaceManager) http.HandlerFunc {
 	}
 }
 
+// WorkspaceUpdateHandler modifies an existing workspace.
+func WorkspaceUpdateHandler(wm *WorkspaceManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		if !checkCSRFHeader(r) {
+			http.Error(w, "missing or invalid CSRF header", http.StatusForbidden)
+			return
+		}
+
+		var ws Workspace
+		if err := json.NewDecoder(r.Body).Decode(&ws); err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+
+		wsID := r.URL.Query().Get("id")
+		if wsID != "" {
+			ws.ID = wsID
+		}
+
+		if err := wm.UpdateWorkspace(ws); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "workspace": ws})
+	}
+}
+
+// WorkspaceDeleteHandler deletes a workspace by ID.
+func WorkspaceDeleteHandler(wm *WorkspaceManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		if !checkCSRFHeader(r) {
+			http.Error(w, "missing or invalid CSRF header", http.StatusForbidden)
+			return
+		}
+
+		wsID := r.URL.Query().Get("id")
+		if wsID == "" {
+			var body struct {
+				ID string `json:"id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+				wsID = body.ID
+			}
+		}
+
+		if wsID == "" {
+			http.Error(w, "workspace id is required", http.StatusBadRequest)
+			return
+		}
+
+		if err := wm.DeleteWorkspace(wsID); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "message": "workspace deleted", "id": wsID})
+	}
+}
+
 // WorkspaceImportHandler parses and imports an OpenAPI spec.
 func WorkspaceImportHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1136,6 +1568,271 @@ func WorkspaceImportHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
 			"service": savedSvc,
+			"summary": parsed,
+		})
+	}
+}
+
+// WorkspaceUnlockHandler handles unlocking a PIN/passcode-locked workspace.
+func WorkspaceUnlockHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			WorkspaceID string `json:"workspace_id"`
+			Passcode    string `json:"passcode"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		if req.WorkspaceID == "" {
+			http.Error(w, "workspace_id is required", http.StatusBadRequest)
+			return
+		}
+
+		unlocked, err := wm.UnlockWorkspace(req.WorkspaceID, req.Passcode)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if !unlocked {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "message": "Invalid passcode"})
+			return
+		}
+
+		// Update session cookie with newly unlocked workspace
+		var unlockedList []string
+		username := cfg.AuthUser
+		if cookie, err := r.Cookie(DocsSessionCookieName); err == nil && cookie != nil && cookie.Value != "" {
+			if sess, ok := auth.ParseAndVerifySessionToken(cookie.Value, "", cfg.JWTSecret); ok && sess != nil {
+				unlockedList = sess.UnlockedWorkspaces
+				if sess.Username != "" {
+					username = sess.Username
+				}
+			}
+		}
+
+		already := false
+		for _, u := range unlockedList {
+			if u == req.WorkspaceID {
+				already = true
+				break
+			}
+		}
+		if !already {
+			unlockedList = append(unlockedList, req.WorkspaceID)
+		}
+
+		newToken := auth.GenerateDocsSessionToken(username, cfg.JWTSecret, unlockedList...)
+		http.SetCookie(w, &http.Cookie{
+			Name:     DocsSessionCookieName,
+			Value:    newToken,
+			Path:     "/",
+			Expires:  time.Now().Add(24 * time.Hour),
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success":   true,
+			"message":   "Workspace unlocked successfully",
+			"workspace": req.WorkspaceID,
+		})
+	}
+}
+
+// WorkspaceInviteHandler creates a signed invitation link for a workspace.
+func WorkspaceInviteHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		if !checkCSRFHeader(r) {
+			http.Error(w, "missing or invalid CSRF header", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			WorkspaceID string `json:"workspace_id"`
+			DurationSec int64  `json:"duration_sec"` // Duration in seconds, defaults to 7 days
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		if req.WorkspaceID == "" {
+			http.Error(w, "workspace_id is required", http.StatusBadRequest)
+			return
+		}
+		if _, err := wm.GetWorkspace(req.WorkspaceID); err != nil {
+			http.Error(w, "workspace not found", http.StatusNotFound)
+			return
+		}
+
+		dur := time.Duration(req.DurationSec) * time.Second
+		if dur <= 0 {
+			dur = 7 * 24 * time.Hour
+		}
+
+		inviteToken := auth.GenerateInviteToken(req.WorkspaceID, cfg.JWTSecret, dur)
+		inviteLink := fmt.Sprintf("/docs/workspaces/accept-invite?token=%s", inviteToken)
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success":      true,
+			"token":        inviteToken,
+			"invite_link":  inviteLink,
+			"expires_in":   int64(dur.Seconds()),
+			"workspace_id": req.WorkspaceID,
+		})
+	}
+}
+
+// WorkspaceAcceptInviteHandler accepts a signed invitation link, unlocks access, and redirects to docs.
+func WorkspaceAcceptInviteHandler(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "token is required", http.StatusBadRequest)
+			return
+		}
+
+		wsID, valid := auth.VerifyInviteToken(token, cfg.JWTSecret)
+		if !valid || wsID == "" {
+			http.Error(w, "invalid or expired invitation token", http.StatusUnauthorized)
+			return
+		}
+
+		var unlockedList []string
+		username := cfg.AuthUser
+		if cookie, err := r.Cookie(DocsSessionCookieName); err == nil && cookie != nil && cookie.Value != "" {
+			if sess, ok := auth.ParseAndVerifySessionToken(cookie.Value, "", cfg.JWTSecret); ok && sess != nil {
+				unlockedList = sess.UnlockedWorkspaces
+				if sess.Username != "" {
+					username = sess.Username
+				}
+			}
+		}
+
+		already := false
+		for _, u := range unlockedList {
+			if u == wsID {
+				already = true
+				break
+			}
+		}
+		if !already {
+			unlockedList = append(unlockedList, wsID)
+		}
+
+		newToken := auth.GenerateDocsSessionToken(username, cfg.JWTSecret, unlockedList...)
+		http.SetCookie(w, &http.Cookie{
+			Name:     DocsSessionCookieName,
+			Value:    newToken,
+			Path:     "/",
+			Expires:  time.Now().Add(24 * time.Hour),
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		http.Redirect(w, r, fmt.Sprintf("/docs?ws=%s", wsID), http.StatusFound)
+	}
+}
+
+// SpecRawHandler returns the raw OpenAPI JSON/YAML for in-browser editing.
+func SpecRawHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		wsID := r.URL.Query().Get("ws")
+		if wsID == "" {
+			wsID = "default"
+		}
+		svcID := r.URL.Query().Get("svc")
+		if svcID == "" {
+			svcID = "default"
+		}
+
+		var specBytes []byte
+		var err error
+		if wm != nil {
+			specBytes, err = wm.GetSpecData(wsID, svcID)
+		}
+		if err != nil || len(specBytes) == 0 {
+			specBytes, err = os.ReadFile(cfg.SpecFilePath)
+		}
+		if err != nil || len(specBytes) == 0 {
+			http.Error(w, "spec not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(specBytes)
+	}
+}
+
+// SpecSaveHandler saves edited OpenAPI spec data atomically with history backup.
+func SpecSaveHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		if !checkCSRFHeader(r) {
+			http.Error(w, "missing or invalid CSRF header", http.StatusForbidden)
+			return
+		}
+		if !cfg.EnableLiveSpecEditing {
+			http.Error(w, "live spec editing is disabled", http.StatusForbidden)
+			return
+		}
+
+		var req struct {
+			WorkspaceID string `json:"workspace_id"`
+			ServiceID   string `json:"service_id"`
+			Content     string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+
+		if req.WorkspaceID == "" {
+			req.WorkspaceID = "default"
+		}
+		if req.ServiceID == "" {
+			req.ServiceID = "default"
+		}
+		if strings.TrimSpace(req.Content) == "" {
+			http.Error(w, "spec content cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		parsed, standardizedJSON, err := ParseSpec(strings.NewReader(req.Content), cfg.MaxSpecBytes)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("spec validation failed: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		if err := wm.SaveLiveSpec(req.WorkspaceID, req.ServiceID, standardizedJSON); err != nil {
+			http.Error(w, fmt.Sprintf("failed saving live spec: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		wm.LogAudit(AuditEvent{
+			Action:    "spec:live_edit",
+			Workspace: req.WorkspaceID,
+			Service:   req.ServiceID,
+			RemoteIP:  r.RemoteAddr,
+			Status:    "SUCCESS",
+			Details:   fmt.Sprintf("Saved live spec: %s (v%s)", parsed.Title, parsed.Version),
+		})
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"message": "Spec saved successfully",
 			"summary": parsed,
 		})
 	}
@@ -1233,11 +1930,65 @@ func NavHandler(cfg Config) http.HandlerFunc {
 	}
 }
 
-// ReadmeHandler returns the project README markdown.
-func ReadmeHandler(cfg Config) http.HandlerFunc {
+// MarkdownDocsHandler returns the JSON list of available markdown documents for a service.
+func MarkdownDocsHandler(wm *WorkspaceManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setSecurityHeaders(w)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		wsID := r.URL.Query().Get("ws")
+		if wsID == "" {
+			wsID = "default"
+		}
+		svcID := r.URL.Query().Get("svc")
+		if svcID == "" {
+			svcID = "default"
+		}
+		var docs []MarkdownDoc
+		if wm != nil {
+			docs = wm.ListMarkdownDocs(wsID, svcID)
+		}
+		if docs == nil {
+			docs = []MarkdownDoc{}
+		}
+		_ = json.NewEncoder(w).Encode(docs)
+	}
+}
+
+// ReadmeHandler returns the project README markdown or requested markdown document.
+func ReadmeHandler(cfg Config, wm ...*WorkspaceManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setSecurityHeaders(w)
 		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+
+		wsID := r.URL.Query().Get("ws")
+		if wsID == "" {
+			wsID = "default"
+		}
+		svcID := r.URL.Query().Get("svc")
+		if svcID == "" {
+			svcID = "default"
+		}
+		fileQuery := r.URL.Query().Get("file")
+
+		var activeWM *WorkspaceManager
+		if len(wm) > 0 && wm[0] != nil {
+			activeWM = wm[0]
+		}
+
+		if activeWM != nil {
+			if fileQuery != "" {
+				if b, err := activeWM.GetMarkdownDocContent(wsID, svcID, fileQuery); err == nil && len(b) > 0 {
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write(b)
+					return
+				}
+			}
+			if b, err := activeWM.GetMarkdownDocContent(wsID, svcID, "README.md"); err == nil && len(b) > 0 {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(b)
+				return
+			}
+		}
 
 		candidates := []string{
 			cfg.ReadmePath,
@@ -1289,7 +2040,8 @@ func LoginHandler(cfg Config, authEnabled bool) http.HandlerFunc {
 				_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "Invalid payload"})
 				return
 			}
-			if body.Username != cfg.AuthUser || body.Password != cfg.AuthPassword {
+			if subtle.ConstantTimeCompare([]byte(body.Username), []byte(cfg.AuthUser)) != 1 ||
+				!auth.CheckPassword(body.Password, cfg.AuthPassword, cfg.AuthPasswordHash) {
 				w.WriteHeader(http.StatusUnauthorized)
 				_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "Invalid username or password"})
 				return

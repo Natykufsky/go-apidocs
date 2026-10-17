@@ -2,6 +2,8 @@
 node_modules/
 .vite/
 *.local
+dist/
+ui/dist/
 
 # Go binaries / builds
 bin/
@@ -12,9 +14,23 @@ bin/
 *.dylib
 *.test
 *.out
+go-apidocs
 .wakatime-project
 
 # Environment & Secrets
 .env
 .env.*
 !.env.example
+
+# Sandboxed Runtime Storage & Local Data
+apidocs-data/
+workspaces.json
+qa_tracker.json
+
+# IDE / OS metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

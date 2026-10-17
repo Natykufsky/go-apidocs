@@ -167,6 +167,46 @@ body {
   font-size: 100%;
 }
 
+/* Dark Mode Markdown Overrides */
+.dark .markdown-body {
+  color: #e2e8f0;
+}
+.dark .markdown-body h1,
+.dark .markdown-body h2,
+.dark .markdown-body h3,
+.dark .markdown-body h4,
+.dark .markdown-body h5,
+.dark .markdown-body h6 {
+  color: #f8fafc;
+}
+.dark .markdown-body h1,
+.dark .markdown-body h2 {
+  border-bottom-color: #1e293b;
+}
+.dark .markdown-body hr {
+  background-color: #1e293b;
+}
+.dark .markdown-body blockquote {
+  color: #94a3b8;
+  border-left-color: #334155;
+  background-color: #0f172a;
+}
+.dark .markdown-body table th,
+.dark .markdown-body table td {
+  border-color: #334155;
+}
+.dark .markdown-body table th {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+.dark .markdown-body table tr:nth-child(2n) {
+  background-color: #0b0f17;
+}
+.dark .markdown-body code {
+  background-color: #1e293b;
+  color: #34d399;
+}
+
 /* Swagger UI Light Theme Overrides & Legibility Fixes */
 .swagger-ui {
   color: #1e293b !important;

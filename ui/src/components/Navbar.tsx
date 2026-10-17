@@ -15,6 +15,7 @@ import {
   Layers,
   ExternalLink,
   Zap,
+  Code2,
 } from 'lucide-react';
 import { Workspace, WorkspaceSwitcher } from './WorkspaceSwitcher';
 
@@ -42,9 +43,12 @@ interface NavbarProps {
   activeServiceId?: string;
   writesEnabled?: boolean;
   securityAuditEnabled?: boolean;
+  liveSpecEditingEnabled?: boolean;
   onSelectService?: (workspaceId: string, serviceId: string) => void;
   onOpenImporter?: () => void;
+  onOpenWorkspaceManager?: () => void;
   onOpenSecurityAudit?: () => void;
+  onOpenLiveSpec?: () => void;
   onOpenAITests?: () => void;
   onOpenSDKGenerator?: () => void;
   onOpenTenantSettings?: () => void;
@@ -64,9 +68,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeServiceId = 'default',
   writesEnabled = false,
   securityAuditEnabled = false,
+  liveSpecEditingEnabled = false,
   onSelectService,
   onOpenImporter,
+  onOpenWorkspaceManager,
   onOpenSecurityAudit,
+  onOpenLiveSpec,
   onOpenAITests,
   onOpenSDKGenerator,
   onOpenTenantSettings,
@@ -132,6 +139,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 writesEnabled={writesEnabled}
                 onSelectService={onSelectService}
                 onOpenImporter={onOpenImporter}
+                onOpenManager={onOpenWorkspaceManager}
                 onOpenSecurityAudit={onOpenSecurityAudit}
               />
             </div>
@@ -244,6 +252,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
 
                 <div className="p-1 space-y-0.5">
+                  {/* Live Spec Editor */}
+                  {liveSpecEditingEnabled && onOpenLiveSpec && (
+                    <button
+                      onClick={() => {
+                        setIsSettingsMenuOpen(false);
+                        onOpenLiveSpec();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
+                    >
+                      <Code2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-white">Edit OpenAPI Spec</div>
+                        <div className="text-[10px] text-slate-500">Live JSON/YAML modification & history</div>
+                      </div>
+                    </button>
+                  )}
+
                   {/* Security Audit */}
                   {securityAuditEnabled && onOpenSecurityAudit && (
                     <button
