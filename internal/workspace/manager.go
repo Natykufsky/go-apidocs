@@ -344,15 +344,31 @@ func (wm *WorkspaceManager) ListMarkdownDocs(wsID, svcID string) []MarkdownDoc {
 
 	docsMap := make(map[string]MarkdownDoc)
 
-	// 1. Check explicitly configured ReadmePath
-	if svc.ReadmePath != "" {
-		if _, err := os.Stat(svc.ReadmePath); err == nil {
-			base := filepath.Base(svc.ReadmePath)
-			docsMap[base] = MarkdownDoc{
-				Name:  base,
-				Path:  svc.ReadmePath,
-				Title: formatDocTitle(base),
+	// 1. Check explicitly configured ReadmePath or candidate README paths
+	readmeCandidates := []string{
+		svc.ReadmePath,
+		os.Getenv("DOCS_README_PATH"),
+		filepath.Join(svc.DocsDir, "README.md"),
+		filepath.Join(svc.DocsDir, "readme.md"),
+		filepath.Join(svc.DocsDir, "Guide.md"),
+		"./README.md",
+		"./readme.md",
+		"README.md",
+	}
+	for _, cand := range readmeCandidates {
+		if cand == "" {
+			continue
+		}
+		if _, err := os.Stat(cand); err == nil {
+			base := filepath.Base(cand)
+			if _, exists := docsMap[base]; !exists {
+				docsMap[base] = MarkdownDoc{
+					Name:  base,
+					Path:  cand,
+					Title: formatDocTitle(base),
+				}
 			}
+			break
 		}
 	}
 

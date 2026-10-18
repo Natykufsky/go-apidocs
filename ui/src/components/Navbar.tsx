@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Zap,
   Code2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Workspace, WorkspaceSwitcher } from './WorkspaceSwitcher';
 
@@ -55,6 +56,7 @@ interface NavbarProps {
   onToggleMobileSidebar: () => void;
   onOpenSearch?: () => void;
   onOpenCredentials?: () => void;
+  onOpenQAReport?: () => void;
   hasCredentials?: boolean;
   activeEnv?: string;
   maskPII?: boolean;
@@ -80,6 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleMobileSidebar,
   onOpenSearch,
   onOpenCredentials,
+  onOpenQAReport,
   hasCredentials = false,
   activeEnv = 'default',
   maskPII = false,
@@ -116,14 +119,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   const pageMeta = getPageMeta();
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200 shadow-xs">
-      <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-800/80 transition-colors duration-200">
+      <div className="w-full px-3 sm:px-6 lg:px-8 h-15 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Left Section: Mobile Drawer Trigger & Workspace Switcher + Breadcrumb */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={onToggleMobileSidebar}
-            className="lg:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="lg:hidden p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 transition-all cursor-pointer shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95 shadow-2xs border border-slate-200/60 dark:border-slate-700/60"
             aria-label="Toggle navigation drawer"
           >
             <Menu className="w-5 h-5" />
@@ -131,7 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Workspace Switcher in Navbar */}
           {workspaces.length > 0 && onSelectService && (
-            <div className="shrink-0">
+            <div className="shrink-0 max-w-[150px] sm:max-w-xs">
               <WorkspaceSwitcher
                 workspaces={workspaces}
                 activeWorkspaceId={activeWorkspaceId}
@@ -146,9 +149,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {/* Breadcrumb Hierarchy */}
-          <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0" />
-            <span className="inline-flex items-center gap-1.5 text-slate-900 dark:text-slate-100 font-semibold bg-slate-100/90 dark:bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-200/70 dark:border-slate-700/80 shadow-2xs shrink-0">
+            <span className="inline-flex items-center gap-1.5 text-slate-900 dark:text-slate-100 font-semibold bg-slate-100/80 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200/70 dark:border-slate-700/80 shadow-2xs shrink-0">
               <span>{pageMeta.icon}</span>
               <span>{pageMeta.title}</span>
             </span>
@@ -157,14 +160,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Center Section: Unified Global Command Palette Trigger */}
         {onOpenSearch && (
-          <div className="flex-1 max-w-md mx-2 hidden md:block">
+          <div className="flex-1 max-w-sm lg:max-w-md mx-2 hidden sm:block">
             <button
               onClick={onOpenSearch}
               title="Global Search & Command Palette (⌘K / Ctrl+K)"
-              className="w-full flex items-center justify-between bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 rounded-xl px-3.5 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer shadow-2xs group"
+              className="w-full flex items-center justify-between bg-slate-100/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 rounded-xl px-3.5 py-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer shadow-2xs group min-h-[40px]"
             >
               <div className="flex items-center gap-2.5 truncate">
-                <Search className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors shrink-0" />
+                <Search className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors shrink-0" />
                 <span className="font-medium text-slate-600 dark:text-slate-300 truncate">Search API, schemas, endpoints...</span>
               </div>
               <kbd className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-mono font-bold bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-md border border-slate-200 dark:border-slate-700 shadow-2xs">
@@ -175,14 +178,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         {/* Right Section: Compact Status Indicators & Unified Settings Dropdown */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           
-          {/* Mobile Search Button (Compact) */}
+          {/* Mobile Search Button (Compact & Touch friendly) */}
           {onOpenSearch && (
             <button
               onClick={onOpenSearch}
               title="Search API (⌘K)"
-              className="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shadow-2xs"
+              className="sm:hidden p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shadow-2xs border border-slate-200/60 dark:border-slate-700/60"
             >
               <Search className="w-4 h-4" />
             </button>
@@ -192,7 +195,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {activeEnv && activeEnv !== 'default' && (
             <div
               title={`Active Environment: ${activeEnv}`}
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300"
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-300"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               <span className="uppercase">{activeEnv}</span>
@@ -203,22 +206,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           {maskPII && (
             <div
               title="Real-time PII & Secrets Masking Active"
-              className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-[11px] font-bold text-purple-700 dark:text-purple-300"
+              className="hidden xl:flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-[11px] font-bold text-purple-700 dark:text-purple-300"
             >
               <EyeOff className="w-3 h-3 text-purple-600 dark:text-purple-400" />
               <span>Masked</span>
             </div>
           )}
 
-          {/* Quick Credential Status (Compact Pill) */}
+          {/* Quick Credential Status (Touch-friendly Pill) */}
           {onOpenCredentials && (
             <button
               onClick={onOpenCredentials}
               title="Sandbox Authentication & Header Mapper"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs min-h-[38px] ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs min-h-[42px] ${
                 hasCredentials
-                  ? 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300/80 dark:border-amber-800 text-amber-900 dark:text-amber-300'
-                  : 'bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-400'
+                  ? 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300/80 dark:border-amber-800 text-amber-900 dark:text-amber-300 hover:bg-amber-100'
+                  : 'bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300'
               }`}
             >
               <KeyRound className={`w-3.5 h-3.5 ${hasCredentials ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`} />
@@ -231,7 +234,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => setIsSettingsMenuOpen(!isSettingsMenuOpen)}
               title="Tools & Workspace Settings"
-              className={`flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl border transition-all cursor-pointer shadow-2xs min-h-[38px] ${
+              className={`flex items-center gap-1.5 p-2.5 sm:px-3 sm:py-2 rounded-xl border transition-all cursor-pointer shadow-2xs min-h-[42px] ${
                 isSettingsMenuOpen
                   ? 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white'
                   : 'bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300'
@@ -252,6 +255,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
 
                 <div className="p-1 space-y-0.5">
+                  {/* QA Sprint Report */}
+                  {onOpenQAReport && (
+                    <button
+                      onClick={() => {
+                        setIsSettingsMenuOpen(false);
+                        onOpenQAReport();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-amber-500 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-white">QA Sprint Report</div>
+                        <div className="text-[10px] text-slate-500">Test pass rate, bugs & markdown audit</div>
+                      </div>
+                    </button>
+                  )}
+
                   {/* Live Spec Editor */}
                   {liveSpecEditingEnabled && onOpenLiveSpec && (
                     <button

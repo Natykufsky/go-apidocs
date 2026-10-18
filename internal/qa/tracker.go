@@ -17,15 +17,41 @@ import (
 	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
 )
 
-// EndpointRecord holds the QA review, test status, and AI-generated test suite for an endpoint.
+// AIExecutionSummary holds the aggregated results of a live AI test execution run.
+type AIExecutionSummary struct {
+	TotalTests       int     `json:"total_tests"`
+	Passed           int     `json:"passed"`
+	Failed           int     `json:"failed"`
+	PassRate         float64 `json:"pass_rate"`
+	AverageLatencyMs int     `json:"avg_latency_ms"`
+	RunAt            string  `json:"run_at"`
+}
+
+// AIStressMetrics holds live concurrency & burst stress testing statistics.
+type AIStressMetrics struct {
+	ConcurrencyLevel int     `json:"concurrency_level"`
+	TotalRequests    int     `json:"total_requests"`
+	Successful       int     `json:"successful"`
+	Failed           int     `json:"failed"`
+	RateLimited      int     `json:"rate_limited"`
+	RPS              float64 `json:"rps"`
+	AvgLatencyMs     int     `json:"avg_latency_ms"`
+	P95LatencyMs     int     `json:"p95_latency_ms"`
+	DurationMs       int     `json:"duration_ms"`
+	RunAt            string  `json:"run_at"`
+}
+
+// EndpointRecord holds the QA review, test status, AI test suite, and execution telemetry for an endpoint.
 type EndpointRecord struct {
-	EndpointKey string               `json:"endpoint_key"` // e.g., "GET /api/v1/entities"
-	Endpoint    string               `json:"endpoint,omitempty"`
-	Status      string               `json:"status"` // "passed", "failed", "retest", "untested"
-	Comment     string               `json:"comment"`
-	Tester      string               `json:"tester"`
-	TestedAt    string               `json:"tested_at"`
-	AISuite     *aiDomain.TestSuite  `json:"ai_suite,omitempty"`
+	EndpointKey      string               `json:"endpoint_key"` // e.g., "GET /api/v1/entities"
+	Endpoint         string               `json:"endpoint,omitempty"`
+	Status           string               `json:"status"` // "passed", "failed", "retest", "untested"
+	Comment          string               `json:"comment"`
+	Tester           string               `json:"tester"`
+	TestedAt         string               `json:"tested_at"`
+	AISuite          *aiDomain.TestSuite  `json:"ai_suite,omitempty"`
+	ExecutionSummary *AIExecutionSummary  `json:"execution_summary,omitempty"`
+	StressMetrics    *AIStressMetrics     `json:"stress_metrics,omitempty"`
 }
 
 type QATracker struct {
@@ -95,6 +121,22 @@ func (q *QATracker) SaveRecord(req EndpointRecord) (EndpointRecord, error) {
 	defer q.mu.Unlock()
 
 	data := q.loadData()
+	existing := data[req.EndpointKey]
+
+	// Preserve existing AI suite or telemetry if not explicitly overwritten in req
+	if req.AISuite == nil && existing.AISuite != nil {
+		req.AISuite = existing.AISuite
+	}
+	if req.ExecutionSummary == nil && existing.ExecutionSummary != nil {
+		req.ExecutionSummary = existing.ExecutionSummary
+	}
+	if req.StressMetrics == nil && existing.StressMetrics != nil {
+		req.StressMetrics = existing.StressMetrics
+	}
+	if req.Tester == "" && existing.Tester != "" {
+		req.Tester = existing.Tester
+	}
+
 	data[req.EndpointKey] = req
 	if err := q.saveData(data); err != nil {
 		return req, fmt.Errorf("failed to persist QA record: %w", err)
@@ -155,6 +197,13 @@ func (q *QATracker) BuildReport() (string, int, int, int, int, map[string]Endpoi
 		comment := strings.ReplaceAll(item.Comment, "\n", "<br>")
 		if comment == "" {
 			comment = "-"
+		}
+
+		if item.ExecutionSummary != nil {
+			comment += fmt.Sprintf("<br>⚡ **AI Run**: %d/%d passed (%.0f%%) @ %dms avg", item.ExecutionSummary.Passed, item.ExecutionSummary.TotalTests, item.ExecutionSummary.PassRate, item.ExecutionSummary.AverageLatencyMs)
+		}
+		if item.StressMetrics != nil {
+			comment += fmt.Sprintf("<br>🔥 **Stress**: %dx conc | %.1f req/s | P95: %dms | 429: %d", item.StressMetrics.ConcurrencyLevel, item.StressMetrics.RPS, item.StressMetrics.P95LatencyMs, item.StressMetrics.RateLimited)
 		}
 
 		md.WriteString(fmt.Sprintf("| `%s` | %s | %s | %s | %s |\n", ep, statusBadge, tester, item.TestedAt, comment))
@@ -364,7 +413,7 @@ func (q *QATracker) HandleGenerateAITestsHTTP(w http.ResponseWriter, r *http.Req
 	if q.llmClient == nil || (!q.llmClient.IsAvailable() && strings.TrimSpace(req.APIKey) == "" && req.Provider != "ollama") {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"error": "AI service is not configured. Please set NVIDIA_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY or provide an API Key directly in the UI.",
+			"error": "AI service is not configured. Please set an API key in your environment (.env) or provide an API Key directly in the UI settings.",
 		})
 		return
 	}

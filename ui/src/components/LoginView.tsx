@@ -84,6 +84,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, initialMode = 'log
     }
   };
 
+  const [saveToLocalStorage, setSaveToLocalStorage] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!orgName.trim() || !subdomain.trim() || !adminEmail.trim()) {
@@ -117,11 +120,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, initialMode = 'log
           subdomain: data.tenant.subdomain || subdomain,
           name: data.tenant.name || orgName,
         });
-        // Save tenant header to local storage for quick access
-        try {
-          if (data.tenant.id) localStorage.setItem('apidocs_tenant_id', data.tenant.id);
-          if (data.tenant.api_key) localStorage.setItem('apidocs_access_token', data.tenant.api_key);
-        } catch (e) {}
+        
+        // Security: Only persist to localStorage if user explicitly opts in
+        if (saveToLocalStorage) {
+          try {
+            if (data.tenant.id) localStorage.setItem('apidocs_tenant_id', data.tenant.id);
+            if (data.tenant.api_key) localStorage.setItem('apidocs_access_token', data.tenant.api_key);
+          } catch (e) {}
+        }
         setLoading(false);
       } else {
         setErrorMessage(data.error || data.message || 'Failed to register organization workspace.');
@@ -419,6 +425,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, initialMode = 'log
                 </div>
               </div>
 
+              {/* Security Storage Option */}
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  id="saveTokenCheckbox"
+                  type="checkbox"
+                  checked={saveToLocalStorage}
+                  onChange={(e) => setSaveToLocalStorage(e.target.checked)}
+                  className="rounded border-slate-300 dark:border-slate-700 text-slate-900 focus:ring-slate-900 cursor-pointer h-4 w-4"
+                />
+                <label htmlFor="saveTokenCheckbox" className="text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                  Remember API key in browser sandbox (<span className="text-amber-600 dark:text-amber-400 font-semibold">Disable on public PCs</span>)
+                </label>
+              </div>
+
               <button
                 type="submit"
                 disabled={loading}
@@ -455,22 +475,37 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, initialMode = 'log
                 </p>
               </div>
 
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 text-left space-y-1.5">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 text-left space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                     Generated Tenant API Key
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleCopyKey}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 cursor-pointer"
-                  >
-                    {copiedKey ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedKey ? 'Copied' : 'Copy'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(!showKey)}
+                      className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                    >
+                      {showKey ? 'Hide' : 'Reveal'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyKey}
+                      className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 cursor-pointer"
+                    >
+                      {copiedKey ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedKey ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="font-mono text-xs text-slate-900 dark:text-white break-all font-semibold select-all">
-                  {registeredResult.apiKey}
+                <div className="font-mono text-xs text-slate-900 dark:text-white break-all font-semibold select-all bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-700/70">
+                  {showKey
+                    ? registeredResult.apiKey
+                    : `${registeredResult.apiKey.slice(0, 8)}••••••••••••••••••••••••••••••••`}
+                </div>
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
+                  <ShieldCheck className="w-3 h-3 shrink-0" />
+                  <span>Store this secret safely. It will not be shown again.</span>
                 </div>
               </div>
 

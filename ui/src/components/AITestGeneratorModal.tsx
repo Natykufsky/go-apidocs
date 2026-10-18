@@ -19,6 +19,13 @@ import {
   Key,
   Sliders,
   ChevronDown,
+  ExternalLink,
+  Gift,
+  HelpCircle,
+  Activity,
+  Gauge,
+  Download,
+  Code2,
 } from 'lucide-react';
 
 export interface AITestCase {
@@ -62,11 +69,267 @@ interface AITestGeneratorModalProps {
   onLoadIntoSandbox?: (testCase: AITestCase) => void;
 }
 
-const AI_PROVIDERS = [
-  { id: 'nvidia', name: 'NVIDIA NIM', model: 'DeepSeek v4.1 Flash', icon: '⚡' },
-  { id: 'openai', name: 'OpenAI', model: 'GPT-4o mini', icon: '🤖' },
-  { id: 'anthropic', name: 'Anthropic', model: 'Claude 3.5 Sonnet', icon: '🔮' },
-  { id: 'ollama', name: 'Local Ollama', model: 'Llama 3.1', icon: '🦙' },
+// Enhanced list of supported AI Inference Engines & Models
+export interface AIModelOption {
+  id: string;
+  name: string;
+  contextWindow?: string;
+  description: string;
+}
+
+export interface AIProviderConfig {
+  id: string;
+  name: string;
+  company: string;
+  tagline: string;
+  badge: string;
+  badgeColor: string;
+  icon: string;
+  category: 'cloud' | 'local' | 'speed' | 'frontier';
+  defaultModel: string;
+  defaultBaseUrl: string;
+  keyPlaceholder: string;
+  consoleUrl?: string;
+  freeTier?: {
+    isFree: boolean;
+    quotaText: string;
+    docsUrl: string;
+    instructions: string;
+  };
+  models: AIModelOption[];
+}
+
+const AI_PROVIDERS: AIProviderConfig[] = [
+  {
+    id: 'nvidia',
+    name: 'NVIDIA NIM',
+    company: 'NVIDIA',
+    tagline: 'Hardware accelerated DeepSeek & open models',
+    badge: 'Recommended',
+    badgeColor: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+    icon: '⚡',
+    category: 'frontier',
+    defaultModel: 'deepseek-ai/deepseek-v4.1-flash',
+    defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
+    keyPlaceholder: 'nvapi-...',
+    consoleUrl: 'https://build.nvidia.com/',
+    freeTier: {
+      isFree: true,
+      quotaText: '1,000 Free Inference Credits',
+      docsUrl: 'https://build.nvidia.com/',
+      instructions: 'Sign up for NVIDIA Build with your Google or work account to receive 1,000 free API credits instantly.',
+    },
+    models: [
+      { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek v4.1 Flash', description: 'Ultra-low latency reasoning & schema testing' },
+      { id: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 Reasoning', description: 'Maximum depth chain-of-thought logic synthesis' },
+      { id: 'meta/llama-3.3-70b-instruct', name: 'Llama 3.3 70B Instruct', description: 'General high-fidelity OpenAPI analysis' },
+    ],
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    company: 'OpenAI',
+    tagline: 'Industry benchmark frontier models',
+    badge: 'Popular',
+    badgeColor: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+    icon: '🤖',
+    category: 'frontier',
+    defaultModel: 'gpt-4o-mini',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    keyPlaceholder: 'sk-proj-...',
+    consoleUrl: 'https://platform.openai.com/api-keys',
+    models: [
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast, cost-efficient automated testing' },
+      { id: 'gpt-4o', name: 'GPT-4o (Omni)', description: 'Flagship multimodal reasoning & security probes' },
+      { id: 'o3-mini', name: 'o3-mini (Reasoning)', description: 'Next-gen fast STEM reasoning with structured outputs' },
+      { id: 'o1', name: 'o1 (Full Reasoning)', description: 'Deep chain-of-thought mathematical & security logic' },
+    ],
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic Claude',
+    company: 'Anthropic',
+    tagline: 'Unmatched nuance, safety & code generation',
+    badge: 'Precision',
+    badgeColor: 'bg-teal-500/10 text-teal-600 border-teal-500/20',
+    icon: '🔮',
+    category: 'frontier',
+    defaultModel: 'claude-sonnet-5-5',
+    defaultBaseUrl: 'https://api.anthropic.com/v1',
+    keyPlaceholder: 'sk-ant-...',
+    consoleUrl: 'https://console.anthropic.com/settings/keys',
+    models: [
+      { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', description: 'Recommended default: high intelligence, speed & deep coding' },
+      { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', description: 'Ultra-low latency test generation and data extraction' },
+      { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', description: 'Flagship depth for complex architectures and threat models' },
+    ],
+  },
+  {
+    id: 'groq',
+    name: 'Groq Cloud',
+    company: 'Groq LPU™',
+    tagline: 'Instant token generation (500+ tokens/sec)',
+    badge: 'Free Tier Available',
+    badgeColor: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+    icon: '⚡',
+    category: 'speed',
+    defaultModel: 'openai/gpt-oss-120b',
+    defaultBaseUrl: 'https://api.groq.com/openai/v1',
+    keyPlaceholder: 'gsk_...',
+    consoleUrl: 'https://console.groq.com/keys',
+    freeTier: {
+      isFree: true,
+      quotaText: '14,400 requests/day (Free Forever)',
+      docsUrl: 'https://console.groq.com/keys',
+      instructions: 'Sign up in 30 seconds with Google/GitHub to get a free API key with 14,400 daily requests.',
+    },
+    models: [
+      { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B (Active Flagship)', description: 'Full reasoning, 131k context & structured JSON output on Groq' },
+      { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B (High Speed)', description: 'Ultra-low latency open-weights reasoning model' },
+      { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B', description: 'Multimodal intelligence & deep structured QA validation' },
+    ],
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    company: 'Google AI Studio',
+    tagline: 'Huge context windows & native OpenAPI reasoning',
+    badge: '1,500 req/day Free',
+    badgeColor: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+    icon: '✨',
+    category: 'frontier',
+    defaultModel: 'gemini-3.8-flash',
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    keyPlaceholder: 'AIzaSy...',
+    consoleUrl: 'https://aistudio.google.com/app/apikey',
+    freeTier: {
+      isFree: true,
+      quotaText: '15 RPM / 1,500 req/day (Free Tier)',
+      docsUrl: 'https://aistudio.google.com/app/apikey',
+      instructions: 'Sign in with your standard Google Account and click "Create API key" for instant free access.',
+    },
+    models: [
+      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', description: 'Google recommendation: latest ultra-fast reasoning with 1M context' },
+      { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', description: 'Advanced architectural reasoning for complex OpenAPI schemas' },
+    ],
+  },
+  {
+    id: 'github',
+    name: 'GitHub Models',
+    company: 'GitHub & Azure AI',
+    tagline: 'Free sandbox playground for logged-in GitHub developers',
+    badge: 'Free with GitHub',
+    badgeColor: 'bg-slate-900/10 text-slate-800 border-slate-900/20',
+    icon: '🐙',
+    category: 'cloud',
+    defaultModel: 'gpt-4o-mini',
+    defaultBaseUrl: 'https://models.inference.ai.azure.com',
+    keyPlaceholder: 'ghp_... or github_pat_...',
+    consoleUrl: 'https://github.com/settings/tokens',
+    freeTier: {
+      isFree: true,
+      quotaText: '150 req/day (Free for GitHub accounts)',
+      docsUrl: 'https://github.com/settings/tokens',
+      instructions: 'Generate a classic GitHub Personal Access Token (PAT) with read permission to access GitHub Models for free.',
+    },
+    models: [
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini (via GitHub)', description: 'Fast automated test generation hosted on Azure AI' },
+      { id: 'meta-llama-3.1-70b-instruct', name: 'Llama 3.1 70B (via GitHub)', description: 'Free open weights on GitHub Models' },
+      { id: 'mistral-large-2407', name: 'Mistral Large (via GitHub)', description: 'Enterprise reasoning hosted by GitHub' },
+    ],
+  },
+  {
+    id: 'huggingface',
+    name: 'Hugging Face Inference',
+    company: 'Hugging Face',
+    tagline: 'Serverless inference router for open-source AI models',
+    badge: 'Free Serverless',
+    badgeColor: 'bg-amber-500/10 text-amber-700 border-amber-500/20',
+    icon: '🤗',
+    category: 'cloud',
+    defaultModel: 'Qwen/Qwen2.5-Coder-32B-Instruct',
+    defaultBaseUrl: 'https://router.huggingface.co/v1',
+    keyPlaceholder: 'hf_...',
+    consoleUrl: 'https://huggingface.co/settings/tokens',
+    freeTier: {
+      isFree: true,
+      quotaText: 'Free Serverless Rate Limits',
+      docsUrl: 'https://huggingface.co/settings/tokens',
+      instructions: 'Create a free Hugging Face account and generate a free Read Token to test community models.',
+    },
+    models: [
+      { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', description: 'Exceptional open-source test engineering model' },
+      { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct', description: 'Hugging Face serverless endpoint' },
+      { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B', name: 'DeepSeek R1 Distill 32B', description: 'Reasoning model on Hugging Face Hub' },
+    ],
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral & Codestral',
+    company: 'Mistral AI',
+    tagline: 'European frontier open-weight models',
+    badge: 'Developer Choice',
+    badgeColor: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+    icon: '🌪️',
+    category: 'cloud',
+    defaultModel: 'codestral-latest',
+    defaultBaseUrl: 'https://api.mistral.ai/v1',
+    keyPlaceholder: 'mis_...',
+    consoleUrl: 'https://console.mistral.ai/api-keys/',
+    models: [
+      { id: 'codestral-latest', name: 'Codestral Latest', description: 'Purpose-built for API test code & assertion synthesis' },
+      { id: 'mistral-large-latest', name: 'Mistral Large', description: 'Top-tier multilingual and edge-case intelligence' },
+      { id: 'mistral-small-latest', name: 'Mistral Small', description: 'Efficient balanced reasoning for fast schema parsing' },
+    ],
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek Direct',
+    company: 'DeepSeek AI',
+    tagline: 'Native official DeepSeek API endpoints',
+    badge: 'Economical',
+    badgeColor: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
+    icon: '🐳',
+    category: 'frontier',
+    defaultModel: 'deepseek-flash',
+    defaultBaseUrl: 'https://api.deepseek.com/v1',
+    keyPlaceholder: 'sk-...',
+    consoleUrl: 'https://platform.deepseek.com/api_keys',
+    freeTier: {
+      isFree: true,
+      quotaText: 'Sign-up Free Balance Included',
+      docsUrl: 'https://platform.deepseek.com/api_keys',
+      instructions: 'Log in with mobile or email at platform.deepseek.com to generate your API key with trial balance.',
+    },
+    models: [
+      { id: 'deepseek-flash', name: 'DeepSeek V4.1 Flash', description: 'Recommended default: 1M context, ultra-fast QA generation' },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', description: 'Maximum depth reasoning model for complex security & API logic' },
+    ],
+  },
+  {
+    id: 'ollama',
+    name: 'Local Ollama',
+    company: 'Self-Hosted (Local)',
+    tagline: '100% private, air-gapped on your local hardware',
+    badge: '100% Free & Offline',
+    badgeColor: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20',
+    icon: '🦙',
+    category: 'local',
+    defaultModel: 'llama3.1:latest',
+    defaultBaseUrl: 'http://localhost:11434',
+    keyPlaceholder: 'None required (local endpoint)',
+    freeTier: {
+      isFree: true,
+      quotaText: 'Unlimited / Zero Cost / No Internet',
+      docsUrl: 'https://ollama.com/download',
+      instructions: 'Run `ollama run llama3.1` in your terminal. No accounts, tokens, or network connection required.',
+    },
+    models: [
+      { id: 'llama3.1:latest', name: 'Llama 3.1 (Local)', description: 'Standard local 8B model' },
+      { id: 'deepseek-coder-v2:latest', name: 'DeepSeek Coder V2 (Local)', description: 'Specialized API coding weights' },
+      { id: 'qwen2.5-coder:latest', name: 'Qwen 2.5 Coder (Local)', description: 'High precision code & schema validation' },
+    ],
+  },
 ];
 
 export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
@@ -78,6 +341,8 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
 }) => {
   const [suite, setSuite] = useState<AITestSuite | null>(initialSuite || null);
   const [selectedProvider, setSelectedProvider] = useState<string>('nvidia');
+  const [selectedModel, setSelectedModel] = useState<string>('deepseek-ai/deepseek-v4.1-flash');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
@@ -105,6 +370,37 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   // Live Test Runner State
   const [runningTests, setRunningTests] = useState(false);
   const [executionResults, setExecutionResults] = useState<Record<string, TestExecutionResult>>({});
+
+  // Concurrency & Burst Stress Testing State
+  const [showStressRunner, setShowStressRunner] = useState(false);
+  const [concurrencyLevel, setConcurrencyLevel] = useState<number>(5);
+  const [totalRequestsTarget, setTotalRequestsTarget] = useState<number>(25);
+  const [runningStress, setRunningStress] = useState(false);
+  const [stressMetrics, setStressMetrics] = useState<{
+    completed: number;
+    successful: number;
+    failed: number;
+    rateLimited: number;
+    rps: number;
+    avgLatencyMs: number;
+    p95LatencyMs: number;
+    durationMs: number;
+  } | null>(null);
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [exportFormat, setExportFormat] = useState<'k6' | 'locust'>('k6');
+  const [exportCopied, setExportCopied] = useState(false);
+
+  const activeProvider = AI_PROVIDERS.find((p) => p.id === selectedProvider) || AI_PROVIDERS[0];
+
+  // Update selected model when provider changes
+  const handleSelectProvider = (providerId: string) => {
+    setSelectedProvider(providerId);
+    const p = AI_PROVIDERS.find((item) => item.id === providerId);
+    if (p) {
+      setSelectedModel(p.defaultModel);
+    }
+    setIsDropdownOpen(false);
+  };
 
   const handleUpdateKey = (provider: string, key: string) => {
     const next = { ...providerKeys, [provider]: key };
@@ -140,6 +436,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
         },
         body: JSON.stringify({
           provider: selectedProvider,
+          model: selectedModel,
           endpoint_key: endpointKey,
           custom_prompt: customPrompt,
           api_key: activeKey,
@@ -239,6 +536,258 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       await handleRunSingleTest(tc);
     }
     setRunningTests(false);
+
+    // Automatically sync AI Suite run summary to QA Tracker
+    try {
+      // Calculate latest results
+      setTimeout(async () => {
+        let total = suite.test_cases.length;
+        let passed = 0;
+        let failed = 0;
+        let latencies: number[] = [];
+
+        for (const tc of suite.test_cases) {
+          const res = executionResults[tc.id];
+          if (res?.status === 'passed') passed++;
+          else if (res?.status === 'failed') failed++;
+          if (res?.durationMs) latencies.push(res.durationMs);
+        }
+
+        const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+        const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+        const overallStatus = passed === total ? 'passed' : (failed > 0 ? 'failed' : 'retest');
+
+        await fetch('/docs/qa/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint_key: endpointKey,
+            status: overallStatus,
+            tester: `AI QA Runner (${suite.model_used || selectedProvider})`,
+            comment: `AI Test Run: ${passed}/${total} passed (${passRate}%) across ${suite.test_cases.length} scenarios.`,
+            execution_summary: {
+              total_tests: total,
+              passed,
+              failed,
+              pass_rate: passRate,
+              avg_latency_ms: avgLatency,
+              run_at: new Date().toISOString(),
+            },
+          }),
+        });
+      }, 500);
+    } catch {}
+  };
+
+  // High-Throughput Concurrent Burst Stress Engine
+  const handleRunConcurrentStress = async () => {
+    if (!suite?.test_cases || suite.test_cases.length === 0) return;
+    setRunningStress(true);
+    setStressMetrics(null);
+
+    const startTime = performance.now();
+    let completedCount = 0;
+    let successfulCount = 0;
+    let failedCount = 0;
+    let rateLimitedCount = 0;
+    const latencies: number[] = [];
+
+    // Worker queue with concurrency limiter
+    const testCasesPool = suite.test_cases;
+    let queueIndex = 0;
+
+    const worker = async () => {
+      while (queueIndex < totalRequestsTarget) {
+        const currentReq = queueIndex++;
+        const tc = testCasesPool[currentReq % testCasesPool.length];
+        const reqStart = performance.now();
+
+        try {
+          let targetUrl = tc.path;
+          if (tc.query_params && Object.keys(tc.query_params).length > 0) {
+            const qp = new URLSearchParams(tc.query_params);
+            targetUrl += (targetUrl.includes('?') ? '&' : '?') + qp.toString();
+          }
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...(tc.headers || {}),
+          };
+
+          const options: RequestInit = {
+            method: tc.method || 'GET',
+            headers,
+          };
+
+          if (['POST', 'PUT', 'PATCH'].includes(tc.method.toUpperCase()) && tc.request_body) {
+            options.body = typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
+          }
+
+          const res = await fetch(targetUrl, options);
+          const reqDuration = Math.round(performance.now() - reqStart);
+          latencies.push(reqDuration);
+          completedCount++;
+
+          if (res.status === 429) {
+            rateLimitedCount++;
+          } else if (res.status === tc.expected_status || (res.status >= 200 && res.status < 400)) {
+            successfulCount++;
+          } else {
+            failedCount++;
+          }
+        } catch {
+          failedCount++;
+          completedCount++;
+        }
+
+        // Real-time metrics tick
+        const elapsedSec = Math.max(0.1, (performance.now() - startTime) / 1000);
+        setStressMetrics({
+          completed: completedCount,
+          successful: successfulCount,
+          failed: failedCount,
+          rateLimited: rateLimitedCount,
+          rps: Math.round((completedCount / elapsedSec) * 10) / 10,
+          avgLatencyMs: latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
+          p95LatencyMs: latencies.length > 0 ? [...latencies].sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)] || 0 : 0,
+          durationMs: Math.round(performance.now() - startTime),
+        });
+      }
+    };
+
+    // Launch concurrent worker pool
+    const activeWorkers = Array.from({ length: Math.min(concurrencyLevel, totalRequestsTarget) }, () => worker());
+    await Promise.allSettled(activeWorkers);
+
+    const totalElapsedSec = Math.max(0.1, (performance.now() - startTime) / 1000);
+    latencies.sort((a, b) => a - b);
+    const finalMetrics = {
+      completed: completedCount,
+      successful: successfulCount,
+      failed: failedCount,
+      rateLimited: rateLimitedCount,
+      rps: Math.round((completedCount / totalElapsedSec) * 10) / 10,
+      avgLatencyMs: latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
+      p95LatencyMs: latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.95)] || 0 : 0,
+      durationMs: Math.round(performance.now() - startTime),
+    };
+    setStressMetrics(finalMetrics);
+
+    // Automatically sync Stress test metrics to QA Tracker
+    try {
+      await fetch('/docs/qa/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint_key: endpointKey,
+          comment: `Stress Tested: ${concurrencyLevel}x parallel, ${finalMetrics.rps} req/s, P95 ${finalMetrics.p95LatencyMs}ms (429: ${finalMetrics.rateLimited})`,
+          stress_metrics: {
+            concurrency_level: concurrencyLevel,
+            total_requests: completedCount,
+            successful: successfulCount,
+            failed: failedCount,
+            rate_limited: rateLimitedCount,
+            rps: finalMetrics.rps,
+            avg_latency_ms: finalMetrics.avgLatencyMs,
+            p95_latency_ms: finalMetrics.p95LatencyMs,
+            duration_ms: finalMetrics.durationMs,
+            run_at: new Date().toISOString(),
+          },
+        }),
+      });
+    } catch {}
+
+    setRunningStress(false);
+  };
+
+  // Generate k6 Load Test Script
+  const generateK6Script = (): string => {
+    if (!suite?.test_cases || suite.test_cases.length === 0) return '';
+    const origin = window.location.origin;
+
+    const casesCode = suite.test_cases.map((tc, idx) => {
+      let url = `${origin}${tc.path}`;
+      if (tc.query_params && Object.keys(tc.query_params).length > 0) {
+        url += '?' + new URLSearchParams(tc.query_params).toString();
+      }
+      const headers = JSON.stringify({
+        'Content-Type': 'application/json',
+        ...(tc.headers || {}),
+      }, null, 4);
+
+      const body = tc.request_body
+        ? `JSON.stringify(${JSON.stringify(tc.request_body)})`
+        : 'null';
+
+      return `  // Scenario ${idx + 1}: ${tc.name} (${tc.category})
+  {
+    const res = http.${tc.method.toLowerCase()}('${url}', ${body}, { headers: ${headers} });
+    check(res, {
+      'status is ${tc.expected_status}': (r) => r.status === ${tc.expected_status},
+    });
+    sleep(0.05);
+  }`;
+    }).join('\n\n');
+
+    return `import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+// Automated k6 Performance & Stress Script for: ${endpointKey}
+// Generated via go-apidocs AI Inference Engine (${suite.model_used})
+export const options = {
+  stages: [
+    { duration: '30s', target: 20 },  // Ramp-up to 20 virtual users
+    { duration: '1m', target: 50 },   // Stress plateau at 50 virtual users
+    { duration: '20s', target: 0 },   // Graceful cooldown
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<300'], // 95% of requests must complete below 300ms
+    http_req_failed: ['rate<0.02'],   // Failure rate under 2%
+  },
+};
+
+export default function () {
+${casesCode}
+}
+`;
+  };
+
+  // Generate Locust Python Load Test Script
+  const generateLocustScript = (): string => {
+    if (!suite?.test_cases || suite.test_cases.length === 0) return '';
+
+    const tasks = suite.test_cases.map((tc, idx) => {
+      let path = tc.path;
+      if (tc.query_params && Object.keys(tc.query_params).length > 0) {
+        path += '?' + new URLSearchParams(tc.query_params).toString();
+      }
+      const headers = JSON.stringify({
+        'Content-Type': 'application/json',
+        ...(tc.headers || {}),
+      });
+
+      const jsonPayload = tc.request_body ? `, json=${JSON.stringify(tc.request_body)}` : '';
+
+      return `    @task
+    def scenario_${idx + 1}_${tc.id.replace(/[^a-zA-Z0-9_]/g, '_')}(self):
+        """${tc.name} - ${tc.category}"""
+        with self.client.${tc.method.toLowerCase()}("${path}", headers=${headers}${jsonPayload}, catch_response=True) as res:
+            if res.status_code == ${tc.expected_status}:
+                res.success()
+            else:
+                res.failure(f"Expected ${tc.expected_status}, got {res.status_code}")`;
+    }).join('\n\n');
+
+    return `from locust import HttpUser, task, between
+
+# Automated Locust Stress & Concurrency Test for: ${endpointKey}
+# Generated via go-apidocs AI Engine (${suite.model_used})
+
+class APIStressUser(HttpUser):
+    wait_time = between(0.01, 0.1)
+
+${tasks}
+`;
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -267,110 +816,233 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       case 'auth & rbac':
         return 'bg-rose-50 text-rose-700 border-rose-200';
       default:
-        return 'bg-purple-50 text-purple-700 border-purple-200';
+        return 'bg-slate-100 text-slate-700 border-slate-300';
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white border border-slate-200 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden font-sans">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-indigo-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-md">
-              <Sparkles className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200/80 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden font-sans">
+        {/* Human Designed Header */}
+        <div className="px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white flex items-center justify-between relative overflow-hidden">
+          {/* Subtle decorative glow */}
+          <div className="absolute top-0 right-1/4 w-96 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex items-center gap-3.5 relative z-10">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-cyan-500 to-emerald-500 p-[1px] shadow-lg shadow-indigo-500/20">
+              <div className="w-full h-full bg-slate-950 rounded-2xl flex items-center justify-center text-white">
+                <Sparkles className="w-5 h-5 text-indigo-400" />
+              </div>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold tracking-tight">AI Test Suite & Execution Runner</h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-500/30 flex items-center gap-1">
-                  <Cpu className="w-3 h-3" />
-                  {suite?.model_used || 'Multi-Provider Synthesis'}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-sm font-semibold tracking-tight text-white">AI Test Suite & Execution Runner</h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-mono font-medium border border-indigo-500/30 flex items-center gap-1.5">
+                  <Cpu className="w-3 h-3 text-indigo-400" />
+                  {suite?.model_used || activeProvider.name}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 font-mono mt-0.5">Target: {endpointKey}</p>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                <span>Target:</span>
+                <span className="text-slate-200 font-bold">{endpointKey}</span>
+              </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer relative z-10"
+            aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
-          {/* AI Provider & Generation Toolbar */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            {/* Provider Chips & Credentials Toggle */}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">AI Inference Engine:</span>
-              <div className="flex items-center gap-2 flex-wrap">
-                {AI_PROVIDERS.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedProvider(p.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                      selectedProvider === p.id
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>{p.icon}</span>
-                    <span>{p.name}</span>
-                    <span className="text-[10px] opacity-75">({p.model})</span>
-                  </button>
-                ))}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 bg-slate-50/60">
+          {/* Human-Designed AI Inference Engine Selection Card */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4 relative z-20 overflow-visible">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              {/* Engine Selector Dropdown */}
+              <div className="space-y-1.5 flex-1 relative z-30">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>AI Inference Engine & Provider</span>
+                </label>
 
+                {/* Dropdown Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full sm:max-w-md px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:bg-slate-50/50 flex items-center justify-between gap-3 text-left transition-all shadow-xs cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-lg shrink-0">{activeProvider.icon}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 truncate">{activeProvider.name}</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${activeProvider.badgeColor}`}>
+                          {activeProvider.badge}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 truncate">{activeProvider.tagline}</p>
+                    </div>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-transform shrink-0 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu Modal / Overlay */}
+                {isDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsDropdownOpen(false)}
+                    />
+                    <div className="absolute top-full left-0 mt-2 w-full sm:w-[460px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2 max-h-[380px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Choose Inference Provider
+                      </div>
+                      <div className="space-y-1">
+                        {AI_PROVIDERS.map((provider) => {
+                          const isSelected = selectedProvider === provider.id;
+                          return (
+                            <button
+                              key={provider.id}
+                              type="button"
+                              onClick={() => handleSelectProvider(provider.id)}
+                              className={`w-full p-2.5 rounded-xl text-left flex items-start gap-3 transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-indigo-50/80 border border-indigo-200 text-slate-900'
+                                  : 'hover:bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              <span className="text-xl shrink-0 mt-0.5">{provider.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-xs font-bold text-slate-900 truncate">{provider.name}</span>
+                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-medium border ${provider.badgeColor}`}>
+                                      {provider.badge}
+                                    </span>
+                                  </div>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
+                                </div>
+                                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{provider.tagline}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Model Picker & Settings Toggle */}
+              <div className="flex items-end gap-2.5 flex-wrap">
+                <div className="space-y-1.5 flex-1 min-w-[200px]">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Inference Model</span>
+                  </label>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-800 shadow-xs cursor-pointer transition-all"
+                  >
+                    {activeProvider.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Settings & Credentials Button */}
                 <button
                   type="button"
                   onClick={() => setShowSettings(!showSettings)}
-                  title="Configure Custom API Key or Custom Endpoint URL"
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1 transition-all cursor-pointer ${
+                  title="Configure custom API Key or Base URL"
+                  className={`px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-xs whitespace-nowrap ${
                     showSettings || providerKeys[selectedProvider]
-                      ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                      ? 'bg-indigo-50 border-indigo-300 text-indigo-700 ring-2 ring-indigo-500/10'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
                   }`}
                 >
                   <Key className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Key / Settings</span>
-                  <ChevronDown className={`w-3 h-3 transition-transform ${showSettings ? 'rotate-180' : ''}`} />
+                  <span>API Key & Settings</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSettings ? 'rotate-180' : ''}`} />
                 </button>
               </div>
             </div>
 
             {/* Custom API Credentials & Endpoint Settings Panel */}
             {showSettings && (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in">
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200 space-y-3 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Sliders className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Configure {AI_PROVIDERS.find((p) => p.id === selectedProvider)?.name} Credentials</span>
+                    <span>Configure {activeProvider.name} Credentials & Endpoint</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">Stored securely in your local browser</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Stored securely in your local browser storage</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Free Tier Guidance Box */}
+                {activeProvider.freeTier && (
+                  <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-950 flex items-start justify-between gap-3 text-xs">
+                    <div className="flex items-start gap-2.5">
+                      <Gift className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold flex items-center gap-1.5">
+                          <span>{activeProvider.freeTier.quotaText}</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-200/80 text-emerald-800">
+                            No Credit Card Required
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                          {activeProvider.freeTier.instructions}
+                        </p>
+                      </div>
+                    </div>
+
+                    <a
+                      href={activeProvider.freeTier.docsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors shadow-2xs"
+                    >
+                      <span>Get Free Key</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                      API Key (Optional override)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        API Key (Optional override)
+                      </label>
+                      {activeProvider.consoleUrl && (
+                        <a
+                          href={activeProvider.consoleUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                          title={`Open ${activeProvider.company || activeProvider.name} dashboard to generate API key`}
+                        >
+                          <span>Connect {activeProvider.name}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                     <input
                       type="password"
-                      placeholder={
-                        selectedProvider === 'nvidia'
-                          ? 'nvapi-...'
-                          : selectedProvider === 'openai'
-                          ? 'sk-...'
-                          : selectedProvider === 'anthropic'
-                          ? 'sk-ant-...'
-                          : 'Not required for local Ollama'
-                      }
+                      placeholder={activeProvider.keyPlaceholder}
                       value={providerKeys[selectedProvider] || ''}
                       onChange={(e) => handleUpdateKey(selectedProvider, e.target.value)}
-                      className="w-full text-xs font-mono px-3 py-2 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
+                      className="w-full text-xs font-mono px-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
 
@@ -380,39 +1052,32 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      placeholder={
-                        selectedProvider === 'ollama'
-                          ? 'http://localhost:11434'
-                          : selectedProvider === 'nvidia'
-                          ? 'https://integrate.api.nvidia.com/v1'
-                          : selectedProvider === 'openai'
-                          ? 'https://api.openai.com/v1'
-                          : 'https://api.anthropic.com/v1'
-                      }
+                      placeholder={activeProvider.defaultBaseUrl}
                       value={customBaseUrls[selectedProvider] || ''}
                       onChange={(e) => handleUpdateBaseUrl(selectedProvider, e.target.value)}
-                      className="w-full text-xs font-mono px-3 py-2 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
+                      className="w-full text-xs font-mono px-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            {/* Prompt tweak & Action Button */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-1">
               <div className="flex-1">
                 <input
                   type="text"
                   placeholder="Optional prompt tweak (e.g. 'Emphasize SQL injection probes, BOLA heuristics, and JWT expiry checks')..."
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
-                  className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-slate-400"
                 />
               </div>
 
               <button
                 onClick={handleGenerate}
                 disabled={loading}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap"
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap"
               >
                 {loading ? (
                   <>
@@ -452,24 +1117,260 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
                   </div>
                 </div>
 
-                <button
-                  onClick={handleRunAllTests}
-                  disabled={runningTests}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 shrink-0 cursor-pointer whitespace-nowrap"
-                >
-                  {runningTests ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Executing Tests Live...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 fill-white" />
-                      <span>Run All Synthesized Tests</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  {/* Export Load Test Script Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowExportModal(true)}
+                    className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Export as k6 / Locust load testing script"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Export k6 / Locust</span>
+                  </button>
+
+                  {/* Toggle Stress & Concurrency Runner Panel */}
+                  <button
+                    type="button"
+                    onClick={() => setShowStressRunner(!showStressRunner)}
+                    className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                      showStressRunner
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-amber-500/20'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <Gauge className="w-3.5 h-3.5" />
+                    <span>Concurrency & Stress</span>
+                  </button>
+
+                  {/* Standard Sequential Run All */}
+                  <button
+                    onClick={handleRunAllTests}
+                    disabled={runningTests || runningStress}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                  >
+                    {runningTests ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Executing Tests Live...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-white" />
+                        <span>Run All Tests Live</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
+
+              {/* Concurrency & Burst Stress Runner HUD Panel */}
+              {showStressRunner && (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 space-y-4 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-700">
+                        <Activity className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                          <span>Concurrent Stress & Burst Simulator</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-800">
+                            Live Endpoint Load
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Dispatches concurrent worker pools to evaluate real-time throughput, P95 latency, and rate limiting (429).
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleRunConcurrentStress}
+                      disabled={runningStress || runningTests}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-amber-600/20 flex items-center gap-2 shrink-0 cursor-pointer"
+                    >
+                      {runningStress ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Pumping Burst Requests...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-3.5 h-3.5 fill-white" />
+                          <span>Start Concurrency Test</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Settings Sliders / Inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    <div className="p-3 rounded-xl bg-white border border-amber-200/80 space-y-1.5 shadow-2xs">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700">Parallel Workers (Concurrency):</span>
+                        <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                          {concurrencyLevel}x parallel
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="50"
+                        step="1"
+                        value={concurrencyLevel}
+                        disabled={runningStress}
+                        onChange={(e) => setConcurrencyLevel(parseInt(e.target.value, 10))}
+                        className="w-full accent-amber-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                        <span>1x (Gentle)</span>
+                        <span>10x (Moderate)</span>
+                        <span>25x (Heavy)</span>
+                        <span>50x (Stress)</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white border border-amber-200/80 space-y-1.5 shadow-2xs">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700">Total Burst Iterations:</span>
+                        <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                          {totalRequestsTarget} requests
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="5"
+                        max="200"
+                        step="5"
+                        value={totalRequestsTarget}
+                        disabled={runningStress}
+                        onChange={(e) => setTotalRequestsTarget(parseInt(e.target.value, 10))}
+                        className="w-full accent-amber-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                        <span>5 reqs</span>
+                        <span>50 reqs</span>
+                        <span>100 reqs</span>
+                        <span>200 reqs</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Real-time Telemetry HUD */}
+                  {stressMetrics && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 animate-in fade-in duration-200">
+                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Throughput</div>
+                        <div className="text-base font-extrabold text-indigo-600 mt-0.5 font-mono">{stressMetrics.rps} <span className="text-[10px] text-slate-400 font-normal">req/s</span></div>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">P95 Latency</div>
+                        <div className="text-base font-extrabold text-amber-600 mt-0.5 font-mono">{stressMetrics.p95LatencyMs} <span className="text-[10px] text-slate-400 font-normal">ms</span></div>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Avg Response</div>
+                        <div className="text-base font-extrabold text-slate-900 mt-0.5 font-mono">{stressMetrics.avgLatencyMs} <span className="text-[10px] text-slate-400 font-normal">ms</span></div>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Completed / 429</div>
+                        <div className="text-base font-extrabold text-slate-900 mt-0.5 font-mono">
+                          <span className="text-emerald-600">{stressMetrics.successful}</span>
+                          <span className="text-slate-300">/</span>
+                          <span className={stressMetrics.rateLimited > 0 ? 'text-amber-600' : 'text-slate-400'}>{stressMetrics.rateLimited}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Load Test Script Export Modal Overlay */}
+              {showExportModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150">
+                  <div className="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold">
+                          <Code2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Export Load & Stress Test Script</h3>
+                          <p className="text-[11px] text-slate-500">Ready-to-run automation script incorporating all AI synthesized edge cases</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExportModal(false)}
+                        className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Format Tabs: k6 vs Locust */}
+                    <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setExportFormat('k6')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          exportFormat === 'k6' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Grafana k6 (JavaScript)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExportFormat('locust')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          exportFormat === 'locust' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Locust (Python)
+                      </button>
+                    </div>
+
+                    {/* Code Snippet Box */}
+                    <div className="relative rounded-2xl bg-slate-950 p-4 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-[320px] leading-relaxed border border-slate-800">
+                      <pre className="whitespace-pre">
+                        {exportFormat === 'k6' ? generateK6Script() : generateLocustScript()}
+                      </pre>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-[11px] text-slate-500">
+                        {exportFormat === 'k6' ? 'Run with: `k6 run loadtest.js`' : 'Run with: `locust -f locustfile.py --host=...`'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const script = exportFormat === 'k6' ? generateK6Script() : generateLocustScript();
+                          navigator.clipboard.writeText(script);
+                          setExportCopied(true);
+                          setTimeout(() => setExportCopied(false), 2000);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                      >
+                        {exportCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Copied to Clipboard!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy Script</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Category Filter Chips */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1">

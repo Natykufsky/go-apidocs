@@ -538,6 +538,7 @@ export const App: React.FC = () => {
           onNavigate={handleNavigate}
           onOpenSearch={() => setIsSearchModalOpen(true)}
           onOpenCredentials={() => setIsCredsModalOpen(true)}
+          onOpenQAReport={() => setIsReportOpen(true)}
           hasCredentials={hasCredentials}
           activeModule={activeModule}
           availableModules={availableModules}
@@ -573,6 +574,7 @@ export const App: React.FC = () => {
             onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
             onOpenSearch={() => setIsSearchModalOpen(true)}
             onOpenCredentials={() => setIsCredsModalOpen(true)}
+            onOpenQAReport={() => setIsReportOpen(true)}
             hasCredentials={hasCredentials}
             activeEnv={activeEnv}
             maskPII={maskPII}

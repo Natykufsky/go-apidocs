@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	DefaultAnthropicModel   = "claude-3-5-sonnet-20241022"
+	DefaultAnthropicModel   = "claude-sonnet-5-5"
 	DefaultAnthropicBaseURL = "https://api.anthropic.com/v1"
 	AnthropicVersion        = "2023-06-01"
 )

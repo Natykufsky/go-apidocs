@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   X,
   Compass,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { NavItem, NavConfig } from './Navbar';
 import { Workspace } from './WorkspaceSwitcher';
@@ -50,6 +51,7 @@ interface SidebarProps {
   onNavigate: (path: string) => void;
   onOpenSearch?: () => void;
   onOpenCredentials?: () => void;
+  onOpenQAReport?: () => void;
   hasCredentials?: boolean;
   activeModule?: string;
   availableModules?: string[];
@@ -79,6 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate,
   onOpenSearch,
   onOpenCredentials,
+  onOpenQAReport,
   hasCredentials = false,
   activeModule = 'all',
   availableModules = [],
@@ -262,12 +265,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-2.5 truncate">
-                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <Sparkles className="w-4 h-4 shrink-0" />
                   {!collapsed && <span className="truncate">AI Test Studio</span>}
                 </div>
                 {!collapsed && (
-                  <span className="px-2 py-0.5 text-[9px] rounded-full bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200 font-extrabold uppercase">
-                    DeepSeek
+                  <span className="px-2 py-0.5 text-[9px] rounded-full bg-green-100 dark:bg-green-900/60 text-green-800 dark:text-green-300 font-extrabold uppercase">
+                    Multi-AI
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* QA Sprint Report */}
+            {onOpenQAReport && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenQAReport();
+                  onCloseMobile();
+                }}
+                title="Open QA Sprint Testing Report & Audit"
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer min-h-[44px] ${
+                  collapsed
+                    ? 'justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700'
+                    : 'bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30 border border-amber-200/80 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 justify-between'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <FileSpreadsheet className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  {!collapsed && <span className="truncate">QA Sprint Report</span>}
+                </div>
+                {!collapsed && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-200 font-bold">
+                    QA
                   </span>
                 )}
               </button>
@@ -462,7 +492,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center gap-2.5 truncate">
                   {maskPII ? (
-                    <EyeOff className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                    <EyeOff className="w-4 h-4  dark:text-purple-400 shrink-0" />
                   ) : (
                     <Eye className="w-4 h-4 text-slate-500 shrink-0" />
                   )}
@@ -575,12 +605,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile Drawer Backdrop & Sidebar */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex animate-in fade-in-20 duration-200">
+        <div className="fixed inset-0 z-50 lg:hidden flex animate-in fade-in duration-200">
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity cursor-pointer"
             onClick={onCloseMobile}
+            aria-label="Close navigation overlay"
           />
-          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-slate-900 shadow-2xl z-10 animate-in slide-in-from-left duration-200 h-full overflow-hidden">
+          <div className="relative flex-1 flex flex-col max-w-[280px] sm:max-w-xs w-full bg-white dark:bg-slate-900 shadow-2xl z-10 animate-in slide-in-from-left duration-200 h-full overflow-hidden border-r border-slate-200/80 dark:border-slate-800">
             {sidebarContent}
           </div>
         </div>

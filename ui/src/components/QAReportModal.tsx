@@ -18,6 +18,32 @@ export interface QARecord {
   status: 'passed' | 'retest' | 'failed' | 'untested';
   comment?: string;
   tested_at?: string;
+  tester?: string;
+  execution_summary?: {
+    total_tests: number;
+    passed: number;
+    failed: number;
+    pass_rate: number;
+    avg_latency_ms: number;
+    run_at: string;
+  };
+  stress_metrics?: {
+    concurrency_level: number;
+    total_requests: number;
+    successful: number;
+    failed: number;
+    rate_limited: number;
+    rps: number;
+    avg_latency_ms: number;
+    p95_latency_ms: number;
+    duration_ms: number;
+    run_at: string;
+  };
+  ai_suite?: {
+    summary?: string;
+    model_used?: string;
+    test_cases?: any[];
+  };
 }
 
 interface QAReportModalProps {
@@ -46,7 +72,7 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Calculate sprint stats by merging all discovered OpenAPI endpoints with recorded QA data
+  // Calculate sprint stats and system-wide stress/performance aggregates
   const endpointSet = new Set<string>([
     ...(allEndpoints || []),
     ...Object.keys(qaData),
@@ -57,17 +83,43 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
   let failedCount = 0;
   let untestedCount = 0;
 
+  // Aggregate AI & Stress telemetry
+  let totalAiTests = 0;
+  let totalAiPassed = 0;
+  let endpointsWithAiRuns = 0;
+  let peakRps = 0;
+  let maxP95 = 0;
+  let totalRateLimits = 0;
+  let stressTestedCount = 0;
+  const slaThresholdMs = 200; // SLA Alert Threshold (200ms)
+  let slaViolations = 0;
+
   for (const ep of endpoints) {
     const item = qaData[ep];
     if (item?.status === 'passed') passedCount++;
     else if (item?.status === 'retest') retestCount++;
     else if (item?.status === 'failed') failedCount++;
     else untestedCount++;
+
+    if (item?.execution_summary && item.execution_summary.total_tests > 0) {
+      endpointsWithAiRuns++;
+      totalAiTests += item.execution_summary.total_tests;
+      totalAiPassed += item.execution_summary.passed;
+    }
+
+    if (item?.stress_metrics && item.stress_metrics.total_requests > 0) {
+      stressTestedCount++;
+      if (item.stress_metrics.rps > peakRps) peakRps = item.stress_metrics.rps;
+      if (item.stress_metrics.p95_latency_ms > maxP95) maxP95 = item.stress_metrics.p95_latency_ms;
+      if (item.stress_metrics.rate_limited) totalRateLimits += item.stress_metrics.rate_limited;
+      if (item.stress_metrics.p95_latency_ms > slaThresholdMs) slaViolations++;
+    }
   }
 
   const total = endpoints.length || 1;
   const testedCount = passedCount + retestCount + failedCount;
   const passRate = testedCount > 0 ? Math.round((passedCount / testedCount) * 100) : 0;
+  const aiSuitePassRate = totalAiTests > 0 ? Math.round((totalAiPassed / totalAiTests) * 100) : 0;
 
   // Filter endpoints
   const filteredEndpoints = endpoints.filter((ep) => {
@@ -87,22 +139,48 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
     md += `*Generated: ${new Date().toLocaleString()}*\n\n`;
     md += `### Summary Metrics\n`;
     md += `- **Total Endpoints Tested**: ${testedCount} / ${endpoints.length}\n`;
-    md += `- **Pass Rate**: ${passRate}%\n`;
+    md += `- **Manual Pass Rate**: ${passRate}%\n`;
     md += `- **Passed (Working)**: ${passedCount}\n`;
     md += `- **Needs Retest**: ${retestCount}\n`;
     md += `- **Failed / Bugs**: ${failedCount}\n\n`;
-    md += `| Method & Endpoint | Status | Last Tested | QA Comments / Bug Notes |\n`;
-    md += `| :--- | :--- | :--- | :--- |\n`;
+    if (endpointsWithAiRuns > 0 || stressTestedCount > 0) {
+      md += `### Automated AI & Concurrency Stress Telemetry\n`;
+      if (endpointsWithAiRuns > 0) {
+        md += `- **AI Test Suite Pass Rate**: ${aiSuitePassRate}% (${totalAiPassed}/${totalAiTests} tests across ${endpointsWithAiRuns} endpoints)\n`;
+      }
+      if (stressTestedCount > 0) {
+        md += `- **Endpoints Stress-Tested**: ${stressTestedCount}\n`;
+        md += `- **Peak Throughput**: ${peakRps.toFixed(1)} req/sec\n`;
+        md += `- **Worst P95 Latency**: ${maxP95.toFixed(1)} ms\n`;
+        md += `- **SLA (>200ms) Violations**: ${slaViolations}\n`;
+        md += `- **429 Rate Limits Hit**: ${totalRateLimits}\n\n`;
+      }
+    }
+    md += `| Method & Endpoint | Status | AI Test Suite | Stress Performance | Last Tested | QA Comments / Bug Notes |\n`;
+    md += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
 
     for (const ep of endpoints) {
-      const item = qaData[ep];
+      const item = qaData[ep] || { status: 'untested', comment: '', tested_at: '' };
       let statusIcon = '⚪ Untested';
       if (item.status === 'passed') statusIcon = '🟢 PASSED';
       if (item.status === 'failed') statusIcon = '🔴 FAILED / BUG';
       if (item.status === 'retest') statusIcon = '🟡 RETEST';
 
+      let aiSummary = '-';
+      if (item.execution_summary) {
+        aiSummary = `${item.execution_summary.passed}/${item.execution_summary.total_tests} (${item.execution_summary.pass_rate}%) ~${item.execution_summary.avg_latency_ms}ms`;
+      }
+
+      let stressSummary = '-';
+      if (item.stress_metrics) {
+        stressSummary = `${item.stress_metrics.concurrency_level}x conc | ${item.stress_metrics.rps} req/s | P95: ${item.stress_metrics.p95_latency_ms}ms`;
+        if (item.stress_metrics.rate_limited > 0) {
+          stressSummary += ` | 429: ${item.stress_metrics.rate_limited}`;
+        }
+      }
+
       const comment = (item.comment || '-').replace(/\n/g, '<br>');
-      md += `| \`${ep}\` | ${statusIcon} | ${item.tested_at || '-'} | ${comment} |\n`;
+      md += `| \`${ep}\` | ${statusIcon} | ${aiSummary} | ${stressSummary} | ${item.tested_at || '-'} | ${comment} |\n`;
     }
     return md;
   };
@@ -231,6 +309,53 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
           </div>
         </div>
 
+        {/* Automated System-Wide Concurrency & Stress Health Telemetry Card */}
+        {(endpointsWithAiRuns > 0 || stressTestedCount > 0) && (
+          <div className="px-6 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="font-bold text-slate-200 uppercase tracking-wider text-[10px]">
+                Automated Stress & Suite Health
+              </span>
+            </div>
+            <div className="flex items-center gap-6 flex-wrap">
+              {endpointsWithAiRuns > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">AI Suite Pass:</span>
+                  <span className={`font-mono font-bold ${aiSuitePassRate >= 90 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {aiSuitePassRate}% ({totalAiPassed}/{totalAiTests})
+                  </span>
+                </div>
+              )}
+              {stressTestedCount > 0 && (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400">Peak Load:</span>
+                    <span className="font-mono font-bold text-cyan-300">{peakRps.toFixed(1)} req/s</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400">Worst P95:</span>
+                    <span className={`font-mono font-bold ${maxP95 <= slaThresholdMs ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {maxP95.toFixed(1)}ms
+                    </span>
+                  </div>
+                  {totalRateLimits > 0 && (
+                    <div className="flex items-center gap-1.5 text-rose-300 font-bold">
+                      <span>429 Throttles:</span>
+                      <span className="font-mono">{totalRateLimits}</span>
+                    </div>
+                  )}
+                  {slaViolations > 0 && (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold">
+                      ⚠ SLA &gt;{slaThresholdMs}ms ({slaViolations})
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* View Switcher Tabs & Filter Bar */}
         <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1">
@@ -311,8 +436,70 @@ export const QAReportModal: React.FC<QAReportModalProps> = ({
                         <td className="p-3 text-slate-500 font-mono text-[11px]">
                           {item.tested_at || '—'}
                         </td>
-                        <td className="p-3 max-w-xs text-slate-600 truncate">
-                          {item.comment || <span className="text-slate-400 italic">No notes</span>}
+                        <td className="p-3 max-w-sm text-slate-600">
+                          <div className="space-y-1.5">
+                            <div>{item.comment || <span className="text-slate-400 italic">No notes</span>}</div>
+
+                            {/* Automated AI & Stress Telemetry Badges */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {item.execution_summary && (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono text-[10px] font-bold">
+                                    <span>⚡ AI Suite:</span>
+                                    <span>{item.execution_summary.passed}/{item.execution_summary.total_tests} ({item.execution_summary.pass_rate}%)</span>
+                                  </span>
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-mono text-[10px]">
+                                    {item.execution_summary.avg_latency_ms}ms avg
+                                  </span>
+                                </>
+                              )}
+
+                              {item.stress_metrics && (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10px] font-bold">
+                                    <span>🔥 Stress:</span>
+                                    <span>{item.stress_metrics.concurrency_level}x conc • {item.stress_metrics.rps} req/s</span>
+                                  </span>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md font-mono text-[10px] ${item.stress_metrics.p95_latency_ms > slaThresholdMs ? 'bg-rose-100 text-rose-800 font-bold border border-rose-200' : 'bg-slate-100 text-slate-600'}`}>
+                                    P95: {item.stress_metrics.p95_latency_ms}ms
+                                  </span>
+                                  {item.stress_metrics.rate_limited > 0 && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 font-mono text-[10px] font-bold">
+                                      429: {item.stress_metrics.rate_limited}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+
+                            {/* Intelligent Status Escalation / Recommendations */}
+                            {(() => {
+                              const exec = item.execution_summary;
+                              const stress = item.stress_metrics;
+                              if (exec && exec.pass_rate === 100 && (!stress || (stress.failed === 0 && stress.p95_latency_ms <= slaThresholdMs)) && item.status !== 'passed') {
+                                return (
+                                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                                    <span>✨ Recommendation: Ready for Sign-Off (100% Suite Pass)</span>
+                                  </div>
+                                );
+                              }
+                              if ((exec && exec.failed > 0) || (stress && stress.failed > 0)) {
+                                return (
+                                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold">
+                                    <span>⚠ Recommendation: Failures detected in automated suite</span>
+                                  </div>
+                                );
+                              }
+                              if (stress && stress.p95_latency_ms > slaThresholdMs) {
+                                return (
+                                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
+                                    <span>⏱ SLA Warning: P95 ({stress.p95_latency_ms}ms) exceeds {slaThresholdMs}ms budget</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </td>
                         <td className="p-3 text-right">
                           {onInspectEndpoint && (

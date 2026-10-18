@@ -80,4 +80,30 @@ func TestMultiProviderDispatcher(t *testing.T) {
 	if suite.ModelUsed != "nvidia-mock-model" {
 		t.Fatalf("expected nvidia-mock-model, got %s", suite.ModelUsed)
 	}
+
+	// 3. Groq alias dispatch (routes through openai adapter)
+	suite, err = dispatcher.GenerateTests(ctx, aiPort.GenerateOptions{
+		Provider:    "groq",
+		EndpointKey: "GET /api/v1/orders",
+		APIKey:      "gsk_test123",
+	})
+	if err != nil {
+		t.Fatalf("failed generating tests via groq alias: %v", err)
+	}
+	if suite.ModelUsed != "openai-mock-model" {
+		t.Fatalf("expected openai-mock-model for groq, got %s", suite.ModelUsed)
+	}
+
+	// 4. Hugging Face alias dispatch
+	suite, err = dispatcher.GenerateTests(ctx, aiPort.GenerateOptions{
+		Provider:    "huggingface",
+		EndpointKey: "POST /api/v1/feedback",
+		APIKey:      "hf_test123",
+	})
+	if err != nil {
+		t.Fatalf("failed generating tests via huggingface alias: %v", err)
+	}
+	if suite.ModelUsed != "openai-mock-model" {
+		t.Fatalf("expected openai-mock-model for huggingface, got %s", suite.ModelUsed)
+	}
 }
