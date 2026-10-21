@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/chi/v5"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 
 	"github.com/Natykufsky/go-apidocs/assets"
@@ -932,6 +933,12 @@ func MountFiber(app *fiber.App, cfg Config) {
 	app.Post("/docs/qa/reset", defaultQA.HandleResetData)
 	app.Get("/docs/qa/report", defaultQA.HandleGetReport)
 	app.Post("/docs/qa/ai-generate", defaultQA.HandleGenerateAITests)
+	qaAdaptor := adaptor.HTTPHandlerFunc
+	app.Post("/docs/qa/execute", qaAdaptor(defaultQA.HandleExecuteHTTP))
+	app.Get("/docs/qa/reports", qaAdaptor(defaultQA.HandleReportsHTTP))
+	app.Post("/docs/qa/reports", qaAdaptor(defaultQA.HandleReportsHTTP))
+	app.Delete("/docs/qa/reports", qaAdaptor(defaultQA.HandleReportsHTTP))
+	app.Post("/docs/qa/sequence", qaAdaptor(defaultQA.HandleSequenceHTTP))
 
 	// Cybersecurity Audit Engine APIs
 	if cfg.EnableSecurityAudit {
@@ -1136,6 +1143,11 @@ func MountChi(r chi.Router, cfg Config) {
 	r.Post("/docs/qa/reset", defaultQA.HandleResetDataHTTP)
 	r.Get("/docs/qa/report", defaultQA.HandleGetReportHTTP)
 	r.Post("/docs/qa/ai-generate", defaultQA.HandleGenerateAITestsHTTP)
+	r.Post("/docs/qa/execute", defaultQA.HandleExecuteHTTP)
+	r.Get("/docs/qa/reports", defaultQA.HandleReportsHTTP)
+	r.Post("/docs/qa/reports", defaultQA.HandleReportsHTTP)
+	r.Delete("/docs/qa/reports", defaultQA.HandleReportsHTTP)
+	r.Post("/docs/qa/sequence", defaultQA.HandleSequenceHTTP)
 
 	// Login & Session Routes
 	r.Get("/docs/login", LoginHandler(cfg, authEnabled))
@@ -1233,6 +1245,11 @@ func MountGin(r gin.IRoutes, cfg Config) {
 	r.POST("/docs/qa/reset", gin.WrapF(defaultQA.HandleResetDataHTTP))
 	r.GET("/docs/qa/report", gin.WrapF(defaultQA.HandleGetReportHTTP))
 	r.POST("/docs/qa/ai-generate", gin.WrapF(defaultQA.HandleGenerateAITestsHTTP))
+	r.POST("/docs/qa/execute", gin.WrapF(defaultQA.HandleExecuteHTTP))
+	r.GET("/docs/qa/reports", gin.WrapF(defaultQA.HandleReportsHTTP))
+	r.POST("/docs/qa/reports", gin.WrapF(defaultQA.HandleReportsHTTP))
+	r.DELETE("/docs/qa/reports", gin.WrapF(defaultQA.HandleReportsHTTP))
+	r.POST("/docs/qa/sequence", gin.WrapF(defaultQA.HandleSequenceHTTP))
 
 	// Login & Session Routes
 	r.GET("/docs/login", gin.WrapF(LoginHandler(cfg, authEnabled)))
@@ -1304,6 +1321,9 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	mux.HandleFunc("/docs/qa/reset", defaultQA.HandleResetDataHTTP)
 	mux.HandleFunc("/docs/qa/report", defaultQA.HandleGetReportHTTP)
 	mux.HandleFunc("/docs/qa/ai-generate", defaultQA.HandleGenerateAITestsHTTP)
+	mux.HandleFunc("/docs/qa/execute", defaultQA.HandleExecuteHTTP)
+	mux.HandleFunc("/docs/qa/reports", defaultQA.HandleReportsHTTP)
+	mux.HandleFunc("/docs/qa/sequence", defaultQA.HandleSequenceHTTP)
 
 	// Live Dynamic Mock API Server (synthesized directly from OpenAPI schemas)
 	mockServer := schema.NewMockServer(defaultFilter)

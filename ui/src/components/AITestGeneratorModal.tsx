@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   X,
@@ -26,6 +26,10 @@ import {
   Gauge,
   Download,
   Code2,
+  GitBranch,
+  FolderOpen,
+  Trash2,
+  ListOrdered,
 } from 'lucide-react';
 
 export interface AITestCase {
@@ -405,6 +409,13 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   const [batchProgress, setBatchProgress] = useState<{ current: string; done: number; total: number } | null>(null);
   const [batchAutoRun, setBatchAutoRun] = useState(true);
   const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
+  // Results of the most recent server-side run, used when saving reports.
+  const lastRunResultsRef = useRef<Record<string, TestExecutionResult>>({});
+
+  // Test sequence analysis (workflow ordering across endpoints).
+  const [showSequencePanel, setShowSequencePanel] = useState(false);
+  const [sequenceAnalysis, setSequenceAnalysis] = useState<any>(null);
+  const [sequenceLoading, setSequenceLoading] = useState(false);
   // Endpoint whose suite is currently shown in the primary inspection pane.
   const [activeEndpointView, setActiveEndpointView] = useState<string>(endpointKey);
 
@@ -618,51 +629,61 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   };
 
   // Run only the checked test cases (falls back to the full suite if none checked).
+  // Execution happens server-side: real assertion evaluation (status, body,
+  // json_path, headers) with per-check pass/fail detail.
   const handleRunSelectedTests = async () => {
     if (!suite?.test_cases?.length) return;
     const targets = suite.test_cases.filter((tc) => selectedTestIds.has(tc.id));
     const casesToRun = targets.length > 0 ? targets : suite.test_cases;
     setRunningTests(true);
-    for (const tc of casesToRun) {
-      await handleRunSingleTest(tc);
-    }
-    setRunningTests(false);
-
-    const total = casesToRun.length;
-    let passed = 0;
-    let failed = 0;
-    const latencies: number[] = [];
-    casesToRun.forEach((tc) => {
-      const res = executionResults[tc.id];
-      if (res?.status === 'passed') passed++;
-      else if (res?.status === 'failed') failed++;
-      if (res?.durationMs) latencies.push(res.durationMs);
-    });
-    const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
-    const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
-    const scope = targets.length > 0 ? `selected subset (${targets.length}/${suite.test_cases.length} cases)` : 'full suite';
-    const overallStatus = passed === total && total > 0 ? 'passed' : failed > 0 ? 'failed' : 'retest';
 
     try {
-      await fetch('/docs/qa/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint_key: endpointKey,
-          status: overallStatus,
-          tester: `AI QA Runner (${suite.model_used || selectedProvider})`,
-          comment: `AI Test Run [${scope}]: ${passed}/${total} passed (${passRate}%).`,
-          execution_summary: {
-            total_tests: total,
-            passed,
-            failed,
-            pass_rate: passRate,
-            avg_latency_ms: avgLatency,
-            run_at: new Date().toISOString(),
-          },
-        }),
+      const scoped: AITestSuite = { ...suite, test_cases: casesToRun };
+      const data = await runSuitesOnBackend({ [endpointKey]: scoped });
+      const epResults = convertBackendResults(endpointKey, data.results[endpointKey] || []);
+      setExecutionResults((prev) => ({ ...prev, ...epResults }));
+      lastRunResultsRef.current = epResults;
+
+      const total = casesToRun.length;
+      let passed = 0;
+      let failed = 0;
+      let latencySum = 0;
+      casesToRun.forEach((tc) => {
+        const res = epResults[tc.id];
+        if (res?.status === 'passed') passed++;
+        else if (res?.status === 'failed') failed++;
+        latencySum += res?.durationMs || 0;
       });
-    } catch {}
+      const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+      const avgLatency = total > 0 ? Math.round(latencySum / total) : 0;
+      const scope = targets.length > 0 ? `selected subset (${targets.length}/${suite.test_cases.length} cases)` : 'full suite';
+      const overallStatus = passed === total && total > 0 ? 'passed' : failed > 0 ? 'failed' : 'retest';
+
+      try {
+        await fetch('/docs/qa/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint_key: endpointKey,
+            status: overallStatus,
+            tester: `AI QA Runner (${suite.model_used || selectedProvider})`,
+            comment: `Server-side AI Test Run [${scope}]: ${passed}/${total} passed (${passRate}%).`,
+            execution_summary: {
+              total_tests: total,
+              passed,
+              failed,
+              pass_rate: passRate,
+              avg_latency_ms: avgLatency,
+              run_at: new Date().toISOString(),
+            },
+          }),
+        });
+      } catch {}
+    } catch (e: any) {
+      setError('Server-side execution failed: ' + (e.message || 'unknown error'));
+    } finally {
+      setRunningTests(false);
+    }
   };
 
   // ---------- Report persistence ----------
@@ -853,6 +874,64 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       setSuite(suites[lastEp]);
       setSelectedTestCase(suites[lastEp].test_cases[0] || null);
       setExecutionResults(results[lastEp] || {});
+    }
+  };
+
+  // Execute suites server-side via the Go assertion engine (status, body, json_path, headers).
+  const runSuitesOnBackend = async (suites: Record<string, AITestSuite>) => {
+    const res = await fetch('/docs/qa/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suites }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'execution failed');
+    return data as { results: Record<string, any[]>; summary: Record<string, { total: number; passed: number; failed: number; avg_latency_ms: number }> };
+  };
+
+  const convertBackendResults = (ep: string, backend: any[]): Record<string, TestExecutionResult> => {
+    const out: Record<string, TestExecutionResult> = {};
+    (backend || []).forEach((r: any) => {
+      out[r.test_case_id] = {
+        testId: r.test_case_id,
+        status: r.passed ? 'passed' : 'failed',
+        actualStatus: r.actual_status,
+        durationMs: r.duration_ms,
+        assertionsPassed: (r.assertion_checks || []).filter((c: any) => c.passed).length,
+        assertionsTotal: (r.assertion_checks || []).length || 1,
+        errorMessage: r.error_message || (r.passed ? undefined : (r.assertion_checks || []).find((c: any) => !c.passed)?.detail),
+      };
+    });
+    return out;
+  };
+
+  // Save the current run as a persisted server-side report.
+  const handleSaveToServer = async () => {
+    const payload = buildReportPayload();
+    const title = `${endpointKey} — ${new Date().toLocaleString()}`;
+    try {
+      const res = await fetch('/docs/qa/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          endpoint_key: endpointKey,
+          provider: payload.provider,
+          model: payload.model,
+          suites: { [endpointKey]: suite },
+          results: { [endpointKey]: Object.values(executionResults).map((r) => ({
+            test_case_id: r.testId,
+            passed: r.status === 'passed',
+            actual_status: r.actualStatus ?? 0,
+            duration_ms: r.durationMs ?? 0,
+            error_message: r.errorMessage,
+          })) },
+        }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      setReportSavedAt(new Date().toISOString());
+    } catch (e: any) {
+      setError('Failed to save report: ' + e.message);
     }
   };
 
@@ -1567,6 +1646,14 @@ ${tasks}
                     </button>
                     <button
                       type="button"
+                      onClick={() => handleSaveToServer()}
+                      className="px-2.5 py-2.5 hover:bg-slate-50 text-indigo-600 text-[10px] font-bold transition-all cursor-pointer"
+                      title="Save report to the server for later review"
+                    >
+                      SAVE
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleSaveReport('json')}
                       className="px-2.5 py-2.5 hover:bg-slate-50 text-slate-500 text-[10px] font-bold font-mono transition-all cursor-pointer"
                       title="Download execution report as JSON"
@@ -1574,6 +1661,11 @@ ${tasks}
                       JSON
                     </button>
                   </div>
+                  {reportSavedAt && (
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Saved
+                    </span>
+                  )}
 
                   {/* Export Load Test Script Button */}
                   <button
@@ -1598,6 +1690,36 @@ ${tasks}
                   >
                     <Gauge className="w-3.5 h-3.5" />
                     <span>Concurrency & Stress</span>
+                  </button>
+
+                  {/* Sequence Analysis Panel Toggle */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setShowSequencePanel(!showSequencePanel);
+                      if (!sequenceAnalysis && !sequenceLoading) {
+                        setSequenceLoading(true);
+                        try {
+                          const specRes = await fetch('/docs/swagger.json');
+                          const spec = await specRes.json();
+                          const seqRes = await fetch('/docs/qa/sequence', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(spec),
+                          });
+                          if (seqRes.ok) setSequenceAnalysis(await seqRes.json());
+                        } catch {}
+                        setSequenceLoading(false);
+                      }
+                    }}
+                    className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                      showSequencePanel
+                        ? 'bg-sky-500 text-white border-sky-600 shadow-sky-500/20'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <GitBranch className="w-3.5 h-3.5" />
+                    <span>Test Sequence</span>
                   </button>
 
                   {/* Standard Sequential Run All + Run Selected */}
@@ -1829,6 +1951,63 @@ ${tasks}
                   </div>
                 </div>
               )}
+
+              {/* Test Sequence Analysis Panel */}
+              {showSequencePanel && (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent border border-sky-500/30 space-y-3 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-sky-500/20 flex items-center justify-center text-sky-700">
+                      <ListOrdered className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">Recommended Test Sequence</div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {sequenceAnalysis?.summary || 'Analyzing the OpenAPI spec for dependency-aware execution order…'}
+                      </p>
+                    </div>
+                  </div>
+                  {sequenceLoading && <div className="text-[11px] text-slate-400 animate-pulse px-1">Analyzing spec…</div>}
+                  {sequenceAnalysis?.steps && (
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {sequenceAnalysis.phases.map((p: string) => (
+                          <span key={p} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-700 border border-sky-500/20">{p}</span>
+                        ))}
+                      </div>
+                      <div className="max-h-64 overflow-y-auto space-y-1">
+                        {sequenceAnalysis.steps.map((s: any) => (
+                          <div key={s.endpoint_key} className="flex items-start gap-2 p-2 rounded-xl bg-white border border-slate-200">
+                            <span className="w-6 h-6 shrink-0 rounded-lg bg-sky-500/10 text-sky-700 text-[10px] font-bold flex items-center justify-center">{s.order}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[11px] font-bold font-mono text-slate-800">{s.endpoint_key}</div>
+                              <div className="text-[10px] text-slate-500 leading-snug">{s.reason}</div>
+                              {s.depends_on && s.depends_on.length > 0 && (
+                                <div className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
+                                  <ArrowRight className="w-3 h-3" /> after: {s.depends_on.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[10px] text-slate-400 space-y-0.5">
+                        {sequenceAnalysis.notes?.map((n: string, i: number) => <div key={i}>• {n}</div>)}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Saved Reports Manager */}
+              <SavedReportsPanel onOpenReport={(rep) => {
+                const ep = Object.keys(rep.suites || {})[0] || rep.endpoint_key;
+                if (rep.suites?.[ep]) {
+                  setActiveEndpointView(ep);
+                  setSuite(rep.suites[ep]);
+                  setSelectedTestCase(rep.suites[ep].test_cases?.[0] || null);
+                  setExecutionResults({});
+                }
+              }} />
 
               {/* Category Filter Chips + Select-all toggle */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -2064,3 +2243,129 @@ ${tasks}
   );
 };
 
+
+// ---------- Saved Reports Manager ----------
+
+interface SavedReportMeta {
+  id: string;
+  title: string;
+  endpoint_key: string;
+  provider?: string;
+  model?: string;
+  saved_at: string;
+  summary?: { total: number; passed: number; failed: number };
+  suites?: Record<string, AITestSuite>;
+}
+
+/**
+ * SavedReportsPanel lists server-persisted execution reports with load &
+ * delete actions, enabling report history review without leaving the runner.
+ */
+export const SavedReportsPanel: React.FC<{ onOpenReport: (rep: SavedReportMeta) => void }> = ({ onOpenReport }) => {
+  const [reports, setReports] = useState<SavedReportMeta[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/docs/qa/reports');
+      const data = await res.json();
+      setReports(data.reports || []);
+    } catch {}
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (expanded) refresh();
+  }, [expanded]);
+
+  const handleDelete = async (id: string) => {
+    try {
+      await fetch(`/docs/qa/reports?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      setReports((prev) => prev.filter((r) => r.id !== id));
+    } catch {}
+  };
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="w-full px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+      >
+        <FolderOpen className="w-3.5 h-3.5 text-slate-500" />
+        <span>Saved Reports</span>
+        <ChevronDown className="w-3.5 h-3.5" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2.5 animate-in fade-in duration-150">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="w-4 h-4 text-slate-500" />
+          <span className="text-xs font-bold text-slate-900">Saved Execution Reports</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">{reports.length}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={refresh}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {reports.length === 0 && !loading && (
+        <div className="text-[11px] text-slate-400 text-center py-3">
+          No saved reports yet. Run a suite and click <strong>SAVE</strong> to persist the execution report.
+        </div>
+      )}
+
+      <div className="space-y-1.5 max-h-56 overflow-y-auto">
+        {reports.map((r) => {
+          const s = r.summary;
+          const allPass = s && s.total > 0 && s.passed === s.total;
+          return (
+            <div key={r.id} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 group">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${allPass ? 'bg-emerald-500' : s && s.failed > 0 ? 'bg-rose-500' : 'bg-slate-300'}`} />
+              <button
+                type="button"
+                onClick={() => onOpenReport(r)}
+                className="min-w-0 flex-1 text-left cursor-pointer"
+                title="Load this report's suite into the inspector"
+              >
+                <div className="text-[11px] font-bold text-slate-800 truncate">{r.title}</div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  {r.endpoint_key}
+                  {s ? ` — ${s.passed}/${s.total} passed` : ''}
+                  {r.model ? ` — ${r.model}` : ''}
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(r.id)}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                title="Delete report"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};

@@ -59,6 +59,8 @@ type QATracker struct {
 	title       string
 	llmClient   aiPort.LLMClientPort
 	mu          sync.RWMutex
+
+	reportsStore *ReportStore // lazily initialized persisted execution reports
 }
 
 func NewQATracker(storagePath, title string, llmClient aiPort.LLMClientPort) *QATracker {
