@@ -205,3 +205,99 @@ func (a *OpenAIAdapter) GenerateTests(ctx context.Context, opts port.GenerateOpt
 func (a *OpenAIAdapter) buildPrompt(opts port.GenerateOptions) string {
 	return domain.DefaultPromptManager.BuildTestSuitePrompt(opts.EndpointKey, opts.SpecJSON, opts.CustomPrompt)
 }
+
+// Complete performs a generic single-shot chat completion, returning the raw
+// model output. It honors per-request provider/model/key/base-url overrides so
+// callers can route generic completion work through the multi-provider
+// dispatcher (any OpenAI-compatible backend: NVIDIA NIM, Groq, Gemini, etc.).
+func (a *OpenAIAdapter) Complete(ctx context.Context, opts port.CompleteOptions) (string, error) {
+	apiKeyToUse := a.apiKey
+	if opts.APIKey != "" {
+		apiKeyToUse = strings.TrimSpace(opts.APIKey)
+	}
+	baseURLToUse := a.baseURL
+	if opts.BaseURL != "" {
+		baseURLToUse = strings.TrimSpace(opts.BaseURL)
+	}
+	modelToUse := a.model
+	if opts.Model != "" {
+		modelToUse = opts.Model
+	}
+	if apiKeyToUse == "" {
+		return "", fmt.Errorf("OpenAI adapter is not configured: missing API key")
+	}
+
+	type chatMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type chatRequest struct {
+		Model          string        `json:"model"`
+		Messages       []chatMessage `json:"messages"`
+		Temperature    float64       `json:"temperature"`
+		MaxTokens      int           `json:"max_tokens"`
+		ResponseFormat map[string]any `json:"response_format,omitempty"`
+	}
+
+	payload := chatRequest{
+		Model: modelToUse,
+		Messages: []chatMessage{
+			{Role: "system", Content: opts.SystemPrompt},
+			{Role: "user", Content: opts.UserPrompt},
+		},
+		Temperature: a.temperature,
+		MaxTokens:   a.maxTokens,
+	}
+	if opts.JSONMode {
+		payload.ResponseFormat = map[string]any{"type": "json_object"}
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal completion request: %w", err)
+	}
+
+	apiURL := strings.TrimRight(baseURLToUse, "/") + "/chat/completions"
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to build completion request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+apiKeyToUse)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := a.httpClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("completion request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if err != nil {
+		return "", fmt.Errorf("failed to read completion response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("completion API returned status %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var chatResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(respBytes, &chatResp); err != nil {
+		return "", fmt.Errorf("failed to decode completion response: %w", err)
+	}
+	if chatResp.Error != nil {
+		return "", fmt.Errorf("completion API error: %s", chatResp.Error.Message)
+	}
+	if len(chatResp.Choices) == 0 {
+		return "", fmt.Errorf("received empty completion")
+	}
+	return chatResp.Choices[0].Message.Content, nil
+}

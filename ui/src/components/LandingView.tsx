@@ -931,14 +931,14 @@ export const LandingView: React.FC<LandingViewProps> = ({
               {stats.tagStats
                 .filter((t) => t.name.toLowerCase().includes(tagFilter.toLowerCase()))
                 .map((tag) => (
-                  <div key={tag.name} className="bg-white dark:bg-[#0d121f] p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">{tag.name}</span>
-                      <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300">
+                  <div key={tag.name} className="bg-white dark:bg-[#0d121f] p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-2.5 min-w-0">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-2 gap-y-1">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white break-words min-w-0 flex-1 sm:flex-none">{tag.name}</span>
+                      <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                         {tag.count} operations
                       </span>
                     </div>
-                    {tag.description && <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{tag.description}</p>}
+                    {tag.description && <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed break-words">{tag.description}</p>}
                     <div className="flex gap-1.5 pt-1">
                       {Object.entries(tag.methods).map(([m, count]) => (
                         <span key={m} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300">

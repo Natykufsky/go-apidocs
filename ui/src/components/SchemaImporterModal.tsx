@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { load as loadYaml } from 'js-yaml';
 import {
   X,
   Upload,
@@ -119,20 +120,53 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
           );
         }
       } else {
-        // Basic YAML heuristic preview
-        if (!trimmed.includes('openapi:') && !trimmed.includes('swagger:')) {
-          throw new Error('YAML document must include openapi: or swagger: tag');
+        // YAML: parse with js-yaml then run the same validation/extraction
+        // logic as JSON, giving full-fidelity preflight for YAML specs.
+        const obj = loadYaml(trimmed) as any;
+        if (!obj || typeof obj !== 'object') {
+          throw new Error('YAML document did not parse into a specification object');
         }
-        const titleMatch = trimmed.match(/title:\s*["']?([^"'\n]+)/i);
-        const title = titleMatch ? titleMatch[1].trim() : filename || 'Imported YAML API';
+        const openapiVer = obj.openapi || obj.swagger;
+        if (!openapiVer) {
+          throw new Error("Missing 'openapi' or 'swagger' version in YAML specification");
+        }
+        if (!obj.paths || typeof obj.paths !== 'object') {
+          throw new Error("YAML specification must contain a valid 'paths' object");
+        }
+
+        const methods: Record<string, number> = {};
+        const tagSet = new Set<string>();
+        let totalOps = 0;
+
+        for (const p in obj.paths) {
+          const item = obj.paths[p];
+          if (item && typeof item === 'object') {
+            for (const m in item) {
+              const upperM = m.toUpperCase();
+              if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'].includes(upperM)) {
+                totalOps++;
+                methods[upperM] = (methods[upperM] || 0) + 1;
+                const op = item[m];
+                if (op && Array.isArray(op.tags)) {
+                  op.tags.forEach((t: string) => tagSet.add(t));
+                }
+              }
+            }
+          }
+        }
+
+        const title = obj.info?.title || filename || 'Imported YAML API';
+        const version = obj.info?.version || '1.0.0';
+
         setPreflight({
           title,
-          version: '1.0.0',
-          openapiVersion: '3.0.x (YAML)',
-          pathCount: 1,
-          totalOps: 1,
-          methods: { GET: 1 },
-          tags: ['General'],
+          version,
+          description: obj.info?.description,
+          openapiVersion: `${openapiVer} (YAML)`,
+          pathCount: Object.keys(obj.paths).length,
+          totalOps,
+          methods,
+          tags: Array.from(tagSet),
           rawText,
         });
         if (!serviceTitle) setServiceTitle(title);

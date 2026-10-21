@@ -939,6 +939,7 @@ func MountFiber(app *fiber.App, cfg Config) {
 	app.Post("/docs/qa/reports", qaAdaptor(defaultQA.HandleReportsHTTP))
 	app.Delete("/docs/qa/reports", qaAdaptor(defaultQA.HandleReportsHTTP))
 	app.Post("/docs/qa/sequence", qaAdaptor(defaultQA.HandleSequenceHTTP))
+	app.Post("/docs/qa/sequence/ai", qaAdaptor(defaultQA.HandleAISequenceHTTP))
 
 	// Cybersecurity Audit Engine APIs
 	if cfg.EnableSecurityAudit {
@@ -1148,6 +1149,7 @@ func MountChi(r chi.Router, cfg Config) {
 	r.Post("/docs/qa/reports", defaultQA.HandleReportsHTTP)
 	r.Delete("/docs/qa/reports", defaultQA.HandleReportsHTTP)
 	r.Post("/docs/qa/sequence", defaultQA.HandleSequenceHTTP)
+	r.Post("/docs/qa/sequence/ai", defaultQA.HandleAISequenceHTTP)
 
 	// Login & Session Routes
 	r.Get("/docs/login", LoginHandler(cfg, authEnabled))
@@ -1250,6 +1252,7 @@ func MountGin(r gin.IRoutes, cfg Config) {
 	r.POST("/docs/qa/reports", gin.WrapF(defaultQA.HandleReportsHTTP))
 	r.DELETE("/docs/qa/reports", gin.WrapF(defaultQA.HandleReportsHTTP))
 	r.POST("/docs/qa/sequence", gin.WrapF(defaultQA.HandleSequenceHTTP))
+	r.POST("/docs/qa/sequence/ai", gin.WrapF(defaultQA.HandleAISequenceHTTP))
 
 	// Login & Session Routes
 	r.GET("/docs/login", gin.WrapF(LoginHandler(cfg, authEnabled)))
@@ -1324,6 +1327,7 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 	mux.HandleFunc("/docs/qa/execute", defaultQA.HandleExecuteHTTP)
 	mux.HandleFunc("/docs/qa/reports", defaultQA.HandleReportsHTTP)
 	mux.HandleFunc("/docs/qa/sequence", defaultQA.HandleSequenceHTTP)
+	mux.HandleFunc("/docs/qa/sequence/ai", defaultQA.HandleAISequenceHTTP)
 
 	// Live Dynamic Mock API Server (synthesized directly from OpenAPI schemas)
 	mockServer := schema.NewMockServer(defaultFilter)

@@ -24,3 +24,21 @@ type LLMClientPort interface {
 	GenerateTests(ctx context.Context, opts GenerateOptions) (*domain.TestSuite, error)
 }
 
+// CompleteOptions carries a generic single-shot completion request.
+type CompleteOptions struct {
+	SystemPrompt string `json:"system_prompt"`
+	UserPrompt   string `json:"user_prompt"`
+	JSONMode     bool   `json:"json_mode,omitempty"` // request strict-JSON output
+	Provider     string `json:"provider,omitempty"`
+	Model        string `json:"model,omitempty"`
+	BaseURL      string `json:"base_url,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
+}
+
+// Completer is an optional capability some LLM adapters expose: generic
+// single-shot completions beyond structured test synthesis. Callers should
+// type-assert and degrade gracefully when unsupported.
+type Completer interface {
+	Complete(ctx context.Context, opts CompleteOptions) (string, error)
+}
+

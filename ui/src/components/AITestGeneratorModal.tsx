@@ -416,6 +416,62 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   const [showSequencePanel, setShowSequencePanel] = useState(false);
   const [sequenceAnalysis, setSequenceAnalysis] = useState<any>(null);
   const [sequenceLoading, setSequenceLoading] = useState(false);
+  const [sequenceSource, setSequenceSource] = useState<'standards' | 'ai'>('standards');
+  const [sequenceError, setSequenceError] = useState<string | null>(null);
+
+  const fetchSequence = async (mode: 'standards' | 'ai') => {
+    setSequenceLoading(true);
+    setSequenceError(null);
+    setSequenceSource(mode);
+    try {
+      const specRes = await fetch('/docs/swagger.json');
+      const spec = await specRes.json();
+      if (mode === 'ai') {
+        // Derive the endpoint catalog from the spec for the AI workflow request.
+        const endpoints: string[] = [];
+        const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+        Object.entries(spec.paths || {}).forEach(([path, ops]: [string, any]) => {
+          METHODS.forEach((m) => {
+            if (ops[m]) endpoints.push(`${m.toUpperCase()} ${path}`);
+          });
+        });
+        const seqRes = await fetch('/docs/qa/sequence/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoints, spec_json: JSON.stringify(spec) }),
+        });
+        const data = await seqRes.json();
+        if (!seqRes.ok) throw new Error(data.error || 'AI sequencing failed');
+        setSequenceAnalysis({ summary: data.summary, phases: data.phases, steps: data.steps, notes: data.notes, model_used: data.model_used });
+      } else {
+        const seqRes = await fetch('/docs/qa/sequence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(spec),
+        });
+        if (seqRes.ok) setSequenceAnalysis(await seqRes.json());
+      }
+    } catch (e: any) {
+      setSequenceError(e.message || 'Failed to analyze sequence');
+      // Graceful fallback to the deterministic standards analysis.
+      if (mode === 'ai') {
+        try {
+          const specRes = await fetch('/docs/swagger.json');
+          const spec = await specRes.json();
+          const seqRes = await fetch('/docs/qa/sequence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(spec),
+          });
+          if (seqRes.ok) {
+            setSequenceAnalysis(await seqRes.json());
+            setSequenceSource('standards');
+          }
+        } catch {}
+      }
+    }
+    setSequenceLoading(false);
+  };
   // Endpoint whose suite is currently shown in the primary inspection pane.
   const [activeEndpointView, setActiveEndpointView] = useState<string>(endpointKey);
 
@@ -1698,18 +1754,7 @@ ${tasks}
                     onClick={async () => {
                       setShowSequencePanel(!showSequencePanel);
                       if (!sequenceAnalysis && !sequenceLoading) {
-                        setSequenceLoading(true);
-                        try {
-                          const specRes = await fetch('/docs/swagger.json');
-                          const spec = await specRes.json();
-                          const seqRes = await fetch('/docs/qa/sequence', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(spec),
-                          });
-                          if (seqRes.ok) setSequenceAnalysis(await seqRes.json());
-                        } catch {}
-                        setSequenceLoading(false);
+                        await fetchSequence('standards');
                       }
                     }}
                     className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
@@ -1960,13 +2005,57 @@ ${tasks}
                       <ListOrdered className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-900">Recommended Test Sequence</div>
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                        <span>{sequenceSource === 'ai' ? 'AI-Suggested Test Workflow' : 'Recommended Test Sequence'}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          sequenceSource === 'ai'
+                            ? 'bg-indigo-500/20 text-indigo-700 border-indigo-500/30'
+                            : 'bg-sky-500/10 text-sky-700 border-sky-500/20'
+                        }`}>
+                          {sequenceSource === 'ai' ? 'AI Workflow' : 'REST Standards'}
+                        </span>
+                        {sequenceSource === 'ai' && sequenceAnalysis?.model_used && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-600">
+                            {sequenceAnalysis.model_used}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         {sequenceAnalysis?.summary || 'Analyzing the OpenAPI spec for dependency-aware execution order…'}
                       </p>
                     </div>
                   </div>
-                  {sequenceLoading && <div className="text-[11px] text-slate-400 animate-pulse px-1">Analyzing spec…</div>}
+
+                  {/* Mode Toggle */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => fetchSequence('standards')}
+                        disabled={sequenceLoading}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50 ${
+                          sequenceSource === 'standards' ? 'bg-sky-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}>
+                        REST Standards
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fetchSequence('ai')}
+                        disabled={sequenceLoading}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 ${
+                          sequenceSource === 'ai' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}>
+                        <Sparkles className="w-3 h-3" />
+                        AI Workflow
+                      </button>
+                    </div>
+                    {sequenceLoading && <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />}
+                  </div>
+                  {sequenceError && (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      {sequenceError} — showing REST-standards ordering instead.
+                    </div>
+                  )}
                   {sequenceAnalysis?.steps && (
                     <>
                       <div className="flex flex-wrap gap-1.5">
