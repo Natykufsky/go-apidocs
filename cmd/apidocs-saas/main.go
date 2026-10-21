@@ -16,6 +16,7 @@ import (
 	"github.com/Natykufsky/go-apidocs"
 	"github.com/Natykufsky/go-apidocs/internal/auth"
 	"github.com/Natykufsky/go-apidocs/internal/env"
+	"github.com/Natykufsky/go-apidocs/internal/middleware"
 	tenantAdapter "github.com/Natykufsky/go-apidocs/internal/tenant/adapter"
 	tenantMemory "github.com/Natykufsky/go-apidocs/internal/tenant/adapter/memory"
 	tenantUsecase "github.com/Natykufsky/go-apidocs/internal/tenant/usecase"
@@ -222,8 +223,13 @@ func main() {
 	log.Printf("⚡ [SaaS Platform] Server active on http://localhost:%d", *port)
 
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           limitBodySize(mux, 2<<20), // 2 MiB global API body cap
+		Addr: addr,
+		Handler: middleware.Chain(limitBodySize(mux, 2<<20),
+			middleware.SecureHeadersMiddleware,
+			middleware.RecoverMiddleware,
+			middleware.LoggingMiddleware,
+			middleware.RequestIDMiddleware,
+		),
 		ReadTimeout:       15 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -254,11 +260,6 @@ func main() {
 		log.Println("⚡ [SaaS Platform] Server stopped cleanly")
 	}
 }
-
-// maxAPIBodyBytes caps the size of request bodies across the API surface to
-// prevent unbounded-memory DoS. Spec uploads have their own stricter cap in
-// WorkspaceManager (ErrSpecTooLarge).
-const maxAPIBodyBytes int64 = 2 << 20
 
 // limitBodySize wraps the handler chain with an http.MaxBytesReader.
 func limitBodySize(next http.Handler, maxBytes int64) http.Handler {

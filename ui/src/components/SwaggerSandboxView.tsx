@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import SwaggerUI from 'swagger-ui-react';
-import 'swagger-ui-react/swagger-ui.css';
+import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { QABar, QAStats } from './QABar';
 import { QARecord } from './QAReportModal';
 import { StoredCredentials } from './CredentialManagerModal';
 import { Filter, FlaskConical, FileSpreadsheet, KeyRound, CheckCircle2, X, ShieldAlert, Sparkles } from 'lucide-react';
+import { ErrorBoundary, LoadingFallback } from './ErrorBoundary';
+
+// swagger-ui-react weighs ~1MB+ minified; lazy-load it so the initial bundle
+// only pays for the docs shell. React.lazy splits it into its own chunk.
+const SwaggerUI = lazy(() => import('swagger-ui-react'));
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
@@ -483,17 +486,21 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
       {/* QA Stats Bar */}
       {qaMode && <QABar stats={qaStats} />}
 
-      {/* Main Swagger Explorer */}
+      {/* Main Swagger Explorer (lazy-loaded chunk with crash isolation) */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-8 shadow-xs">
-          <SwaggerUI
-            url={specUrl}
-            docExpansion="list"
-            persistAuthorization={true}
-            displayRequestDuration={true}
-            requestInterceptor={handleRequestInterceptor}
-            responseInterceptor={handleResponseInterceptor}
-          />
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingFallback />}>
+              <SwaggerUI
+                url={specUrl}
+                docExpansion="list"
+                persistAuthorization={true}
+                displayRequestDuration={true}
+                requestInterceptor={handleRequestInterceptor}
+                responseInterceptor={handleResponseInterceptor}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
     </div>

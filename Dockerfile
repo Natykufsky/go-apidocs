@@ -17,18 +17,20 @@ RUN go mod download
 COPY . .
 # Copy compiled UI assets from Stage 1 into assets/dist
 COPY --from=ui-builder /app/ui/dist ./assets/dist
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /go-apidocs ./cmd/go-apidocs
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s -buildid=" -o /go-apidocs ./cmd/go-apidocs
 
-# Stage 3: Minimal Production Image
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
+# Stage 3: Distroless production image (no shell, no package manager, non-root)
+FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 
-# Create sandboxed data directory
-RUN mkdir -p /app/apidocs-data /app/docs
+# Distroless static-debian12 ships ca-certificates & tzdata; the binary is
+# fully static (CGO_ENABLED=0) so no libc is required.
 
 # Copy standalone binary
 COPY --from=go-builder /go-apidocs /usr/local/bin/go-apidocs
+
+# Writable sandboxed data directories are created at runtime via volume mounts
+# (docker-compose / k8s) and are owned by uid 65532.
 
 # Expose HTTP port
 EXPOSE 8080
@@ -39,6 +41,9 @@ ENV PORT=8080 \
     QA_STORAGE=/app/docs/qa_tracker.json \
     NVIDIA_MODEL=deepseek-ai/deepseek-v4.1-flash \
     NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+
+# Drop privileges: distroless nonroot runs as uid 65532
+USER 65532:65532
 
 # Default entrypoint
 ENTRYPOINT ["/usr/local/bin/go-apidocs"]

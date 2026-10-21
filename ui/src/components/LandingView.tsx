@@ -42,6 +42,7 @@ import {
   Target,
 } from 'lucide-react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { NavConfig } from './Navbar';
 import { Workspace, APIService } from './WorkspaceSwitcher';
 
@@ -326,7 +327,17 @@ export const LandingView: React.FC<LandingViewProps> = ({
         .replace(/Bearer\s+ey[A-Za-z0-9-_=]+/g, 'Bearer ey••••••••')
         .replace(/AKIA[0-9A-Z]{16}/g, 'AKIA••••••••••••••••');
     }
-    return marked.parse(processed) as string;
+    // Sanitize rendered markdown before injecting via dangerouslySetInnerHTML:
+    // README content and any embedded HTML/scripts are untrusted input.
+    return DOMPurify.sanitize(marked.parse(processed) as string, {
+      ALLOWED_TAGS: [
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li',
+        'blockquote', 'code', 'pre', 'em', 'strong', 'del', 'hr', 'br',
+        'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'span', 'div',
+      ],
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'target', 'rel'],
+      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'],
+    });
   }, [readmeContent, maskConfidential]);
 
   return (
