@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Layers, ChevronDown, Check, Plus, Upload, Box, ShieldCheck, Settings, Lock } from 'lucide-react';
+import { Layers, ChevronDown, Check, Plus, Upload, Box, ShieldCheck, Settings, Lock, Unlock as UnlockIcon } from 'lucide-react';
 
 export interface APIService {
   id: string;
@@ -17,6 +17,8 @@ export interface Workspace {
   icon?: string;
   visibility?: 'public' | 'internal' | 'locked';
   is_locked?: boolean;
+  /** Server-computed: whether the current session may access this workspace (passcode/invite unlock). */
+  is_unlocked?: boolean;
   passcode?: string;
   services: APIService[];
 }
@@ -136,9 +138,22 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                     <span className="truncate">{ws.name}</span>
                   </div>
                   {ws.is_locked && (
-                    <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider">
-                      <Lock className="w-2.5 h-2.5" />
-                      Locked
+                    <span className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
+                      ws.is_unlocked === false
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                    }`}>
+                      {ws.is_unlocked === false ? (
+                        <>
+                          <Lock className="w-2.5 h-2.5" />
+                          Locked
+                        </>
+                      ) : (
+                        <>
+                          <UnlockIcon className="w-2.5 h-2.5" />
+                          Unlocked
+                        </>
+                      )}
                     </span>
                   )}
                 </div>

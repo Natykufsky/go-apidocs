@@ -10,10 +10,12 @@ import (
 	"io"
 	"io/fs"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -1126,7 +1128,7 @@ func MountChi(r chi.Router, cfg Config) {
 
 	// Workspace Management APIs
 	if cfg.EnableWorkspaces {
-		r.Get("/docs/workspaces", WorkspacesListHandler(wm))
+		r.Get("/docs/workspaces", WorkspacesListHandler(cfg, wm))
 	}
 	if cfg.EnableWorkspaceWrites {
 		r.Post("/docs/workspaces", WorkspaceCreateHandler(wm))
@@ -1229,7 +1231,7 @@ func MountGin(r gin.IRoutes, cfg Config) {
 
 	// Workspace Management APIs
 	if cfg.EnableWorkspaces {
-		r.GET("/docs/workspaces", gin.WrapF(WorkspacesListHandler(wm)))
+		r.GET("/docs/workspaces", gin.WrapF(WorkspacesListHandler(cfg, wm)))
 	}
 	if cfg.EnableWorkspaceWrites {
 		r.POST("/docs/workspaces", gin.WrapF(WorkspaceCreateHandler(wm)))
@@ -1386,7 +1388,7 @@ func MountNetHTTP(mux *http.ServeMux, cfg Config) {
 					return
 				}
 			}
-			WorkspacesListHandler(wm)(w, r)
+			WorkspacesListHandler(cfg, wm)(w, r)
 		})
 	}
 	if cfg.EnableWorkspaceWrites {
@@ -1452,6 +1454,14 @@ func SwaggerJSONHandler(cfg Config, wm *WorkspaceManager, defaultFilter *SpecFil
 		svcID := r.URL.Query().Get("svc")
 
 		if wsID != "" && svcID != "" && cfg.EnableWorkspaces && wm != nil {
+			// Tenant isolation: locked workspaces require a session whose token
+			// records this workspace as unlocked (via passcode or invite).
+			if !wm.IsWorkspaceUnlocked(wsID, sessionUnlockedWorkspaces(r, cfg.JWTSecret)) {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusLocked)
+				_, _ = w.Write([]byte(`{"error":"workspace is locked","workspace":"` + wsID + `","unlock":"POST /docs/workspaces/unlock"}`))
+				return
+			}
 			data, err := wm.GetSpecData(wsID, svcID)
 			if err == nil && len(data) > 0 {
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -1464,12 +1474,42 @@ func SwaggerJSONHandler(cfg Config, wm *WorkspaceManager, defaultFilter *SpecFil
 	}
 }
 
-// WorkspacesListHandler returns list of all workspaces.
-func WorkspacesListHandler(wm *WorkspaceManager) http.HandlerFunc {
+// sessionUnlockedWorkspaces extracts the verified unlocked-workspace list from
+// the session cookie. Missing/invalid cookies yield nil (locked until proven).
+func sessionUnlockedWorkspaces(r *http.Request, secret string) []string {
+	c, err := r.Cookie(DocsSessionCookieName)
+	if err != nil || c == nil || c.Value == "" {
+		return nil
+	}
+	if sess, ok := auth.ParseAndVerifySessionToken(c.Value, "", secret); ok && sess != nil {
+		return sess.UnlockedWorkspaces
+	}
+	return nil
+}
+
+// WorkspacesListHandler returns list of all workspaces, annotated with the
+// per-session unlock state (is_unlocked) so the UI restores unlocked
+// workspaces across page reloads without exposing passcodes.
+func WorkspacesListHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setSecurityHeaders(w)
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(wm.ListWorkspaces())
+		unlocked := sessionUnlockedWorkspaces(r, cfg.JWTSecret)
+		workspaces := wm.ListWorkspaces()
+		out := make([]map[string]any, 0, len(workspaces))
+		for _, ws := range workspaces {
+			// Serialize the workspace without the passcode, then annotate.
+			data, err := json.Marshal(ws)
+			if err != nil {
+				continue
+			}
+			var m map[string]any
+			if err := json.Unmarshal(data, &m); err != nil {
+				continue
+			}
+			m["is_unlocked"] = wm.IsWorkspaceUnlocked(ws.ID, unlocked)
+			out = append(out, m)
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	}
 }
 
@@ -1585,6 +1625,14 @@ func WorkspaceImportHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 			svcID = sanitizeID(parsed.Title)
 		}
 
+		// Tenant isolation: cannot import into a locked workspace without unlock.
+		if !wm.IsWorkspaceUnlocked(wsID, sessionUnlockedWorkspaces(r, cfg.JWTSecret)) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusLocked)
+			_, _ = w.Write([]byte(`{"error":"workspace is locked","workspace":"` + wsID + `","unlock":"POST /docs/workspaces/unlock"}`))
+			return
+		}
+
 		svc := APIService{
 			ID:          svcID,
 			Title:       parsed.Title,
@@ -1612,6 +1660,8 @@ func WorkspaceImportHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 }
 
 // WorkspaceUnlockHandler handles unlocking a PIN/passcode-locked workspace.
+// Includes per-IP+workspace brute-force protection: 5 failed attempts triggers
+// a 15-minute cooldown for that combination.
 func WorkspaceUnlockHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setSecurityHeaders(w)
@@ -1623,12 +1673,22 @@ func WorkspaceUnlockHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 			WorkspaceID string `json:"workspace_id"`
 			Passcode    string `json:"passcode"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
 			http.Error(w, "invalid payload", http.StatusBadRequest)
 			return
 		}
 		if req.WorkspaceID == "" {
 			http.Error(w, "workspace_id is required", http.StatusBadRequest)
+			return
+		}
+
+		// Brute-force guard: cap attempts per client IP + workspace.
+		clientIP := clientIPFrom(r)
+		if !unlockAttemptLimiter.Allow(clientIP + ":" + req.WorkspaceID) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set("Retry-After", "900")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"success":false,"message":"Too many unlock attempts. Try again in 15 minutes."}`))
 			return
 		}
 
@@ -1638,11 +1698,15 @@ func WorkspaceUnlockHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 			return
 		}
 		if !unlocked {
+			unlockAttemptLimiter.Fail(clientIP + ":" + req.WorkspaceID)
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "message": "Invalid passcode"})
 			return
 		}
+
+		// Success: reset the attempt counter for this client+workspace.
+		unlockAttemptLimiter.Reset(clientIP + ":" + req.WorkspaceID)
 
 		// Update session cookie with newly unlocked workspace
 		var unlockedList []string
@@ -1795,6 +1859,14 @@ func SpecRawHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 			svcID = "default"
 		}
 
+		// Tenant isolation: locked workspaces require a verified unlocked session.
+		if wm != nil && !wm.IsWorkspaceUnlocked(wsID, sessionUnlockedWorkspaces(r, cfg.JWTSecret)) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusLocked)
+			_, _ = w.Write([]byte(`{"error":"workspace is locked","workspace":"` + wsID + `","unlock":"POST /docs/workspaces/unlock"}`))
+			return
+		}
+
 		var specBytes []byte
 		var err error
 		if wm != nil {
@@ -1844,6 +1916,14 @@ func SpecSaveHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 		}
 		if strings.TrimSpace(req.Content) == "" {
 			http.Error(w, "spec content cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		// Tenant isolation: cannot edit specs inside a locked workspace.
+		if wm != nil && !wm.IsWorkspaceUnlocked(req.WorkspaceID, sessionUnlockedWorkspaces(r, cfg.JWTSecret)) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusLocked)
+			_, _ = w.Write([]byte(`{"error":"workspace is locked","workspace":"` + req.WorkspaceID + `","unlock":"POST /docs/workspaces/unlock"}`))
 			return
 		}
 
@@ -2267,4 +2347,104 @@ func NewAssetFileServer(embedded *embed.FS) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, string(data))
 	})
+}
+
+// ---------- Unlock brute-force protection ----------
+
+// unlockAttempt is one client+workspace attempt record.
+type unlockAttempt struct {
+	failures  int
+	blockedUntil time.Time
+}
+
+// unlockLimiter caps failed unlock attempts: 5 consecutive failures trigger a
+// 15-minute cooldown per client IP + workspace combination. Success resets.
+type unlockLimiter struct {
+	mu       sync.Mutex
+	attempts map[string]*unlockAttempt
+	maxFail  int
+	cooloff  time.Duration
+}
+
+var unlockAttemptLimiter = &unlockLimiter{
+	attempts: make(map[string]*unlockAttempt),
+	maxFail:  5,
+	cooloff:  15 * time.Minute,
+}
+
+// Allow reports whether an attempt is permitted and records a new attempt slot.
+func (l *unlockLimiter) Allow(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	a, ok := l.attempts[key]
+	if !ok {
+		return true
+	}
+	if a.blockedUntil.After(time.Now()) {
+		return false
+	}
+	return true
+}
+
+// Fail records a failed attempt; after maxFail consecutive failures the key is
+// blocked for the cooloff duration.
+func (l *unlockLimiter) Fail(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	a, ok := l.attempts[key]
+	if !ok {
+		a = &unlockAttempt{}
+		l.attempts[key] = a
+	}
+	a.failures++
+	if a.failures >= l.maxFail {
+		a.blockedUntil = time.Now().Add(l.cooloff)
+		a.failures = 0 // reset count; the block window does the throttling
+	}
+}
+
+// Reset clears the failure count after a successful unlock.
+func (l *unlockLimiter) Reset(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.attempts, key)
+}
+
+// periodicEvict bounds memory by dropping idle entries; called opportunistically.
+func (l *unlockLimiter) periodicEvict() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for k, a := range l.attempts {
+		if a.blockedUntil.Before(time.Now()) && a.failures == 0 {
+			delete(l.attempts, k)
+		}
+	}
+}
+
+// clientIPFrom extracts the best-guess client IP, preferring proxy headers.
+func clientIPFrom(r *http.Request) string {
+	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+		if idx := strings.Index(xf, ","); idx > 0 {
+			return strings.TrimSpace(xf[:idx])
+		}
+		return strings.TrimSpace(xf)
+	}
+	if xr := r.Header.Get("X-Real-IP"); xr != "" {
+		return strings.TrimSpace(xr)
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+func init() {
+	// Opportunistic memory bound for the attempt map.
+	go func() {
+		t := time.NewTicker(10 * time.Minute)
+		defer t.Stop()
+		for range t.C {
+			unlockAttemptLimiter.periodicEvict()
+		}
+	}()
 }

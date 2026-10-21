@@ -251,7 +251,10 @@ export const App: React.FC = () => {
   // Handle Workspace & Service Selection
   const handleSelectService = (wsId: string, svcId: string) => {
     const targetWs = workspaces.find((w) => w.id === wsId);
-    if (targetWs && targetWs.is_locked) {
+    // Server-authoritative lock check: the backend annotates each workspace
+    // with is_unlocked based on the signed session cookie, so lock state
+    // survives reloads and cannot be bypassed client-side.
+    if (targetWs && targetWs.is_locked && targetWs.is_unlocked === false) {
       setUnlockTargetWs({ id: wsId, name: targetWs.name });
       setIsUnlockModalOpen(true);
       return;

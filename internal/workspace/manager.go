@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/Natykufsky/go-apidocs/internal/security"
 )
@@ -534,26 +537,68 @@ func (wm *WorkspaceManager) UpdateWorkspace(ws Workspace) error {
 	return nil
 }
 
-// UnlockWorkspace verifies the passcode for a locked workspace.
+// UnlockWorkspace verifies the passcode for a locked workspace using
+// constant-time comparison, with optional bcrypt hash support. When the
+// workspace stores a bcrypt hash (prefix $2a$/$2b$/$2y$), bcrypt comparison
+// is used; plain-text passcodes are compared in constant time.
 func (wm *WorkspaceManager) UnlockWorkspace(wsID, passcode string) (bool, error) {
 	wm.mu.RLock()
-	defer wm.mu.RUnlock()
-
 	ws, ok := wm.workspaces[wsID]
 	if !ok {
+		wm.mu.RUnlock()
 		return false, ErrWorkspaceNotFound
 	}
+	stored := ws.Passcode
+	locked := ws.Visibility == "locked" || stored != ""
+	wm.mu.RUnlock()
 
-	if ws.Visibility != "locked" && ws.Passcode == "" {
-		return true, nil // Not locked
-	}
-
-	if ws.Passcode == "" {
+	if !locked {
 		return true, nil
 	}
+	if stored == "" {
+		return true, nil
+	}
+	return wm.verifyPasscode(stored, passcode), nil
+}
 
-	valid := strings.TrimSpace(ws.Passcode) == strings.TrimSpace(passcode)
-	return valid, nil
+// verifyPasscode compares a stored secret against a candidate: bcrypt hash if
+// the stored value looks like a bcrypt digest, otherwise constant-time plain
+// comparison. Always consumes comparable time to blunt timing oracles.
+func (wm *WorkspaceManager) verifyPasscode(stored, candidate string) bool {
+	candidate = strings.TrimSpace(candidate)
+	if isBcryptHash(stored) {
+		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(candidate)) == nil
+	}
+	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(stored)), []byte(candidate)) == 1
+}
+
+// isBcryptHash detects bcrypt digests ($2a$, $2b$, $2y$ prefixes).
+func isBcryptHash(s string) bool {
+	return len(s) == 60 && (strings.HasPrefix(s, "$2a$") || strings.HasPrefix(s, "$2b$") || strings.HasPrefix(s, "$2y$"))
+}
+
+// IsWorkspaceUnlocked reports whether the given unlocked-workspace list
+// (from a verified session token) grants access to wsID. Unlocked workspaces
+// and workspaces without a passcode are always accessible.
+func (wm *WorkspaceManager) IsWorkspaceUnlocked(wsID string, unlockedList []string) bool {
+	wm.mu.RLock()
+	ws, ok := wm.workspaces[wsID]
+	if !ok {
+		wm.mu.RUnlock()
+		return false
+	}
+	locked := ws.Visibility == "locked" || ws.Passcode != ""
+	wm.mu.RUnlock()
+
+	if !locked {
+		return true
+	}
+	for _, id := range unlockedList {
+		if id == wsID {
+			return true
+		}
+	}
+	return false
 }
 
 // DeleteWorkspace removes a workspace by ID.
