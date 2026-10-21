@@ -744,6 +744,7 @@ export const App: React.FC = () => {
         isOpen={!!aiTestEndpoint}
         onClose={() => setAiTestEndpoint(null)}
         endpointKey={aiTestEndpoint || ''}
+        endpointsList={allEndpointsList.length > 0 ? allEndpointsList : Object.keys(qaData)}
         onLoadIntoSandbox={(tc) => {
           // If body exists, store temporary sandbox preload payload
           if (tc.request_body) {

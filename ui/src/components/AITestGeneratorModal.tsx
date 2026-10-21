@@ -67,6 +67,8 @@ interface AITestGeneratorModalProps {
   endpointKey: string;
   initialSuite?: AITestSuite;
   onLoadIntoSandbox?: (testCase: AITestCase) => void;
+  /** Full endpoint catalog (e.g. "GET /api/v1/pets") enabling multi-endpoint batch generation & execution. */
+  endpointsList?: string[];
 }
 
 // Enhanced list of supported AI Inference Engines & Models
@@ -338,6 +340,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   endpointKey,
   initialSuite,
   onLoadIntoSandbox,
+  endpointsList = [],
 }) => {
   const [suite, setSuite] = useState<AITestSuite | null>(initialSuite || null);
   const [selectedProvider, setSelectedProvider] = useState<string>('nvidia');
@@ -389,6 +392,21 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportFormat, setExportFormat] = useState<'k6' | 'locust'>('k6');
   const [exportCopied, setExportCopied] = useState(false);
+
+  // Test-case selection: run only checked scenarios instead of the whole suite.
+  const [selectedTestIds, setSelectedTestIds] = useState<Set<string>>(new Set());
+
+  // Multi-endpoint batch mode: pick endpoints from the catalog, then generate
+  // and optionally execute suites for every checked endpoint in one action.
+  const [targetEndpoints, setTargetEndpoints] = useState<Set<string>>(new Set([endpointKey]));
+  const [showEndpointPicker, setShowEndpointPicker] = useState(false);
+  const [batchSuites, setBatchSuites] = useState<Record<string, AITestSuite>>({});
+  const [batchResults, setBatchResults] = useState<Record<string, Record<string, TestExecutionResult>>>({});
+  const [batchProgress, setBatchProgress] = useState<{ current: string; done: number; total: number } | null>(null);
+  const [batchAutoRun, setBatchAutoRun] = useState(true);
+  const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
+  // Endpoint whose suite is currently shown in the primary inspection pane.
+  const [activeEndpointView, setActiveEndpointView] = useState<string>(endpointKey);
 
   const activeProvider = AI_PROVIDERS.find((p) => p.id === selectedProvider) || AI_PROVIDERS[0];
 
@@ -577,6 +595,265 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
         });
       }, 500);
     } catch {}
+  };
+
+  const handleToggleTestSelected = (id: string) => {
+    setSelectedTestIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAllTests = () => {
+    if (!suite) return;
+    const allIds = filteredTests.map((tc) => tc.id);
+    const allSelected = allIds.length > 0 && allIds.every((id) => selectedTestIds.has(id));
+    setSelectedTestIds((prev) => {
+      const next = new Set(prev);
+      allIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  };
+
+  // Run only the checked test cases (falls back to the full suite if none checked).
+  const handleRunSelectedTests = async () => {
+    if (!suite?.test_cases?.length) return;
+    const targets = suite.test_cases.filter((tc) => selectedTestIds.has(tc.id));
+    const casesToRun = targets.length > 0 ? targets : suite.test_cases;
+    setRunningTests(true);
+    for (const tc of casesToRun) {
+      await handleRunSingleTest(tc);
+    }
+    setRunningTests(false);
+
+    const total = casesToRun.length;
+    let passed = 0;
+    let failed = 0;
+    const latencies: number[] = [];
+    casesToRun.forEach((tc) => {
+      const res = executionResults[tc.id];
+      if (res?.status === 'passed') passed++;
+      else if (res?.status === 'failed') failed++;
+      if (res?.durationMs) latencies.push(res.durationMs);
+    });
+    const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+    const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+    const scope = targets.length > 0 ? `selected subset (${targets.length}/${suite.test_cases.length} cases)` : 'full suite';
+    const overallStatus = passed === total && total > 0 ? 'passed' : failed > 0 ? 'failed' : 'retest';
+
+    try {
+      await fetch('/docs/qa/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint_key: endpointKey,
+          status: overallStatus,
+          tester: `AI QA Runner (${suite.model_used || selectedProvider})`,
+          comment: `AI Test Run [${scope}]: ${passed}/${total} passed (${passRate}%).`,
+          execution_summary: {
+            total_tests: total,
+            passed,
+            failed,
+            pass_rate: passRate,
+            avg_latency_ms: avgLatency,
+            run_at: new Date().toISOString(),
+          },
+        }),
+      });
+    } catch {}
+  };
+
+  // ---------- Report persistence ----------
+
+  const buildReportPayload = () => {
+    const results = suite?.test_cases.map((tc) => ({
+      id: tc.id,
+      name: tc.name,
+      category: tc.category,
+      method: tc.method,
+      path: tc.path,
+      expected_status: tc.expected_status,
+      selected: selectedTestIds.has(tc.id),
+      result: executionResults[tc.id] || null,
+    })) || [];
+    const passed = results.filter((r) => r.result?.status === 'passed').length;
+    const failed = results.filter((r) => r.result?.status === 'failed').length;
+    return {
+      report_version: 1,
+      generated_at: new Date().toISOString(),
+      endpoint_key: endpointKey,
+      provider: selectedProvider,
+      model: suite?.model_used || selectedModel,
+      suite_summary: suite?.summary || '',
+      totals: { total: results.length, passed, failed },
+      test_cases: results,
+    };
+  };
+
+  const buildMarkdownReport = (): string => {
+    const p = buildReportPayload();
+    const lines: string[] = [
+      `# AI Test Execution Report`,
+      ``,
+      `- **Endpoint:** ${p.endpoint_key}`,
+      `- **Provider / Model:** ${p.provider} (${p.model})`,
+      `- **Generated:** ${p.generated_at}`,
+      `- **Result:** ${p.totals.passed} passed / ${p.totals.failed} failed of ${p.totals.total}`,
+      ``,
+      p.suite_summary ? `> ${p.suite_summary}` : '',
+      ``,
+      `| # | Test | Category | Expected | Actual | Status | Duration |`,
+      `|---|------|----------|----------|--------|--------|----------|`,
+    ];
+    p.test_cases.forEach((tc, i) => {
+      const status = tc.result?.status || 'not run';
+      const actual = tc.result?.actualStatus ?? '-';
+      const dur = tc.result?.durationMs != null ? `${tc.result.durationMs}ms` : '-';
+      const icon = status === 'passed' ? '✅' : status === 'failed' ? '❌' : '⏭️';
+      lines.push(`| ${i + 1} | ${tc.name} | ${tc.category} | ${tc.expected_status} | ${actual} | ${icon} ${status} | ${dur} |`);
+    });
+    return lines.join('\n');
+  };
+
+  const downloadFile = (filename: string, content: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const safeFileStamp = () => endpointKey.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 60);
+
+  const handleSaveReport = (format: 'json' | 'markdown') => {
+    if (format === 'json') {
+      downloadFile(`ai-test-report-${safeFileStamp()}.json`, JSON.stringify(buildReportPayload(), null, 2), 'application/json');
+    } else {
+      downloadFile(`ai-test-report-${safeFileStamp()}.md`, buildMarkdownReport(), 'text/markdown');
+    }
+    setReportSavedAt(new Date().toISOString());
+  };
+
+  // ---------- Multi-endpoint batch generation & execution ----------
+
+  const handleToggleTargetEndpoint = (ep: string) => {
+    setTargetEndpoints((prev) => {
+      const next = new Set(prev);
+      if (next.has(ep)) next.delete(ep);
+      else next.add(ep);
+      return next;
+    });
+  };
+
+  const handleRunBatch = async () => {
+    const targets = endpointsList.filter((ep) => targetEndpoints.has(ep));
+    if (targets.length === 0) return;
+    setBatchProgress({ current: targets[0], done: 0, total: targets.length });
+
+    const suites: Record<string, AITestSuite> = {};
+    const results: Record<string, Record<string, TestExecutionResult>> = {};
+
+    for (let i = 0; i < targets.length; i++) {
+      const ep = targets[i];
+      setBatchProgress({ current: ep, done: i, total: targets.length });
+      try {
+        const res = await fetch('/docs/qa/ai-generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({
+            provider: selectedProvider,
+            model: selectedModel,
+            endpoint_key: ep,
+            custom_prompt: customPrompt,
+            api_key: providerKeys[selectedProvider] || '',
+            base_url: customBaseUrls[selectedProvider] || '',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'generation failed');
+        const genSuite: AITestSuite = data.suite;
+        suites[ep] = genSuite;
+
+        if (batchAutoRun && genSuite?.test_cases?.length > 0) {
+          const epResults: Record<string, TestExecutionResult> = {};
+          for (const tc of genSuite.test_cases) {
+            const start = performance.now();
+            let status: TestExecutionResult['status'] = 'failed';
+            let actual: number | undefined;
+            try {
+              let url = tc.path;
+              if (tc.query_params && Object.keys(tc.query_params).length > 0) {
+                url += (url.includes('?') ? '&' : '?') + new URLSearchParams(tc.query_params).toString();
+              }
+              const opts: RequestInit = { method: tc.method || 'GET', headers: { 'Content-Type': 'application/json', ...(tc.headers || {}) } };
+              if (['POST', 'PUT', 'PATCH'].includes((tc.method || 'GET').toUpperCase()) && tc.request_body) {
+                opts.body = typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
+              }
+              const resp = await fetch(url, opts);
+              actual = resp.status;
+              status = resp.status === tc.expected_status ? 'passed' : 'failed';
+            } catch (e: any) {
+              status = 'failed';
+            }
+            epResults[tc.id] = {
+              testId: tc.id,
+              status,
+              actualStatus: actual,
+              durationMs: Math.round(performance.now() - start),
+              assertionsPassed: status === 'passed' ? (tc.assertions?.length || 1) : 0,
+              assertionsTotal: tc.assertions?.length || 1,
+              errorMessage: status === 'failed' && actual != null ? `Expected ${tc.expected_status}, received ${actual}` : 'Network invocation failed',
+            };
+          }
+          results[ep] = epResults;
+
+          // Persist per-endpoint QA summary for the batch run.
+          const passed = Object.values(epResults).filter((r) => r.status === 'passed').length;
+          const total = genSuite.test_cases.length;
+          try {
+            await fetch('/docs/qa/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                endpoint_key: ep,
+                status: passed === total ? 'passed' : 'failed',
+                tester: `AI Batch Runner (${selectedProvider})`,
+                comment: `Batch AI run: ${passed}/${total} passed.`,
+                execution_summary: {
+                  total_tests: total,
+                  passed,
+                  failed: total - passed,
+                  pass_rate: total > 0 ? Math.round((passed / total) * 100) : 0,
+                  avg_latency_ms: 0,
+                  run_at: new Date().toISOString(),
+                },
+              }),
+            });
+          } catch {}
+        }
+      } catch (e: any) {
+        // Record the failure but continue the batch.
+        suites[ep] = { endpoint_key: ep, summary: `Generation failed: ${e.message}`, model_used: selectedModel, generated_at: new Date().toISOString(), test_cases: [] };
+      }
+    }
+
+    setBatchSuites(suites);
+    setBatchResults(results);
+    setBatchProgress({ current: '', done: targets.length, total: targets.length });
+    // Point the primary pane at the last successful suite for inspection.
+    const lastEp = targets.reverse().find((ep) => suites[ep]?.test_cases?.length > 0);
+    if (lastEp) {
+      setActiveEndpointView(lastEp);
+      setSuite(suites[lastEp]);
+      setSelectedTestCase(suites[lastEp].test_cases[0] || null);
+      setExecutionResults(results[lastEp] || {});
+    }
   };
 
   // High-Throughput Concurrent Burst Stress Engine
@@ -1102,6 +1379,165 @@ ${tasks}
                 </div>
               </div>
             )}
+
+            {/* Multi-Endpoint Batch Generation & Execution */}
+            {endpointsList.length > 0 && (
+              <div className="pt-1 border-t border-slate-100 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                        <span>Multi-Endpoint Batch Runner</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-white">
+                          {targetEndpoints.size} selected
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Generate (and optionally execute) AI test suites for multiple checked endpoints in one pass.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                        checked={batchAutoRun}
+                        onChange={(e) => setBatchAutoRun(e.target.checked)}
+                      />
+                      <span>Execute after generating</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowEndpointPicker(!showEndpointPicker)}
+                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Choose Endpoints</span>
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showEndpointPicker ? 'rotate-180' : ''}`} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRunBatch}
+                      disabled={batchProgress !== null && batchProgress.done < batchProgress.total}
+                      className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold shadow-md flex items-center gap-2 cursor-pointer whitespace-nowrap"
+                    >
+                      {batchProgress && batchProgress.done < batchProgress.total ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Batch {batchProgress.done + 1}/{batchProgress.total}…</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5 fill-white" />
+                          <span>Run Batch ({targetEndpoints.size})</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Endpoint Picker Checklist */}
+                {showEndpointPicker && (
+                  <div className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Checked endpoints will be included in the batch run
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setTargetEndpoints(new Set(endpointsList))}
+                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTargetEndpoints(new Set())}
+                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                      {endpointsList.map((ep) => (
+                        <label
+                          key={ep}
+                          className="flex items-center gap-2 p-2 rounded-lg border border-slate-100 hover:bg-slate-50 cursor-pointer select-none"
+                        >
+                          <input
+                            type="checkbox"
+                            className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                            checked={targetEndpoints.has(ep)}
+                            onChange={() => handleToggleTargetEndpoint(ep)}
+                          />
+                          <span className="text-[11px] font-mono text-slate-700 truncate" title={ep}>{ep}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Batch Results HUD */}
+                {batchProgress && batchProgress.done >= batchProgress.total && Object.keys(batchSuites).length > 0 && (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in duration-150">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Batch results — click an endpoint to load its suite into the inspector
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(batchSuites).map(([ep, s]) => {
+                        const res = batchResults[ep] || {};
+                        const passed = Object.values(res).filter((r) => r.status === 'passed').length;
+                        const total = s.test_cases.length;
+                        const ok = total > 0 && passed === total;
+                        return (
+                          <button
+                            key={ep}
+                            type="button"
+                            onClick={() => {
+                              setActiveEndpointView(ep);
+                              setSuite(s);
+                              setSelectedTestCase(s.test_cases[0] || null);
+                              setExecutionResults(res);
+                            }}
+                            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-bold font-mono border cursor-pointer transition-all ${
+                              ok
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : total === 0
+                                ? 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                            }`}
+                            title={`${ep}: ${passed}/${total} passed`}
+                          >
+                            {ok ? '✅' : total === 0 ? '⚠️' : '❌'} {ep} {total > 0 ? `(${passed}/${total})` : '(gen failed)'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => downloadFile(
+                          `ai-batch-report-${new Date().toISOString().slice(0, 10)}.json`,
+                          JSON.stringify({ generated_at: new Date().toISOString(), provider: selectedProvider, model: selectedModel, endpoints: batchSuites, results: batchResults }, null, 2),
+                          'application/json'
+                        )}
+                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Download className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Save Batch Report (JSON)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Test Cases Explorer & Execution Runner */}
@@ -1118,6 +1554,27 @@ ${tasks}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  {/* Save execution report */}
+                  <div className="flex items-center rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveReport('markdown')}
+                      className="px-3 py-2.5 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border-r border-slate-200"
+                      title="Download execution report as Markdown"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Save Report</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveReport('json')}
+                      className="px-2.5 py-2.5 hover:bg-slate-50 text-slate-500 text-[10px] font-bold font-mono transition-all cursor-pointer"
+                      title="Download execution report as JSON"
+                    >
+                      JSON
+                    </button>
+                  </div>
+
                   {/* Export Load Test Script Button */}
                   <button
                     type="button"
@@ -1143,11 +1600,12 @@ ${tasks}
                     <span>Concurrency & Stress</span>
                   </button>
 
-                  {/* Standard Sequential Run All */}
+                  {/* Standard Sequential Run All + Run Selected */}
                   <button
-                    onClick={handleRunAllTests}
+                    onClick={handleRunSelectedTests}
                     disabled={runningTests || runningStress}
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                    title={selectedTestIds.size > 0 ? `Run ${selectedTestIds.size} checked test case(s)` : 'Run full suite (none checked)'}
                   >
                     {runningTests ? (
                       <>
@@ -1157,7 +1615,7 @@ ${tasks}
                     ) : (
                       <>
                         <Play className="w-4 h-4 fill-white" />
-                        <span>Run All Tests Live</span>
+                        <span>{selectedTestIds.size > 0 ? `Run Selected (${selectedTestIds.size})` : 'Run All Tests Live'}</span>
                       </>
                     )}
                   </button>
@@ -1372,8 +1830,19 @@ ${tasks}
                 </div>
               )}
 
-              {/* Category Filter Chips */}
+              {/* Category Filter Chips + Select-all toggle */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {suite && (
+                  <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white cursor-pointer whitespace-nowrap select-none hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                      checked={filteredTests.length > 0 && filteredTests.every((tc) => selectedTestIds.has(tc.id))}
+                      onChange={handleSelectAllTests}
+                    />
+                    <span>Select all</span>
+                  </label>
+                )}
                 {categories.map((cat) => (
                   <button
                     key={cat}
@@ -1396,6 +1865,7 @@ ${tasks}
                   {filteredTests.map((tc) => {
                     const isSelected = selectedTestCase?.id === tc.id;
                     const runRes = executionResults[tc.id];
+                    const isChecked = selectedTestIds.has(tc.id);
 
                     return (
                       <div
@@ -1408,6 +1878,18 @@ ${tasks}
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <label
+                            className="flex items-center gap-2 cursor-pointer select-none"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                              checked={isChecked}
+                              onChange={() => handleToggleTestSelected(tc.id)}
+                              title="Include this test case in 'Run Selected'"
+                            />
+                          </label>
                           <span
                             className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getCategoryBadgeClass(
                               tc.category
