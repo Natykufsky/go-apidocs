@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Natykufsky/go-apidocs/internal/core/domain"
@@ -20,12 +21,19 @@ const TenantContextKey contextKey = "apidocs_saas_tenant"
 
 // Service provides tenant lifecycle and SaaS quota checks.
 type Service struct {
-	repo tenantPort.TenantRepository
+	repo  tenantPort.TenantRepository
+	dedup EventDedup
 }
 
-// NewService instantiates a SaaS service.
+// NewService instantiates a SaaS service. An optional EventDedup can be set via
+// SetEventDedup for idempotent billing-webhook processing (recommended in production).
 func NewService(repo tenantPort.TenantRepository) *Service {
 	return &Service{repo: repo}
+}
+
+// SetEventDedup enables idempotent billing-webhook processing.
+func (s *Service) SetEventDedup(dedup EventDedup) {
+	s.dedup = dedup
 }
 
 // RegisterTenantRequest represents onboarding input payload.
@@ -161,10 +169,95 @@ func (s *Service) UpdateTenantTheme(ctx context.Context, tenantID domain.TenantI
 	return tenant, nil
 }
 
+// EventDedup remembers processed billing event IDs so Stripe retries are
+// idempotent. Interface kept at the usecase boundary so a persistent (DB)
+// implementation can replace the in-memory one without touching handlers.
+type EventDedup interface {
+	// Seen reports whether the event ID was already processed.
+	Seen(ctx context.Context, eventID string) (bool, error)
+	// Mark records an event ID as processed.
+	Mark(ctx context.Context, eventID string) error
+}
+
+// InMemoryEventDedup is a bounded, thread-safe EventDedup with TTL expiry.
+type InMemoryEventDedup struct {
+	mu      sync.Mutex
+	entries map[string]time.Time
+	ttl     time.Duration
+	maxSize int
+}
+
+// NewInMemoryEventDedup creates a dedup store; entries expire after ttl and the
+// store evicts oldest entries once maxSize is reached.
+func NewInMemoryEventDedup(ttl time.Duration, maxSize int) *InMemoryEventDedup {
+	if ttl <= 0 {
+		ttl = 24 * time.Hour // Stripe retries within 72h max; 24h is a safe window
+	}
+	if maxSize <= 0 {
+		maxSize = 10000
+	}
+	return &InMemoryEventDedup{
+		entries: make(map[string]time.Time),
+		ttl:     ttl,
+		maxSize: maxSize,
+	}
+}
+
+func (d *InMemoryEventDedup) Seen(_ context.Context, eventID string) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.evictExpiredLocked()
+	_, exists := d.entries[eventID]
+	return exists, nil
+}
+
+func (d *InMemoryEventDedup) Mark(_ context.Context, eventID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.evictExpiredLocked()
+	if len(d.entries) >= d.maxSize {
+		// Evict the oldest entry to keep memory bounded.
+		var oldestID string
+		var oldest time.Time
+		for id, ts := range d.entries {
+			if oldestID == "" || ts.Before(oldest) {
+				oldestID, oldest = id, ts
+			}
+		}
+		if oldestID != "" {
+			delete(d.entries, oldestID)
+		}
+	}
+	d.entries[eventID] = time.Now()
+	return nil
+}
+
+func (d *InMemoryEventDedup) evictExpiredLocked() {
+	cutoff := time.Now().Add(-d.ttl)
+	for id, ts := range d.entries {
+		if ts.Before(cutoff) {
+			delete(d.entries, id)
+		}
+	}
+}
+
 // ApplyBillingEvent updates tenant plan and status from a processed billing webhook.
+// Duplicate event IDs (Stripe retries) are detected and skipped, making the
+// handler idempotent.
 func (s *Service) ApplyBillingEvent(ctx context.Context, event *tenantPort.WebhookEvent) error {
 	if event == nil || event.TenantID == "" {
 		return fmt.Errorf("invalid billing event: missing tenant ID")
+	}
+
+	// Idempotency: skip events already applied (Stripe retries the same event ID).
+	if s.dedup != nil && event.EventID != "" {
+		seen, err := s.dedup.Seen(ctx, event.EventID)
+		if err != nil {
+			return fmt.Errorf("billing dedup check failed: %w", err)
+		}
+		if seen {
+			return nil
+		}
 	}
 
 	tenant, err := s.repo.GetByID(ctx, event.TenantID)
@@ -178,7 +271,16 @@ func (s *Service) ApplyBillingEvent(ctx context.Context, event *tenantPort.Webho
 	tenant.Limits = tenantDomain.DefaultLimitsForPlan(event.Plan)
 	tenant.UpdatedAt = time.Now().UTC()
 
-	return s.repo.Save(ctx, tenant)
+	if err := s.repo.Save(ctx, tenant); err != nil {
+		return err
+	}
+
+	if s.dedup != nil && event.EventID != "" {
+		if err := s.dedup.Mark(ctx, event.EventID); err != nil {
+			return fmt.Errorf("billing dedup mark failed: %w", err)
+		}
+	}
+	return nil
 }
 
 // Middleware returns an HTTP middleware that extracts and sets Tenant in request context.
@@ -193,4 +295,3 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
-

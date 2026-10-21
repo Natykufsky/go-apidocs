@@ -146,12 +146,17 @@ type WorkspaceManager struct {
 
 // simpleRateLimiter provides basic token bucket rate limiting per principal or IP.
 type simpleRateLimiter struct {
-	mu      sync.Mutex
-	enabled bool
-	rps     float64
-	burst   int
-	buckets map[string]*bucket
+	mu        sync.Mutex
+	enabled   bool
+	rps       float64
+	burst     int
+	buckets   map[string]*bucket
+	idleLimit time.Duration // buckets idle longer than this are evicted
 }
+
+// defaultBucketIdleLimit bounds memory: an attacker cycling spoofed keys
+// cannot grow the bucket map without limit.
+const defaultBucketIdleLimit = 10 * time.Minute
 
 type bucket struct {
 	tokens     float64
@@ -171,10 +176,11 @@ func newSimpleRateLimiter(cfg RateLimitConfig) *simpleRateLimiter {
 		burst = 20
 	}
 	return &simpleRateLimiter{
-		enabled: true,
-		rps:     rps,
-		burst:   burst,
-		buckets: make(map[string]*bucket),
+		enabled:   true,
+		rps:       rps,
+		burst:     burst,
+		buckets:   make(map[string]*bucket),
+		idleLimit: defaultBucketIdleLimit,
 	}
 }
 
@@ -186,6 +192,8 @@ func (rl *simpleRateLimiter) Allow(key string) bool {
 	defer rl.mu.Unlock()
 
 	now := time.Now()
+	rl.evictIdleLocked(now)
+
 	b, exists := rl.buckets[key]
 	if !exists {
 		rl.buckets[key] = &bucket{
@@ -207,6 +215,20 @@ func (rl *simpleRateLimiter) Allow(key string) bool {
 		return true
 	}
 	return false
+}
+
+// evictIdleLocked removes buckets whose last activity is older than the idle
+// limit. Must be called with rl.mu held.
+func (rl *simpleRateLimiter) evictIdleLocked(now time.Time) {
+	if len(rl.buckets) == 0 {
+		return
+	}
+	cutoff := now.Add(-rl.idleLimit)
+	for k, b := range rl.buckets {
+		if b.lastUpdate.Before(cutoff) {
+			delete(rl.buckets, k)
+		}
+	}
 }
 
 // NewWorkspaceManager creates a WorkspaceManager with strict security controls.

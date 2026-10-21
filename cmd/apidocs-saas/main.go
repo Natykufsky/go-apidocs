@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/Natykufsky/go-apidocs"
@@ -25,9 +28,10 @@ func main() {
 	specFile := flag.String("spec", "./docs/swagger.json", "Default fallback OpenAPI specification file")
 	flag.Parse()
 
-	// 1. Initialize SaaS Tenant Store & Service
+	// 1. Initialize SaaS Tenant Store & Service (billing idempotency enabled)
 	tenantRepo := tenantMemory.NewMemoryTenantRepository()
 	saasService := tenantUsecase.NewService(tenantRepo)
+	saasService.SetEventDedup(tenantUsecase.NewInMemoryEventDedup(0, 0))
 
 	// 2. Initialize Core Docs Configuration
 	nvidiaKey := os.Getenv("NVIDIA_API_KEY")
@@ -198,19 +202,70 @@ func main() {
 	// Mount core API documentation & sandbox UI
 	apidocs.MountNetHTTP(mux, cfg)
 
+	// Production hardening: health/readiness probes for load balancers & orchestrators
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		// Readiness requires the docs spec to be resolvable; liveness does not.
+		if _, err := os.Stat(cfg.SpecFilePath); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"unavailable","reason":"spec file not resolvable"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
+	})
+
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("⚡ [SaaS Platform] Server active on http://localhost:%d", *port)
-	log.Printf("⚡ [SaaS Platform] Tenant Registration: POST http://localhost:%d/api/v1/saas/tenants/register", *port)
-	log.Printf("⚡ [SaaS Platform] AI Inference Engine: NVIDIA NIM DeepSeek v4.1 Flash")
 
 	server := &http.Server{
-		Addr:         addr,
-		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		Addr:              addr,
+		Handler:           limitBodySize(mux, 2<<20), // 2 MiB global API body cap
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("SaaS server error: %v", err)
+	// Graceful shutdown: drain in-flight requests (incl. Stripe webhooks) on SIGINT/SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("SaaS server error: %v", err)
+		}
+	case <-ctx.Done():
+		log.Println("⚡ [SaaS Platform] Shutdown signal received; draining connections...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("SaaS graceful shutdown incomplete: %v", err)
+		}
+		log.Println("⚡ [SaaS Platform] Server stopped cleanly")
 	}
+}
+
+// maxAPIBodyBytes caps the size of request bodies across the API surface to
+// prevent unbounded-memory DoS. Spec uploads have their own stricter cap in
+// WorkspaceManager (ErrSpecTooLarge).
+const maxAPIBodyBytes int64 = 2 << 20
+
+// limitBodySize wraps the handler chain with an http.MaxBytesReader.
+func limitBodySize(next http.Handler, maxBytes int64) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
