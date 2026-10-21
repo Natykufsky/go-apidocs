@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,7 +27,11 @@ func NewMemoryTenantRepository() *MemoryTenantRepository {
 		byKey:   make(map[string]domain.TenantID),
 	}
 
-	// Seed default SaaS tenant for local dev / testing
+	// Seed default SaaS tenant ONLY for local dev / testing (never in production).
+	switch strings.ToLower(os.Getenv("APP_ENV")) {
+	case "production", "prod":
+		return repo
+	}
 	defaultTenant := &tenantDomain.Tenant{
 		ID:        "default",
 		Name:      "Demo Organization",

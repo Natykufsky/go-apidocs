@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,23 @@ import (
 )
 
 const DocsSessionCookieName = "apidocs_session_token"
+
+// devFallbackSecret is used ONLY when APP_ENV is not production. In production,
+// callers must supply an explicit secret or token operations fail closed.
+const devFallbackSecret = "default_apidocs_dev_secret"
+
+// effectiveSecret resolves the signing secret. In production (APP_ENV=production
+// or prod) an empty secret is an error rather than a silent insecure default.
+func effectiveSecret(secret string) (string, error) {
+	if secret != "" {
+		return secret, nil
+	}
+	switch strings.ToLower(os.Getenv("APP_ENV")) {
+	case "production", "prod":
+		return "", fmt.Errorf("auth: signing secret must not be empty in production (set DOCS_JWT_SECRET)")
+	}
+	return devFallbackSecret, nil
+}
 
 // SessionData holds parsed session token claims.
 type SessionData struct {
@@ -42,8 +60,9 @@ func CheckPassword(providedPass, expectedPlain, expectedHash string) bool {
 
 // GenerateDocsSessionToken creates an HMAC-SHA256 signed session cookie token with role and unlocked workspaces.
 func GenerateDocsSessionToken(username, secret string, unlockedWorkspaces ...string) string {
-	if secret == "" {
-		secret = "default_apidocs_dev_secret"
+	secret, err := effectiveSecret(secret)
+	if err != nil {
+		return "" // fail closed: refuse to mint tokens with no secret in production
 	}
 	expiresAt := time.Now().Add(24 * time.Hour).Unix()
 	unlockedStr := strings.Join(unlockedWorkspaces, ",")
@@ -59,8 +78,9 @@ func GenerateDocsSessionToken(username, secret string, unlockedWorkspaces ...str
 
 // GenerateInviteToken creates a signed, time-limited invitation token for a workspace.
 func GenerateInviteToken(wsID, secret string, validDuration time.Duration) string {
-	if secret == "" {
-		secret = "default_apidocs_dev_secret"
+	secret, err := effectiveSecret(secret)
+	if err != nil {
+		return "" // fail closed
 	}
 	if validDuration <= 0 {
 		validDuration = 7 * 24 * time.Hour // Default 7 days
@@ -78,8 +98,9 @@ func GenerateInviteToken(wsID, secret string, validDuration time.Duration) strin
 
 // VerifyInviteToken validates an invitation token and returns the invited workspace ID if valid.
 func VerifyInviteToken(tokenStr, secret string) (string, bool) {
-	if secret == "" {
-		secret = "default_apidocs_dev_secret"
+	secret, err := effectiveSecret(secret)
+	if err != nil {
+		return "", false // fail closed
 	}
 	rawBytes, err := base64.URLEncoding.DecodeString(tokenStr)
 	if err != nil {
@@ -118,8 +139,9 @@ func VerifyInviteToken(tokenStr, secret string) (string, bool) {
 
 // ParseAndVerifySessionToken validates token signature and returns parsed session data.
 func ParseAndVerifySessionToken(tokenStr, expectedUsername, secret string) (*SessionData, bool) {
-	if secret == "" {
-		secret = "default_apidocs_dev_secret"
+	secret, err := effectiveSecret(secret)
+	if err != nil {
+		return nil, false // fail closed
 	}
 	rawBytes, err := base64.URLEncoding.DecodeString(tokenStr)
 	if err != nil {

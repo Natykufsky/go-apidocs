@@ -62,9 +62,15 @@ func main() {
 	// 3. Construct Root Multi-Tenant Multiplexer
 	mux := http.NewServeMux()
 
-	// Developer OAuth 2.0 Single Sign-On Endpoints
+	// Developer OAuth 2.0 Single Sign-On Endpoints (start + callback, with CSRF state)
+	jwtSecret := os.Getenv("DOCS_JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = os.Getenv("JWT_SECRET")
+	}
 	mux.HandleFunc("/docs/oauth/github", auth.GitHubOAuthHandler)
+	mux.HandleFunc("/docs/oauth/github/callback", auth.GitHubOAuthCallbackHandler(jwtSecret))
 	mux.HandleFunc("/docs/oauth/google", auth.GoogleOAuthHandler)
+	mux.HandleFunc("/docs/oauth/google/callback", auth.GoogleOAuthCallbackHandler(jwtSecret))
 
 	// SaaS Tenant Onboarding & Management APIs
 	mux.HandleFunc("/api/v1/saas/tenants/register", func(w http.ResponseWriter, r *http.Request) {

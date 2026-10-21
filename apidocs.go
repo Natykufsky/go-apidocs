@@ -297,6 +297,15 @@ func ValidateConfig(cfg Config) error {
 	return nil
 }
 
+// isProduction reports whether the process is running in a production environment.
+func isProduction() bool {
+	switch strings.ToLower(os.Getenv("APP_ENV")) {
+	case "production", "prod":
+		return true
+	}
+	return false
+}
+
 // NormalizeConfig applies default configuration values and constructs a WorkspaceManager.
 func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 	// Automatically auto-discover and load .env / .env.local if present
@@ -363,9 +372,10 @@ func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 		if cfg.JWTSecret == "" {
 			cfg.JWTSecret = os.Getenv("JWT_SECRET")
 		}
-		if cfg.JWTSecret == "" {
-			cfg.JWTSecret = "apidocs_super_secret_session_key"
-		}
+	}
+	if cfg.JWTSecret == "" && isProduction() {
+		// Fail fast: never run a production deployment with forgeable session tokens.
+		return cfg, nil, false, fmt.Errorf("go-apidocs: DOCS_JWT_SECRET (or JWTSecret) must be set in production (APP_ENV=production)")
 	}
 	if cfg.QAStoragePath == "" {
 		cfg.QAStoragePath = "./docs/qa_tracker.json"
