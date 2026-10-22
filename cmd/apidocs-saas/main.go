@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/Natykufsky/go-apidocs/internal/auth"
 	"github.com/Natykufsky/go-apidocs/internal/env"
 	"github.com/Natykufsky/go-apidocs/internal/middleware"
+	"github.com/Natykufsky/go-apidocs/internal/schema"
 	tenantAdapter "github.com/Natykufsky/go-apidocs/internal/tenant/adapter"
 	tenantMemory "github.com/Natykufsky/go-apidocs/internal/tenant/adapter/memory"
 	tenantUsecase "github.com/Natykufsky/go-apidocs/internal/tenant/usecase"
@@ -43,8 +45,8 @@ func main() {
 		nvidiaKey = os.Getenv("NVIDIA_KEY")
 	}
 	cfg := apidocs.Config{
-		Title:                 "API Docs Cloud Platform (SaaS)",
-		Subtitle:              "Multi-Tenant Developer Hub & DeepSeek AI Testing",
+		Title:                 "Verity Docs",
+		Subtitle:              "Multi-Tenant Developer Hub & Testing",
 		SpecFilePath:          *specFile,
 		DocsDir:               "./docs",
 		EnableWorkspaces:      true,
@@ -210,17 +212,26 @@ func main() {
 	})
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		// Readiness requires the docs spec to be resolvable; liveness does not.
-		if _, err := os.Stat(cfg.SpecFilePath); err != nil {
+		// Readiness mirrors the spec resolution used by the docs handlers: an
+		// explicit --spec path, then the standard on-disk fallbacks. Serving the
+		// built-in placeholder is a degradation, not a hard failure, so report it
+		// as degraded rather than unavailable.
+		resolved, found := schema.ResolveSpecPath(cfg.SpecFilePath)
+		if !found {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte(`{"status":"unavailable","reason":"spec file not resolvable"}`))
+			_, _ = w.Write([]byte(`{"status":"degraded","reason":"no OpenAPI spec found; serving built-in placeholder","requested":` + strconv.Quote(cfg.SpecFilePath) + `}`))
 			return
 		}
-		_, _ = w.Write([]byte(`{"status":"ready"}`))
+		_, _ = w.Write([]byte(`{"status":"ready","spec_path":` + strconv.Quote(resolved) + `}`))
 	})
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("⚡ [SaaS Platform] Server active on http://localhost:%d", *port)
+	if resolved, found := schema.ResolveSpecPath(cfg.SpecFilePath); !found {
+		log.Printf("⚠️  [SaaS Platform] No OpenAPI spec found at %q; the portal will serve a built-in placeholder spec until one is supplied", cfg.SpecFilePath)
+	} else {
+		log.Printf("📄 [SaaS Platform] Serving OpenAPI spec from %s", resolved)
+	}
 
 	server := &http.Server{
 		Addr: addr,

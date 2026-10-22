@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -10,6 +11,51 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// SpecSource describes where the OpenAPI spec served by a SpecFilter came from.
+type SpecSource string
+
+const (
+	// SpecSourceEmbedded means the spec was supplied via an embedded filesystem.
+	SpecSourceEmbedded SpecSource = "embedded"
+	// SpecSourceFile means the spec was loaded from a swagger.json on disk.
+	SpecSourceFile SpecSource = "file"
+	// SpecSourceModular means the spec was assembled from swagger_base.json + paths/ + schemas.json.
+	SpecSourceModular SpecSource = "modular"
+	// SpecSourcePlaceholder means no spec was found and a built-in fallback is being served.
+	SpecSourcePlaceholder SpecSource = "placeholder"
+)
+
+// fallbackPaths are the on-disk locations consulted when no spec is found at specPath.
+var fallbackPaths = []string{
+	"./docs/swagger.json",
+	"../docs/swagger.json",
+	"../../docs/swagger.json",
+	"./backend/docs/swagger.json",
+	"./swagger.json",
+	"swagger.json",
+}
+
+// ResolveSpecPath reports the first on-disk swagger.json that would be served
+// for the given specPath, plus whether any spec was found at all. It mirrors
+// the lookup order used by SpecFilter.loadSpec so health/readiness probes can
+// agree with what the HTTP handlers actually serve.
+func ResolveSpecPath(specPath string) (path string, found bool) {
+	if specPath != "" {
+		if info, err := os.Stat(specPath); err == nil && !info.IsDir() {
+			return specPath, true
+		}
+	}
+	for _, p := range fallbackPaths {
+		if p == specPath {
+			continue
+		}
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			return p, true
+		}
+	}
+	return "", false
+}
+
 type SpecFilter struct {
 	specPath      string
 	docsDir       string
@@ -17,6 +63,8 @@ type SpecFilter struct {
 	moduleTagMap  map[string][]string
 	mu            sync.RWMutex
 	rawSpec       map[string]interface{}
+	source        SpecSource
+	sourcePath    string
 	embeddedFiles map[string][]byte
 }
 
@@ -53,6 +101,8 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 	if f.embeddedFiles != nil {
 		if b, ok := f.embeddedFiles["swagger.json"]; ok && len(b) > 0 {
 			data = b
+			f.source = SpecSourceEmbedded
+			f.sourcePath = "embedded:swagger.json"
 		}
 	}
 	if len(data) == 0 {
@@ -76,6 +126,8 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 			}
 			if b, readErr := os.ReadFile(p); readErr == nil && len(b) > 0 {
 				data = b
+				f.source = SpecSourceFile
+				f.sourcePath = p
 				break
 			}
 		}
@@ -161,13 +213,21 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 
 					modularSpec["paths"] = mergedPaths
 					f.rawSpec = modularSpec
+					f.source = SpecSourceModular
+					f.sourcePath = baseDir + "swagger_base.json"
 					return f.rawSpec, nil
 				}
 			}
 
 			data, err = os.ReadFile(f.specPath)
 			if err != nil {
-				// Graceful fallback: synthesize a default OpenAPI spec so the server can run out of the box
+				// Graceful fallback: synthesize a default OpenAPI spec so the server can run out of the box.
+				// Warn loudly: silently serving a placeholder spec is indistinguishable from a broken app.
+				slog.Warn("go-apidocs: no OpenAPI spec found; serving built-in placeholder spec",
+					"requested_spec_path", f.specPath,
+					"docs_dir", f.docsDir,
+					"hint", "place a swagger.json at the spec path, or upload one via the Schema Importer",
+				)
 				defaultSpec := map[string]interface{}{
 					"openapi": "3.0.0",
 					"info": map[string]interface{}{
@@ -218,6 +278,8 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 					},
 				}
 				f.rawSpec = defaultSpec
+				f.source = SpecSourcePlaceholder
+				f.sourcePath = ""
 				return f.rawSpec, nil
 			}
 		}
@@ -229,6 +291,21 @@ func (f *SpecFilter) loadSpec() (map[string]interface{}, error) {
 	}
 	f.rawSpec = spec
 	return f.rawSpec, nil
+}
+
+// Source reports where the currently loaded spec came from, and the path it was
+// read from (empty for the placeholder). It is safe to call before loadSpec.
+func (f *SpecFilter) Source() (SpecSource, string) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.source, f.sourcePath
+}
+
+// IsPlaceholder reports whether the served spec is the built-in fallback rather
+// than a real user-supplied OpenAPI document.
+func (f *SpecFilter) IsPlaceholder() bool {
+	src, _ := f.Source()
+	return src == SpecSourcePlaceholder
 }
 
 // FilterSpec dynamically filters OpenAPI spec tags and endpoints based on module or customTag

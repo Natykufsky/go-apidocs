@@ -9,6 +9,7 @@ import (
 
 	"github.com/Natykufsky/go-apidocs"
 	"github.com/Natykufsky/go-apidocs/internal/env"
+	"github.com/Natykufsky/go-apidocs/internal/schema"
 )
 
 func main() {
@@ -76,6 +77,13 @@ func main() {
 	fmt.Printf("   📖 Developer Reference:        http://localhost:%s/guide\n", *port)
 	fmt.Printf("   ⚡ Swagger UI & QA Sandbox:    http://localhost:%s/docs\n", *port)
 	fmt.Printf("   🏠 Developer Hub:              http://localhost:%s/\n", *port)
+	if resolved, found := schema.ResolveSpecPath(*specPath); found {
+		fmt.Printf("   📄 OpenAPI Spec:               %s\n", resolved)
+	} else {
+		fmt.Printf("   ⚠️  OpenAPI Spec:               NOT FOUND (serving built-in placeholder)\n")
+		fmt.Printf("                                  Expected at: %s\n", *specPath)
+		fmt.Printf("                                  The sandbox will be nearly empty until a spec is supplied.\n")
+	}
 	if *authUser != "" {
 		fmt.Printf("   🔒 Security Gate:              Enabled (User: %s)\n", *authUser)
 	} else {
