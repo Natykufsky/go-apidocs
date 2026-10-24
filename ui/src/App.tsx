@@ -5,7 +5,7 @@ import { QAStats } from './components/QABar';
 import { QAReportModal, QARecord } from './components/QAReportModal';
 import { QAInspectModal } from './components/QAInspectModal';
 import { SpotlightSearchModal } from './components/SpotlightSearchModal';
-import { CredentialManagerModal, StoredCredentials } from './components/CredentialManagerModal';
+import { CredentialManagerModal } from './components/CredentialManagerModal';
 import { CodeSnippetModal } from './components/CodeSnippetModal';
 import { SchemaImporterModal } from './components/SchemaImporterModal';
 import { SecurityAuditModal } from './components/SecurityAuditModal';
@@ -22,8 +22,14 @@ import { GuideView } from './components/GuideView';
 import { LandingView } from './components/LandingView';
 import { HealthView } from './components/HealthView';
 import { SwaggerSandboxView } from './components/SwaggerSandboxView';
+import { NotFoundView } from './components/NotFoundView';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext';
+import { QAProvider, useQA } from './context/QAContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { ToastProvider, useToast } from './components/Toast';
 
-interface Capabilities {
+export interface Capabilities {
   workspaces_enabled: boolean;
   workspace_writes_enabled: boolean;
   security_audit_enabled: boolean;
@@ -47,45 +53,21 @@ export const App: React.FC = () => {
     ],
   });
 
-  const [capabilities, setCapabilities] = useState<Capabilities>({
-    workspaces_enabled: true,
-    workspace_writes_enabled: false,
-    security_audit_enabled: false,
-    live_spec_editing_enabled: false,
-    remote_fetch_enabled: false,
-    max_spec_bytes: 5 * 1024 * 1024,
-  });
+  const { credentials, hasCredentials, updateCredentials, clearCredentials, maskPII, toggleMaskPII, activeEnv, setActiveEnv } = useAuth();
+  const {
+    capabilities,
+    workspaces,
+    activeWorkspaceId,
+    activeServiceId,
+    activeModule,
+    specUrl,
+    setActiveModule,
+    selectService,
+    refreshWorkspaces,
+  } = useWorkspace();
+  const { qaData, stats: qaStats, endpoints: allEndpointsList, modules: availableModules, saveRecord, resetQA, setQAData } = useQA();
+  const toast = useToast();
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([
-    {
-      id: 'default',
-      name: 'Default Workspace',
-      icon: '📁',
-      services: [
-        {
-          id: 'default',
-          title: 'Main API',
-          version: '1.0.0',
-          icon: '⚡',
-        },
-      ],
-    },
-  ]);
-
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('ws') || localStorage.getItem('apidocs_active_ws') || 'default';
-  });
-
-  const [activeServiceId, setActiveServiceId] = useState<string>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('svc') || localStorage.getItem('apidocs_active_svc') || 'default';
-  });
-
-  const [activeModule, setActiveModule] = useState<string>('all');
-  const [availableModules, setAvailableModules] = useState<string[]>([]);
-  const [qaMode, setQAMode] = useState<boolean>(true);
-  const [qaData, setQAData] = useState<Record<string, QARecord>>({});
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
   const [isCredsModalOpen, setIsCredsModalOpen] = useState<boolean>(false);
@@ -103,8 +85,7 @@ export const App: React.FC = () => {
   const [inspectEndpoint, setInspectEndpoint] = useState<string | null>(null);
   const [snippetEndpoint, setSnippetEndpoint] = useState<string | null>(null);
   const [aiTestEndpoint, setAiTestEndpoint] = useState<string | null>(null);
-  const [specUrl, setSpecUrl] = useState<string>('/docs/swagger.json');
-  const [allEndpointsList, setAllEndpointsList] = useState<string[]>([]);
+  const [qaMode, setQAMode] = useState<boolean>(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('apidocs_sidebar_collapsed') === 'true';
   });
@@ -119,20 +100,6 @@ export const App: React.FC = () => {
       document.documentElement.style.setProperty('--color-accent', theme.accent_color);
     }
   };
-  const [activeEnv, setActiveEnv] = useState<string>('default');
-  const [maskPII, setMaskPII] = useState<boolean>(() => {
-    return localStorage.getItem('apidocs_mask_pii') === 'true';
-  });
-
-  const toggleMaskPII = () => {
-    setMaskPII((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('apidocs_mask_pii', String(next));
-      } catch (e) {}
-      return next;
-    });
-  };
 
   const toggleSidebarCollapse = () => {
     setSidebarCollapsed((prev) => {
@@ -144,143 +111,8 @@ export const App: React.FC = () => {
     });
   };
 
-  // Stored Credentials state synced with localStorage
-  const [credentials, setCredentials] = useState<StoredCredentials>(() => {
-    try {
-      const access = localStorage.getItem('apidocs_access_token') || undefined;
-      const refresh = localStorage.getItem('apidocs_refresh_token') || undefined;
-      const tenant = localStorage.getItem('apidocs_tenant_id') || undefined;
-      const entity = localStorage.getItem('apidocs_entity_id') || undefined;
-      const updated = localStorage.getItem('apidocs_creds_updated_at') || undefined;
-      const customHeadersStr = localStorage.getItem('apidocs_custom_headers');
-      const customHeaders = customHeadersStr ? JSON.parse(customHeadersStr) : undefined;
-      return {
-        accessToken: access,
-        refreshToken: refresh,
-        tenantId: tenant,
-        entityId: entity,
-        customHeaders,
-        updatedAt: updated,
-      };
-    } catch {
-      return {};
-    }
-  });
-
-  const handleUpdateCredentials = (creds: StoredCredentials) => {
-    setCredentials(creds);
-    try {
-      if (creds.accessToken) localStorage.setItem('apidocs_access_token', creds.accessToken);
-      else localStorage.removeItem('apidocs_access_token');
-
-      if (creds.refreshToken) localStorage.setItem('apidocs_refresh_token', creds.refreshToken);
-      else localStorage.removeItem('apidocs_refresh_token');
-
-      if (creds.tenantId) localStorage.setItem('apidocs_tenant_id', creds.tenantId);
-      else localStorage.removeItem('apidocs_tenant_id');
-
-      if (creds.entityId) localStorage.setItem('apidocs_entity_id', creds.entityId);
-      else localStorage.removeItem('apidocs_entity_id');
-
-      if (creds.customHeaders && Object.keys(creds.customHeaders).length > 0) {
-        localStorage.setItem('apidocs_custom_headers', JSON.stringify(creds.customHeaders));
-      } else {
-        localStorage.removeItem('apidocs_custom_headers');
-      }
-
-      if (creds.updatedAt) localStorage.setItem('apidocs_creds_updated_at', creds.updatedAt);
-      else localStorage.removeItem('apidocs_creds_updated_at');
-    } catch (e) {}
-  };
-
-  const handleClearCredentials = () => {
-    setCredentials({});
-    try {
-      localStorage.removeItem('apidocs_access_token');
-      localStorage.removeItem('apidocs_refresh_token');
-      localStorage.removeItem('apidocs_tenant_id');
-      localStorage.removeItem('apidocs_entity_id');
-      localStorage.removeItem('apidocs_custom_headers');
-      localStorage.removeItem('apidocs_creds_updated_at');
-    } catch (e) {}
-  };
-
-  // Fetch capabilities from backend
-  useEffect(() => {
-    fetch('/docs/capabilities')
-      .then((res) => res.json())
-      .then((data: Capabilities) => {
-        if (data) setCapabilities(data);
-      })
-      .catch(() => {});
-  }, []);
-
-  // Fetch workspaces list from backend
-  const refreshWorkspaces = useCallback(() => {
-    fetch('/docs/workspaces')
-      .then((res) => res.json())
-      .then((data: Workspace[]) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setWorkspaces(data);
-          // Auto-select if active is missing
-          const wsExists = data.some((w) => w.id === activeWorkspaceId);
-          if (!wsExists && data[0]) {
-            setActiveWorkspaceId(data[0].id);
-            if (data[0].services[0]) {
-              setActiveServiceId(data[0].services[0].id);
-            }
-          }
-        }
-      })
-      .catch(() => {});
-  }, [activeWorkspaceId]);
-
-  useEffect(() => {
-    refreshWorkspaces();
-  }, [refreshWorkspaces]);
-
-  // Compute Spec URL based on active workspace and service
-  const updateSpecUrl = useCallback((ws: string, svc: string, mod: string) => {
-    let url = `/docs/swagger.json?ws=${encodeURIComponent(ws)}&svc=${encodeURIComponent(svc)}`;
-    if (mod && mod !== 'all' && mod !== 'imported') {
-      url += `&module=${encodeURIComponent(mod)}`;
-    }
-    setSpecUrl(url);
-  }, []);
-
-  // Handle Workspace & Service Selection
-  const handleSelectService = (wsId: string, svcId: string) => {
-    const targetWs = workspaces.find((w) => w.id === wsId);
-    // Server-authoritative lock check: the backend annotates each workspace
-    // with is_unlocked based on the signed session cookie, so lock state
-    // survives reloads and cannot be bypassed client-side.
-    if (targetWs && targetWs.is_locked && targetWs.is_unlocked === false) {
-      setUnlockTargetWs({ id: wsId, name: targetWs.name });
-      setIsUnlockModalOpen(true);
-      return;
-    }
-
-    setActiveWorkspaceId(wsId);
-    setActiveServiceId(svcId);
-    try {
-      localStorage.setItem('apidocs_active_ws', wsId);
-      localStorage.setItem('apidocs_active_svc', svcId);
-    } catch (e) {}
-
-    const url = new URL(window.location.href);
-    url.searchParams.set('ws', wsId);
-    url.searchParams.set('svc', svcId);
-    window.history.pushState(null, '', url.toString());
-
-    updateSpecUrl(wsId, svcId, activeModule);
-  };
-
-  // Sync Spec URL when workspace or service changes
-  useEffect(() => {
-    updateSpecUrl(activeWorkspaceId, activeServiceId, activeModule);
-  }, [activeWorkspaceId, activeServiceId, activeModule, updateSpecUrl]);
-
-  // Handle browser popstate
+  // Fetch nav config from backend (optional endpoint; silently falls back)
+  // Handle browser popstate — re-sync path and query-derived state
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname || '/');
@@ -289,13 +121,12 @@ export const App: React.FC = () => {
       const svc = urlParams.get('svc');
       const mod = urlParams.get('module') || urlParams.get('tag');
 
-      if (ws) setActiveWorkspaceId(ws);
-      if (svc) setActiveServiceId(svc);
+      if (ws && svc) selectService(ws, svc);
       if (mod) setActiveModule(mod);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [selectService, setActiveModule]);
 
   // Global Spotlight Search shortcut (Cmd+K / Ctrl+K or '/')
   useEffect(() => {
@@ -356,146 +187,34 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Fetch swagger.json to extract available modules/tags and all endpoint keys preserving 01, 02, 03... order
-  useEffect(() => {
-    fetch(specUrl)
-      .then((res) => res.json())
-      .then((swagger: any) => {
-        if (swagger) {
-          const declaredTags: string[] = Array.isArray(swagger.tags)
-            ? swagger.tags.map((t: any) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
-            : [];
-
-          const tagOrderMap = new Map<string, number>();
-          declaredTags.forEach((name, idx) => tagOrderMap.set(name, idx));
-
-          const endpointsWithTag: { key: string; tag: string; path: string }[] = [];
-          const extraTagsSet = new Set<string>();
-
-          if (swagger.paths && typeof swagger.paths === 'object') {
-            for (const path in swagger.paths) {
-              const methods = swagger.paths[path];
-              for (const method in methods) {
-                if (['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(method.toLowerCase())) {
-                  const op = methods[method];
-                  const primaryTag = (op && op.tags && op.tags.length > 0) ? op.tags[0] : 'General';
-                  if (op && op.tags && Array.isArray(op.tags)) {
-                    op.tags.forEach((t: string) => {
-                      if (!tagOrderMap.has(t)) {
-                        extraTagsSet.add(t);
-                      }
-                    });
-                  }
-                  endpointsWithTag.push({
-                    key: `${method.toUpperCase()} ${path}`,
-                    tag: primaryTag,
-                    path: path,
-                  });
-                }
-              }
-            }
-          }
-
-          const extraTags = Array.from(extraTagsSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-          const allModules = [...declaredTags, ...extraTags];
-          allModules.forEach((name, idx) => tagOrderMap.set(name, idx));
-
-          endpointsWithTag.sort((a, b) => {
-            const orderA = tagOrderMap.has(a.tag) ? tagOrderMap.get(a.tag)! : 9999;
-            const orderB = tagOrderMap.has(b.tag) ? tagOrderMap.get(b.tag)! : 9999;
-            if (orderA !== orderB) return orderA - orderB;
-            return a.path.localeCompare(b.path);
-          });
-
-          setAvailableModules(allModules);
-          setAllEndpointsList(endpointsWithTag.map((e) => e.key));
-        }
-      })
-      .catch(() => {});
-  }, [specUrl]);
-
-  // Fetch persisted QA test records from server
-  useEffect(() => {
-    fetch(`/docs/qa/data?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && typeof data === 'object') {
-          setQAData(data);
-        }
-      })
-      .catch(() => {});
-  }, [activeWorkspaceId, activeServiceId]);
-
-  // Module filter handler
-  const handleModuleChange = (mod: string) => {
-    setActiveModule(mod);
-    updateSpecUrl(activeWorkspaceId, activeServiceId, mod);
+  // Handle Workspace & Service Selection (with server-authoritative lock check)
+  const handleSelectService = (wsId: string, svcId: string) => {
+    const targetWs = workspaces.find((w) => w.id === wsId);
+    if (targetWs && targetWs.is_locked && targetWs.is_unlocked === false) {
+      setUnlockTargetWs({ id: wsId, name: targetWs.name });
+      setIsUnlockModalOpen(true);
+      return;
+    }
+    selectService(wsId, svcId);
   };
 
-  // Calculate QA stats
-  const calculateStats = (): QAStats => {
-    let passed = 0;
-    let retest = 0;
-    let failed = 0;
-
-    for (const key in qaData) {
-      const item = qaData[key];
-      if (item?.status === 'passed') passed++;
-      else if (item?.status === 'retest') retest++;
-      else if (item?.status === 'failed') failed++;
-    }
-
-    const tested = passed + retest + failed;
-    const total = Math.max(allEndpointsList.length, Object.keys(qaData).length, tested);
-    const untested = Math.max(0, total - tested);
-
-    return {
-      passed,
-      retest,
-      failed,
-      untested,
-      total,
-    };
+  const handleModuleChange = (mod: string) => {
+    setActiveModule(mod);
   };
 
   const handleResetQA = async () => {
     try {
-      await fetch(`/docs/qa/reset?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`, {
-        method: 'POST',
-      });
-      setQAData({});
+      await resetQA();
       setIsReportOpen(false);
-    } catch (e) {}
+      toast.success('QA records reset');
+    } catch {
+      toast.error('Failed to reset QA records');
+    }
   };
 
-  const handleSaveInspectRecord = async (
-    endpoint: string,
-    status: 'passed' | 'retest' | 'failed' | 'untested',
-    comment: string
-  ) => {
-    const timeStr = new Date().toLocaleString();
-    const updated = {
-      ...qaData,
-      [endpoint]: {
-        status,
-        comment,
-        tested_at: timeStr,
-      },
-    };
-    setQAData(updated);
-
-    try {
-      await fetch(`/docs/qa/record?ws=${encodeURIComponent(activeWorkspaceId)}&svc=${encodeURIComponent(activeServiceId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint,
-          endpoint_key: endpoint,
-          status,
-          comment,
-        }),
-      });
-    } catch (e) {}
+  const handleSaveInspectRecord = (endpoint: string, status: 'passed' | 'retest' | 'failed' | 'untested', comment: string) => {
+    saveRecord(endpoint, status, comment);
+    toast.success(`${endpoint} marked as ${status}`);
   };
 
   // Route: Login & Registration View
@@ -510,13 +229,7 @@ export const App: React.FC = () => {
   const isGuide = currentPath.startsWith('/guide');
   const isDashboard = currentPath === '/dashboard' || currentPath === '/health';
   const isHome = currentPath === '/' || currentPath === '' || currentPath === '/landing';
-
-  const hasCredentials = !!(
-    credentials.accessToken ||
-    credentials.tenantId ||
-    credentials.entityId ||
-    (credentials.customHeaders && Object.keys(credentials.customHeaders).length > 0)
-  );
+  const isKnownRoute = isSandbox || isGuide || isDashboard || isHome;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans">
@@ -612,34 +325,16 @@ export const App: React.FC = () => {
               onToggleQAMode={() => setQAMode(!qaMode)}
               onOpenQAReport={() => setIsReportOpen(true)}
               onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
-              qaStats={calculateStats()}
+              qaStats={qaStats}
               qaData={qaData}
               onUpdateQAData={setQAData}
               credentials={credentials}
-              onUpdateCredentials={handleUpdateCredentials}
+              onUpdateCredentials={updateCredentials}
               onOpenCredentials={() => setIsCredsModalOpen(true)}
               maskPII={maskPII}
             />
           )}
-          {!isGuide && !isHome && !isDashboard && !isSandbox && (
-            <SwaggerSandboxView
-              specUrl={specUrl}
-              activeModule={activeModule}
-              onModuleChange={handleModuleChange}
-              availableModules={availableModules}
-              qaMode={qaMode}
-              onToggleQAMode={() => setQAMode(!qaMode)}
-              onOpenQAReport={() => setIsReportOpen(true)}
-              onInspectEndpoint={(ep) => setInspectEndpoint(ep)}
-              qaStats={calculateStats()}
-              qaData={qaData}
-              onUpdateQAData={setQAData}
-              credentials={credentials}
-              onUpdateCredentials={handleUpdateCredentials}
-              onOpenCredentials={() => setIsCredsModalOpen(true)}
-              maskPII={maskPII}
-            />
-          )}
+          {!isKnownRoute && <NotFoundView onNavigateHome={() => handleNavigate('/')} />}
         </div>
 
         {/* Unified Footer */}
@@ -677,8 +372,8 @@ export const App: React.FC = () => {
         isOpen={isCredsModalOpen}
         onClose={() => setIsCredsModalOpen(false)}
         credentials={credentials}
-        onSave={handleUpdateCredentials}
-        onClear={handleClearCredentials}
+        onSave={updateCredentials}
+        onClear={clearCredentials}
       />
 
       {/* Code Snippet Generator Modal */}
@@ -798,22 +493,13 @@ export const App: React.FC = () => {
           const unlockedId = unlockTargetWs?.id;
           setIsUnlockModalOpen(false);
           setUnlockTargetWs(null);
-          refreshWorkspaces();
-          if (unlockedId) {
-            const targetWs = workspaces.find((w) => w.id === unlockedId);
-            const firstSvcId = targetWs?.services?.[0]?.id || 'default';
-            setActiveWorkspaceId(unlockedId);
-            setActiveServiceId(firstSvcId);
-            try {
-              localStorage.setItem('apidocs_active_ws', unlockedId);
-              localStorage.setItem('apidocs_active_svc', firstSvcId);
-            } catch (e) {}
-            const url = new URL(window.location.href);
-            url.searchParams.set('ws', unlockedId);
-            url.searchParams.set('svc', firstSvcId);
-            window.history.pushState(null, '', url.toString());
-            updateSpecUrl(unlockedId, firstSvcId, activeModule);
-          }
+          toast.success('Workspace unlocked');
+          refreshWorkspaces().then(() => {
+            if (unlockedId) {
+              const targetWs = workspaces.find((w) => w.id === unlockedId);
+              selectService(unlockedId, targetWs?.services?.[0]?.id || 'default');
+            }
+          });
         }}
       />
 
@@ -836,7 +522,9 @@ export const App: React.FC = () => {
         serviceTitle={workspaces.find((w) => w.id === activeWorkspaceId)?.services?.find((s) => s.id === activeServiceId)?.title || 'Current Service'}
         onClose={() => setIsLiveSpecEditorOpen(false)}
         onSpecSaved={() => {
-          updateSpecUrl(activeWorkspaceId, activeServiceId, activeModule);
+          toast.success('Spec saved — refreshing sandbox');
+          // specUrl derives from ws/svc/module; bump refreshWorkspaces to pull latest meta
+          refreshWorkspaces();
         }}
       />
     </div>

@@ -58,6 +58,15 @@ jobs:
       - name: Typecheck & build
         run: npm run build
 
+      - name: Verify embedded bundle is up to date
+        run: |
+          cd ..
+          if [ -n "$(git status --porcelain -- assets/dist)" ]; then
+            echo "::error::assets/dist does not match the UI sources. Run 'npm ci && npm run build' in ui/ and commit the regenerated bundle."
+            git status --porcelain -- assets/dist
+            exit 1
+          fi
+
   docker:
     name: Docker image build
     runs-on: ubuntu-latest

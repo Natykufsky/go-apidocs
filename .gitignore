@@ -5,6 +5,13 @@ node_modules/
 dist/
 ui/dist/
 
+# The compiled React bundle (assets/dist) is the runtime artifact embedded into
+# the Go binary through //go:embed, so every file it ships must stay tracked -
+# including code-split chunks (e.g. assets/dist/assets/SwaggerUILazy.js|.css).
+# Losing one of them makes the lazy-loaded Swagger UI 404 at runtime.
+!/assets/dist/
+!/assets/dist/**
+
 # Go binaries / builds
 bin/
 *.exe

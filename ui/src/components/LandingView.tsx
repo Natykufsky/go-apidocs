@@ -45,6 +45,8 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { NavConfig } from './Navbar';
 import { Workspace, APIService } from './WorkspaceSwitcher';
+import { SkeletonStats } from './Skeletons';
+import { Icon } from '../lib/icons';
 
 interface LandingViewProps {
   config: NavConfig;
@@ -399,7 +401,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7 space-y-5">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-950 dark:text-white leading-[1.14]">
-                The API Docs Cloud Platform & Automated QA Engine
+                The VerityDocs Cloud Platform & Automated QA Engine
               </h1>
               <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 font-normal leading-relaxed max-w-2xl">
                 A single-binary developer hub combining interactive OpenAPI execution, OWASP vulnerability audits, multi-tenant SaaS quotas, and multi-LLM automated test synthesis.
@@ -442,6 +444,13 @@ export const LandingView: React.FC<LandingViewProps> = ({
 
             {/* Interactive Telemetry Metrics Cards */}
             <div className="lg:col-span-5 grid grid-cols-2 gap-3.5">
+              {!spec && (
+                <div className="col-span-2">
+                  <SkeletonStats count={4} />
+                </div>
+              )}
+              {spec && (
+              <>
               <div
                 onClick={() => setActiveTab('endpoints')}
                 className="p-4 rounded-2xl bg-white dark:bg-slate-800/70 border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 cursor-pointer group"
@@ -509,6 +518,8 @@ export const LandingView: React.FC<LandingViewProps> = ({
                   Type specifications
                 </div>
               </div>
+              </>
+              )}
             </div>
           </div>
         </div>

@@ -4,10 +4,15 @@ import { QARecord } from './QAReportModal';
 import { StoredCredentials } from './CredentialManagerModal';
 import { Filter, FlaskConical, FileSpreadsheet, KeyRound, CheckCircle2, X, ShieldAlert, Sparkles } from 'lucide-react';
 import { ErrorBoundary, LoadingFallback } from './ErrorBoundary';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { useQA } from '../context/QAContext';
+import { useEndpointDiff } from '../lib/useEndpointDiff';
+import { GitCompare } from 'lucide-react';
 
-// swagger-ui-react weighs ~1MB+ minified; lazy-load it so the initial bundle
-// only pays for the docs shell. React.lazy splits it into its own chunk.
-const SwaggerUI = lazy(() => import('swagger-ui-react'));
+// swagger-ui-react weighs ~1MB+ minified; lazy-load it (plus its stylesheet,
+// which must ship in the same chunk or the UI renders unstyled/broken) so the
+// initial bundle only pays for the docs shell.
+const SwaggerUI = lazy(() => import('./SwaggerUILazy'));
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
@@ -45,6 +50,9 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
   maskPII = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { activeWorkspaceId, activeServiceId } = useWorkspace();
+  const { endpoints: allEndpoints } = useQA();
+  const { diff, commitSnapshot } = useEndpointDiff(activeWorkspaceId, activeServiceId, allEndpoints);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'warning'>('success');
   const [mockMode, setMockMode] = useState<boolean>(() => {
@@ -485,6 +493,24 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
 
       {/* QA Stats Bar */}
       {qaMode && <QABar stats={qaStats} />}
+
+      {/* Endpoint Diff Banner (new/removed endpoints since last QA baseline) */}
+      {qaMode && (diff.added.length > 0 || diff.removed.length > 0) && (
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200">
+            <GitCompare className="w-4 h-4 shrink-0" />
+            <span className="font-semibold">Spec changed since last QA run:</span>
+            <span className="font-mono">+{diff.added.length} added</span>
+            <span className="font-mono">−{diff.removed.length} removed</span>
+            <button
+              onClick={commitSnapshot}
+              className="ml-auto px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition-colors cursor-pointer"
+            >
+              Mark reviewed
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Swagger Explorer (lazy-loaded chunk with crash isolation) */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">

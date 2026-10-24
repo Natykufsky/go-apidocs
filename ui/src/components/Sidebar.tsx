@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { NavItem, NavConfig } from './Navbar';
 import { Workspace } from './WorkspaceSwitcher';
+import { useTheme } from '../context/ThemeContext';
 
 interface SidebarProps {
   config: NavConfig;
@@ -91,27 +92,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   maskPII = false,
   onToggleMaskPII,
 }) => {
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('apidocs_theme') === 'dark';
-  });
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      try {
-        localStorage.setItem('apidocs_theme', 'dark');
-      } catch (e) {}
-    } else {
-      document.documentElement.classList.remove('dark');
-      try {
-        localStorage.setItem('apidocs_theme', 'light');
-      } catch (e) {}
-    }
-  }, [isDarkMode]);
-
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
-  };
+  // Theme is managed globally by ThemeProvider (see context/ThemeContext.tsx)
+  const { toggle: toggleTheme, isDark: isDarkMode } = useTheme();
 
   const isCurrentActive = (url: string) => {
     if (url === '/' && (currentPath === '/' || currentPath === '' || currentPath === '/landing')) return true;

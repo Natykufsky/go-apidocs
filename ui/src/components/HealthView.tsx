@@ -15,6 +15,7 @@ import {
   Globe,
   Layers
 } from 'lucide-react';
+import { SkeletonStats } from './Skeletons';
 
 interface HealthCapabilities {
   workspaces_enabled: boolean;
@@ -117,6 +118,9 @@ export const HealthView: React.FC = () => {
       </div>
 
       {/* Services & AI Engine Grid */}
+      {capabilities === null ? (
+        <SkeletonStats count={4} />
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* NVIDIA NIM DeepSeek v4.1 Card */}
         <div className="bg-gradient-to-br from-purple-50/70 to-indigo-50/70 dark:from-purple-950/20 dark:to-indigo-950/20 border border-purple-200/80 dark:border-purple-800/60 rounded-2xl p-5 shadow-sm flex items-start justify-between">
@@ -180,6 +184,7 @@ export const HealthView: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Live Diagnostics Log Console */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">

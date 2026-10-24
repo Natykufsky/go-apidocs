@@ -84,6 +84,36 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
   const method = parts[0] || 'GET';
   const path = parts.slice(1).join(' ') || endpointKey;
 
+  // Keyboard triage: J/K navigate, 1=passed 2=retest 3=failed (skipped while typing)
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      const isInput = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
+      if (isInput || e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === 'j') {
+        e.preventDefault();
+        handleNext();
+      } else if (k === 'k') {
+        e.preventDefault();
+        handlePrev();
+      } else if (k === '1') {
+        setStatus('passed');
+      } else if (k === '2') {
+        setStatus('retest');
+      } else if (k === '3') {
+        setStatus('failed');
+      } else if (k === 's' || k === 'enter') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, endpointKey, status, comment, hasPrev, hasNext, currentIndex]);
+
   const getMethodBadgeClass = (m: string) => {
     switch (m.toUpperCase()) {
       case 'GET':

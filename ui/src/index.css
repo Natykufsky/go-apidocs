@@ -210,78 +210,9 @@ body {
   color: #34d399;
 }
 
-/* Swagger UI Light Theme Overrides & Legibility Fixes */
-.swagger-ui {
-  color: #1e293b !important;
-}
-
-.swagger-ui .info .title {
-  color: #0f172a !important;
-}
-
-.swagger-ui .info p,
-.swagger-ui .info li,
-.swagger-ui .info table {
-  color: #334155 !important;
-}
-
-.swagger-ui .opblock-tag {
-  color: #0f172a !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-}
-
-.swagger-ui .opblock .opblock-summary-description {
-  color: #475569 !important;
-}
-
-.swagger-ui .opblock-description-wrapper p,
-.swagger-ui .opblock-external-docs-wrapper p,
-.swagger-ui .opblock-title_normal p {
-  color: #334155 !important;
-}
-
-.swagger-ui table thead tr td,
-.swagger-ui table thead tr th {
-  color: #0f172a !important;
-  border-bottom: 1px solid #cbd5e1 !important;
-}
-
-.swagger-ui .parameter__name {
-  color: #0f172a !important;
-}
-
-.swagger-ui .parameter__type {
-  color: #64748b !important;
-}
-
-.swagger-ui .response-col_status {
-  color: #0f172a !important;
-}
-
-.swagger-ui .response-col_description {
-  color: #334155 !important;
-}
-
-.swagger-ui select {
-  background-color: #ffffff !important;
-  color: #1e293b !important;
-  border: 1px solid #cbd5e1 !important;
-}
-
-.swagger-ui input[type=text],
-.swagger-ui textarea {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border: 1px solid #cbd5e1 !important;
-}
-
-.swagger-ui .model-title {
-  color: #0f172a !important;
-}
-
-.swagger-ui .prop-type {
-  color: #059669 !important;
-}
+/* Swagger UI theme overrides live in components/swagger-ui-overrides.css and
+   are shipped inside the lazy Swagger UI chunk, so they are injected after
+   swagger-ui.css and always win the cascade. */
 
 /* Custom overrides for Scalar Developer Guide */
 .scalar-api-reference,

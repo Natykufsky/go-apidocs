@@ -166,7 +166,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ config, initialMode = 'log
             {config.icon || '⚡'}
           </a>
           <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">
-            {config.title || 'API Docs Cloud Platform'}
+            {config.title || 'VerityDocs Cloud Platform'}
           </h1>
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
             Enterprise Developer Gateway & Multi-Tenant QA Suite

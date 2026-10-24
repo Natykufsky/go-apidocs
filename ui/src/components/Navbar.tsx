@@ -19,6 +19,8 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { Workspace, WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { useTheme } from '../context/ThemeContext';
+import { Sun, Moon, MonitorSmartphone } from 'lucide-react';
 
 export interface NavItem {
   label: string;
@@ -89,6 +91,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
+  const { mode: themeMode, setMode: setThemeMode, isDark } = useTheme();
+
+  const cycleTheme = () => {
+    setThemeMode(themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light');
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -228,6 +235,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden sm:inline">{hasCredentials ? 'Auth Configured' : 'Auth'}</span>
             </button>
           )}
+
+          {/* Theme Mode Cycle Button: Light -> Dark -> System */}
+          <button
+            onClick={cycleTheme}
+            title={`Theme: ${themeMode}${themeMode === 'system' ? ' (OS preference)' : ''} — click to cycle`}
+            className="p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer min-h-[42px] min-w-[42px] flex items-center justify-center shadow-2xs border border-slate-200/60 dark:border-slate-700/60"
+            aria-label={`Current theme: ${themeMode}. Click to change theme.`}
+          >
+            {themeMode === 'light' ? (
+              <Sun className="w-4 h-4 text-amber-500" />
+            ) : themeMode === 'dark' ? (
+              <Moon className={`w-4 h-4 ${isDark ? 'text-indigo-300' : 'text-slate-500'}`} />
+            ) : (
+              <MonitorSmartphone className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+            )}
+          </button>
 
           {/* Unified Settings & Tools Dropdown Menu */}
           <div className="relative" ref={settingsMenuRef}>
