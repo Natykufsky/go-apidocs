@@ -38,7 +38,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     if (stored === "light" || stored === "dark" || stored === "system")
       return stored;
     // Migrate legacy single-value key
-    return safeStorage.get("apidocs_theme") === "dark" ? "dark" : "system";
+    const legacy = safeStorage.get("apidocs_theme");
+    if (legacy === "light" || legacy === "dark") return legacy;
+    // go-apidocs is a dark-first developer console
+    return "dark";
   });
 
   const [systemDark, setSystemDark] = useState(systemPrefersDark);

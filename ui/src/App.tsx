@@ -232,7 +232,7 @@ export const App: React.FC = () => {
   const isKnownRoute = isSandbox || isGuide || isDashboard || isHome;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans">
+    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex font-sans">
       {/* Collapsible Left Sidebar Navigation Hub (Visible in App views: /docs, /guide, /dashboard) */}
       {!isHome && (
         <Sidebar
@@ -338,14 +338,14 @@ export const App: React.FC = () => {
         </div>
 
         {/* Unified Footer */}
-        <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 bg-white mt-auto">
+        <footer className="border-t border-[var(--border-subtle)] py-6 text-center text-xs text-[var(--text-tertiary)] bg-[var(--bg-surface)] mt-auto">
           <p>
             &copy; {new Date().getFullYear()} {navConfig.title} &bull; Powered by{' '}
             <a
               href="https://github.com/Natykufsky/go-apidocs"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-emerald-600 hover:underline font-semibold"
+              className="text-[var(--accent-500)] hover:underline font-semibold"
             >
               go-apidocs
             </a>{' '}

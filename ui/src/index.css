@@ -2,228 +2,329 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   FOUNDATIONS — design tokens
+   Light + Dark; .dark class toggled by ThemeContext
+   ============================================================ */
 :root {
   color-scheme: light;
+
+  /* surfaces */
+  --bg-canvas:   #F7F8FA;
+  --bg-surface:  #FFFFFF;
+  --bg-raised:   #FBFCFD;
+  --bg-overlay:  #F1F3F6;
+  --bg-hover:    #EDEFF3;
+
+  /* borders */
+  --border-subtle:  #E4E7EC;
+  --border-default: #D0D5DD;
+  --border-strong:  #98A2B3;
+  --border-focus:   #0093BD;
+
+  /* text */
+  --text-primary:   #0F1115;
+  --text-secondary: #4A5260;
+  --text-tertiary:  #7A8494;
+  --text-inverse:   #FFFFFF;
+
+  /* brand — Go cyan */
+  --accent-500:   #0093BD;
+  --accent-400:   #00A8D6;
+  --accent-600:   #007A9E;
+  --accent-muted: rgba(0, 147, 189, 0.10);
+
+  /* AI accent */
+  --ai-500:   #7C3AED;
+  --ai-400:   #8B5CF6;
+  --ai-muted: rgba(124, 58, 237, 0.10);
+
+  /* semantic */
+  --success-500: #16A34A;
+  --warning-500: #D97706;
+  --danger-500:  #DC2626;
+  --info-500:    #2563EB;
+
+  /* security grade ramp */
+  --grade-a: #16A34A;
+  --grade-b: #65A30D;
+  --grade-c: #CA8A04;
+  --grade-d: #EA580C;
+  --grade-f: #DC2626;
+
+  /* geometry */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+
+  /* elevation */
+  --e1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --e2: 0 8px 24px rgba(16, 24, 40, 0.08);
+  --e3: 0 24px 64px rgba(16, 24, 40, 0.14);
+
+  /* type */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* dimensions */
+  --row-h: 44px;
+  --topbar-h: 52px;
+  --nav-w: 240px;
 }
 
 :root.dark {
   color-scheme: dark;
+
+  --bg-canvas:   #0A0B0D;
+  --bg-surface:  #111317;
+  --bg-raised:   #171A1F;
+  --bg-overlay:  #1D2026;
+  --bg-hover:    #22262D;
+
+  --border-subtle:  #23272E;
+  --border-default: #2E333B;
+  --border-strong:  #3D434D;
+  --border-focus:   #3FB6D8;
+
+  --text-primary:   #E8EAED;
+  --text-secondary: #9BA1AA;
+  --text-tertiary:  #6B7280;
+  --text-inverse:   #0A0B0D;
+
+  --accent-500:   #00A8D6;
+  --accent-400:   #3FB6D8;
+  --accent-600:   #0087AE;
+  --accent-muted: rgba(0, 168, 214, 0.12);
+
+  --ai-500:   #8B5CF6;
+  --ai-400:   #A78BFA;
+  --ai-muted: rgba(139, 92, 246, 0.14);
+
+  --success-500: #22C55E;
+  --warning-500: #F59E0B;
+  --danger-500:  #EF4444;
+  --info-500:    #3B82F6;
+
+  --grade-a: #16A34A;
+  --grade-b: #65A30D;
+  --grade-c: #EAB308;
+  --grade-d: #F97316;
+  --grade-f: #DC2626;
+
+  --e1: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --e2: 0 8px 24px rgba(0, 0, 0, 0.50);
+  --e3: 0 24px 64px rgba(0, 0, 0, 0.60);
 }
+
+html[data-density="compact"] { --row-h: 32px; }
+
+/* ============================================================
+   BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: #f8fafc;
-  color: #0f172a;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.011em;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.dark body,
-.dark {
-  background-color: #0b0f17;
-  color: #f1f5f9;
+/* scrollbars */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 99px;
+  border: 2px solid var(--bg-canvas);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ============================================================
+   COMPONENT PRIMITIVES
+   ============================================================ */
+@layer components {
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 32px; padding: 0 12px; border-radius: var(--r-sm);
+    border: 1px solid var(--border-default);
+    background: var(--bg-raised); color: var(--text-primary);
+    font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer;
+    transition: background 0.12s ease-out, border-color 0.12s ease-out, transform 0.12s ease-out;
+  }
+  .btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+  .btn--primary { background: var(--accent-500); border-color: var(--accent-500); color: #04161C; font-weight: 600; }
+  .btn--primary:hover { background: var(--accent-400); border-color: var(--accent-400); }
+
+  .btn--ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+  .btn--ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  .btn--ai { background: var(--ai-500); border-color: var(--ai-500); color: #FFFFFF; font-weight: 600; }
+  .btn--ai:hover { background: var(--ai-400); border-color: var(--ai-400); }
+
+  .btn--danger { color: var(--danger-500); border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.08); }
+  .btn--danger:hover { background: rgba(239, 68, 68, 0.16); }
+
+  .btn--sm { height: 26px; padding: 0 9px; font-size: 12px; }
+  .btn--lg { height: 38px; padding: 0 16px; font-size: 14px; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 20px; padding: 0 7px; border-radius: var(--r-pill);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid transparent; white-space: nowrap; line-height: 1;
+  }
+  .pill--get     { background: rgba(59,130,246,0.14); color:#2563EB; border-color: rgba(59,130,246,0.28); }
+  .pill--post    { background: rgba(34,197,94,0.14);  color:#15803D; border-color: rgba(34,197,94,0.28); }
+  .pill--put     { background: rgba(245,158,11,0.14); color:#B45309; border-color: rgba(245,158,11,0.28); }
+  .pill--patch   { background: rgba(139,92,246,0.16); color:#6D28D9; border-color: rgba(139,92,246,0.30); }
+  .pill--delete  { background: rgba(239,68,68,0.14);  color:#B91C1C; border-color: rgba(239,68,68,0.28); }
+  .pill--ok      { background: rgba(34,197,94,0.13);  color:#15803D; border-color: rgba(34,197,94,0.26); }
+  .pill--warn    { background: rgba(245,158,11,0.13); color:#B45309; border-color: rgba(245,158,11,0.26); }
+  .pill--err     { background: rgba(239,68,68,0.13);  color:#B91C1C; border-color: rgba(239,68,68,0.26); }
+  .pill--info    { background: rgba(59,130,246,0.13); color:#1D4ED8; border-color: rgba(59,130,246,0.26); }
+  .pill--neutral { background: var(--bg-overlay); color: var(--text-secondary); border-color: var(--border-default); }
+  .pill--ai      { background: var(--ai-muted); color: var(--ai-500); border-color: rgba(124,58,237,0.30); }
+
+  :root.dark .pill--get     { color:#7CB1FF; }
+  :root.dark .pill--post    { color:#5FD98A; }
+  :root.dark .pill--put     { color:#F5B84A; }
+  :root.dark .pill--patch   { color:#B08CFF; }
+  :root.dark .pill--delete  { color:#F87A7A; }
+  :root.dark .pill--ok      { color:#5FD98A; }
+  :root.dark .pill--warn    { color:#F5B84A; }
+  :root.dark .pill--err     { color:#F87A7A; }
+  :root.dark .pill--info    { color:#7CB1FF; }
+  :root.dark .pill--ai      { color:#B08CFF; }
+
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-md);
+  }
+
+  .input {
+    width: 100%; height: 34px; padding: 0 11px;
+    border-radius: var(--r-sm);
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    outline: none;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-muted); }
+  .input::placeholder { color: var(--text-tertiary); }
+
+  .kbd {
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 1px 5px; border-radius: 4px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-default);
+    color: var(--text-tertiary);
+  }
 }
 
-/* GitHub-Style Markdown Document Styling */
+/* utility */
+.mono { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: -0.01em; }
+
+/* ============================================================
+   MARKDOWN — GitHub-faithful, token-driven
+   ============================================================ */
 .markdown-body {
-  color: #24292f;
+  color: var(--text-primary);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.65;
   word-wrap: break-word;
 }
-
-.markdown-body h1,
-.markdown-body h2,
-.markdown-body h3,
-.markdown-body h4,
-.markdown-body h5,
-.markdown-body h6 {
-  margin-top: 24px;
-  margin-bottom: 16px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: #0f172a;
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  margin-top: 24px; margin-bottom: 16px;
+  font-weight: 600; line-height: 1.3; letter-spacing: -0.015em;
+  color: var(--text-primary);
 }
-
-.markdown-body h1 {
-  font-size: 1.85em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid #e2e8f0;
+.markdown-body h1 { font-size: 1.7em;  padding-bottom: .3em; border-bottom: 1px solid var(--border-subtle); }
+.markdown-body h2 { font-size: 1.35em; padding-bottom: .3em; border-bottom: 1px solid var(--border-subtle); }
+.markdown-body h3 { font-size: 1.15em; }
+.markdown-body p, .markdown-body blockquote, .markdown-body ul, .markdown-body ol,
+.markdown-body dl, .markdown-body table, .markdown-body pre {
+  margin-top: 0; margin-bottom: 16px;
 }
-
-.markdown-body h2 {
-  font-size: 1.45em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.markdown-body h3 {
-  font-size: 1.2em;
-}
-
-.markdown-body p,
-.markdown-body blockquote,
-.markdown-body ul,
-.markdown-body ol,
-.markdown-body dl,
-.markdown-body table,
-.markdown-body pre {
-  margin-top: 0;
-  margin-bottom: 16px;
-}
-
-.markdown-body a {
-  color: #059669;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.markdown-body a:hover {
-  text-decoration: underline;
-}
-
-.markdown-body hr {
-  height: 0.2em;
-  padding: 0;
-  margin: 24px 0;
-  background-color: #e2e8f0;
-  border: 0;
-}
-
+.markdown-body a { color: var(--accent-500); text-decoration: none; font-weight: 500; }
+.markdown-body a:hover { text-decoration: underline; }
+.markdown-body hr { height: 1px; background-color: var(--border-subtle); border: 0; margin: 24px 0; }
 .markdown-body blockquote {
   padding: 0 1em;
-  color: #475569;
-  border-left: 0.25em solid #cbd5e1;
-  background-color: #f8fafc;
-  border-radius: 0 8px 8px 0;
+  color: var(--text-secondary);
+  border-left: 3px solid var(--border-default);
+  background: var(--bg-overlay);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
 }
-
-.markdown-body ul,
-.markdown-body ol {
-  padding-left: 2em;
-}
-
-.markdown-body li + li {
-  margin-top: 0.25em;
-}
-
+.markdown-body ul, .markdown-body ol { padding-left: 2em; }
+.markdown-body li + li { margin-top: .25em; }
 .markdown-body table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 16px;
-  font-size: 13px;
-  display: block;
-  overflow-x: auto;
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  display: block; overflow-x: auto;
 }
-
-.markdown-body table th,
-.markdown-body table td {
-  padding: 8px 14px;
-  border: 1px solid #e2e8f0;
-}
-
-.markdown-body table th {
-  font-weight: 700;
-  background-color: #f8fafc;
-  color: #0f172a;
-}
-
-.markdown-body table tr:nth-child(2n) {
-  background-color: #f8fafc;
-}
-
+.markdown-body table th, .markdown-body table td { padding: 8px 14px; border: 1px solid var(--border-subtle); }
+.markdown-body table th { font-weight: 600; background-color: var(--bg-overlay); color: var(--text-primary); }
+.markdown-body table tr:nth-child(2n) { background-color: var(--bg-raised); }
 .markdown-body code {
-  padding: 0.2em 0.4em;
-  margin: 0;
-  font-size: 85%;
-  background-color: #f1f5f9;
-  color: #059669;
-  border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: .15em .4em; font-size: 85%;
+  background-color: var(--bg-overlay); color: var(--accent-500);
+  border-radius: 4px; font-family: var(--font-mono);
 }
-
 .markdown-body pre {
-  padding: 16px;
-  overflow: auto;
-  font-size: 13px;
-  line-height: 1.45;
-  background-color: #0f172a;
-  border-radius: 14px;
-  color: #f8fafc;
+  padding: 14px 16px; overflow: auto; font-size: 12.5px; line-height: 1.7;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  color: var(--text-secondary);
 }
-
 .markdown-body pre code {
-  display: inline;
-  max-width: auto;
-  padding: 0;
-  margin: 0;
-  overflow: visible;
-  line-height: inherit;
-  word-wrap: normal;
-  background-color: transparent;
-  color: #f8fafc;
-  border: 0;
-  font-size: 100%;
+  display: inline; padding: 0; margin: 0;
+  background-color: transparent; color: inherit; border: 0; font-size: 100%;
 }
 
-/* Dark Mode Markdown Overrides */
-.dark .markdown-body {
-  color: #e2e8f0;
-}
-.dark .markdown-body h1,
-.dark .markdown-body h2,
-.dark .markdown-body h3,
-.dark .markdown-body h4,
-.dark .markdown-body h5,
-.dark .markdown-body h6 {
-  color: #f8fafc;
-}
-.dark .markdown-body h1,
-.dark .markdown-body h2 {
-  border-bottom-color: #1e293b;
-}
-.dark .markdown-body hr {
-  background-color: #1e293b;
-}
-.dark .markdown-body blockquote {
-  color: #94a3b8;
-  border-left-color: #334155;
-  background-color: #0f172a;
-}
-.dark .markdown-body table th,
-.dark .markdown-body table td {
-  border-color: #334155;
-}
-.dark .markdown-body table th {
-  background-color: #1e293b;
-  color: #f1f5f9;
-}
-.dark .markdown-body table tr:nth-child(2n) {
-  background-color: #0b0f17;
-}
-.dark .markdown-body code {
-  background-color: #1e293b;
-  color: #34d399;
-}
-
-/* Swagger UI theme overrides live in components/swagger-ui-overrides.css and
-   are shipped inside the lazy Swagger UI chunk, so they are injected after
-   swagger-ui.css and always win the cascade. */
-
-/* Custom overrides for Scalar Developer Guide */
+/* ============================================================
+   SCALAR guide overrides
+   ============================================================ */
 .scalar-api-reference,
 .scalar-app {
-  --scalar-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
-  --scalar-font-code: 'JetBrains Mono', monospace !important;
-  --scalar-background-1: #ffffff !important;
-  --scalar-background-2: #f8fafc !important;
-  --scalar-background-3: #f1f5f9 !important;
-  --scalar-color-1: #0f172a !important;
-  --scalar-color-2: #334155 !important;
-  --scalar-color-3: #64748b !important;
-  --scalar-color-accent: #059669 !important;
+  --scalar-font: var(--font-sans) !important;
+  --scalar-font-code: var(--font-mono) !important;
+  --scalar-background-1: var(--bg-surface) !important;
+  --scalar-background-2: var(--bg-canvas) !important;
+  --scalar-background-3: var(--bg-overlay) !important;
+  --scalar-color-1: var(--text-primary) !important;
+  --scalar-color-2: var(--text-secondary) !important;
+  --scalar-color-3: var(--text-tertiary) !important;
+  --scalar-color-accent: var(--accent-500) !important;
 }
+
+/* ============================================================
+   Motion / selection
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+::selection { background: var(--accent-muted); color: var(--text-primary); }
