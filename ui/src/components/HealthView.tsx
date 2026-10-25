@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Activity,
   Server,
-  Database,
-  Cpu,
   RefreshCw,
   Terminal,
-  CheckCircle2,
-  AlertTriangle,
   ShieldCheck,
   Sparkles,
-  Bot,
   Zap,
-  Globe,
-  Layers
+  Copy,
+  Check,
+  Search,
+  CircleDot,
+  X,
 } from 'lucide-react';
 import { SkeletonStats } from './Skeletons';
 
@@ -24,6 +22,92 @@ interface HealthCapabilities {
   remote_fetch_enabled: boolean;
   max_spec_bytes: number;
 }
+
+/* ---------- log-level detection ---------- */
+type LogLevel = 'sys' | 'info' | 'warn' | 'err' | 'ok';
+
+const detectLevel = (msg: string): LogLevel => {
+  const m = msg.toLowerCase();
+  if (/\b(err|error|fatal|panic|fail)/i.test(m)) return 'err';
+  if (/\b(warn|warning|slow|degrad)/i.test(m)) return 'warn';
+  if (/\b(ok|healthy|connected|ready|active|online|valid)/i.test(m)) return 'ok';
+  if (msg.startsWith('[') && /\[(system|healthcheck)/.test(msg)) return 'sys';
+  return 'info';
+};
+
+const levelMeta: Record<LogLevel, { dot: string; tag: string }> = {
+  sys: { dot: '#A78BFA', tag: 'SYS' },
+  info: { dot: '#22D3EE', tag: 'INFO' },
+  warn: { dot: '#FACC15', tag: 'WARN' },
+  err: { dot: '#F87171', tag: 'ERR' },
+  ok: { dot: '#4ADE80', tag: 'OK' },
+};
+
+/* ---------- stat tile ---------- */
+const StatTile: React.FC<{
+  label: string;
+  value: string;
+  hint: string;
+  tone: 'accent' | 'success' | 'warning' | 'neutral';
+  Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  hintIcon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+}> = ({ label, value, hint, tone, Icon, hintIcon: HintIcon }) => {
+  const colors: Record<string, { icon: string; hint: string }> = {
+    accent: { icon: 'var(--accent-500)', hint: 'var(--accent-500)' },
+    success: { icon: 'var(--success-500)', hint: 'var(--success-500)' },
+    warning: { icon: 'var(--warning-500)', hint: 'var(--warning-500)' },
+    neutral: { icon: 'var(--text-tertiary)', hint: 'var(--text-tertiary)' },
+  };
+  return (
+    <div
+      className="p-4 rounded-[var(--r-md)] flex items-start justify-between transition-all duration-200"
+      style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border-default)';
+        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border-subtle)';
+        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+      }}
+    >
+      <div className="min-w-0 flex-1">
+        <div
+          className="text-[10.5px] font-semibold uppercase mb-1.5"
+          style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+        >
+          {label}
+        </div>
+        <div
+          className="text-[15px] font-semibold leading-tight truncate mb-1"
+          style={{ color: 'var(--text-primary)', letterSpacing: '-0.015em' }}
+        >
+          {value}
+        </div>
+        <div
+          className="text-[11.5px] font-medium inline-flex items-center gap-1"
+          style={{ color: colors[tone].hint }}
+        >
+          {HintIcon && <HintIcon className="w-3 h-3" />}
+          {hint}
+        </div>
+      </div>
+      <div
+        className="w-8 h-8 rounded-[var(--r-sm)] grid place-items-center shrink-0 ml-2"
+        style={{
+          background: 'color-mix(in srgb, ' + colors[tone].icon + ' 10%, transparent)',
+          border: '1px solid color-mix(in srgb, ' + colors[tone].icon + ' 22%, transparent)',
+        }}
+      >
+        <Icon className="w-4 h-4" style={{ color: colors[tone].icon }} />
+      </div>
+    </div>
+  );
+};
 
 export const HealthView: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
@@ -37,8 +121,10 @@ export const HealthView: React.FC = () => {
     fail: 0,
     pending: 0,
   });
+  const [copiedLogs, setCopiedLogs] = useState(false);
+  const logSearchRef = useRef<HTMLInputElement>(null);
 
-  const [logs, setLogs] = useState<string[]>([
+  const [logs] = useState<string[]>([
     '[system] Gateway reverse-proxy initialized on :8080',
     '[ai:nvidia] NIM DeepSeek v4.1 Flash inference endpoint online',
     '[database] PostgreSQL connection pool healthy (10/50 active)',
@@ -77,39 +163,106 @@ export const HealthView: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleRefresh = () => {
-    loadData();
-  };
+  // Cmd+K focuses log search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        logSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
-  const filteredLogs = logs.filter((l) =>
-    l.toLowerCase().includes(logSearch.toLowerCase())
+  const handleRefresh = () => loadData();
+
+  const filteredLogs = useMemo(
+    () => logs.filter((l) => l.toLowerCase().includes(logSearch.toLowerCase())),
+    [logs, logSearch],
   );
 
+  const copyAllLogs = () => {
+    navigator.clipboard.writeText(filteredLogs.join('\n'));
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
+
+  const uptimePct = qaStats.total > 0 ? Math.round((qaStats.pass / qaStats.total) * 100) : null;
+
   return (
-    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm transition-colors">
+    <div
+      className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5"
+      style={{ background: 'var(--bg-canvas)' }}
+    >
+      {/* ============================================================
+          HEADER
+          ============================================================ */}
+      <div
+        className="rounded-[var(--r-lg)] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">System Health & Ops Dashboard</h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              All Systems Operational
+          <div className="flex flex-wrap items-center gap-2.5 mb-1.5">
+            <h1
+              className="text-[18px] sm:text-[20px] font-semibold"
+              style={{ color: 'var(--text-primary)', letterSpacing: '-0.018em' }}
+            >
+              System health
+            </h1>
+            <span
+              className="inline-flex items-center gap-1.5 h-6 px-2 rounded-[var(--r-pill)] text-[11px] font-medium"
+              style={{
+                background: 'color-mix(in srgb, var(--success-500) 9%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--success-500) 24%, transparent)',
+                color: 'var(--success-500)',
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  background: 'var(--success-500)',
+                  boxShadow: '0 0 0 3px color-mix(in srgb, var(--success-500) 15%, transparent), 0 0 6px var(--success-500)',
+                }}
+              />
+              All systems operational
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Real-time telemetry, NVIDIA NIM AI test engine status, and sandbox diagnostics.
+          <p className="text-[12.5px]" style={{ color: 'var(--text-tertiary)' }}>
+            Real-time telemetry, AI engine status, and sandbox diagnostics.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400">
-            Last check: {lastChecked.toLocaleTimeString()}
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className="mono text-[11px] hidden sm:inline"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            {lastChecked.toLocaleTimeString()}
           </span>
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[var(--r-sm)] text-[12px] font-medium transition-all"
+            style={{
+              background: 'var(--bg-canvas)',
+              border: '1px solid var(--border-subtle)',
+              color: 'var(--text-secondary)',
+            }}
+            onMouseEnter={(e) => {
+              if (!refreshing) {
+                e.currentTarget.style.borderColor = 'var(--border-default)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-subtle)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -117,88 +270,93 @@ export const HealthView: React.FC = () => {
         </div>
       </div>
 
-      {/* Services & AI Engine Grid */}
+      {/* ============================================================
+          STAT TILES
+          ============================================================ */}
       {capabilities === null ? (
         <SkeletonStats count={4} />
       ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* NVIDIA NIM DeepSeek v4.1 Card */}
-        <div className="bg-gradient-to-br from-purple-50/70 to-indigo-50/70 dark:from-purple-950/20 dark:to-indigo-950/20 border border-purple-200/80 dark:border-purple-800/60 rounded-2xl p-5 shadow-sm flex items-start justify-between">
-          <div>
-            <div className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1">
-              <Bot className="w-3.5 h-3.5" /> AI NIM Engine
-            </div>
-            <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">DeepSeek v4.1</div>
-            <div className="text-xs text-purple-600 dark:text-purple-300 font-semibold mt-2 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" /> Synthetic QA Synthesis
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 flex items-center justify-center">
-            <Sparkles className="w-4 h-4" />
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile
+            label="AI engine"
+            value="DeepSeek v4.1"
+            hint="Synthesis ready"
+            tone="accent"
+            Icon={Sparkles}
+            hintIcon={Sparkles}
+          />
+          <StatTile
+            label="API gateway"
+            value="Active"
+            hint="99.98% uptime"
+            tone="success"
+            Icon={Server}
+            hintIcon={Zap}
+          />
+          <StatTile
+            label="Security"
+            value={capabilities?.security_audit_enabled ? 'Hardened' : 'Dialer active'}
+            hint="SSRF defense"
+            tone="success"
+            Icon={ShieldCheck}
+            hintIcon={ShieldCheck}
+          />
+          <StatTile
+            label="QA coverage"
+            value={
+              qaStats.total > 0
+                ? `${qaStats.pass}/${qaStats.total}`
+                : uptimePct !== null
+                ? `${uptimePct}%`
+                : 'Tracking'
+            }
+            hint={qaStats.fail > 0 ? `${qaStats.fail} issues` : 'No issues'}
+            tone={qaStats.fail > 0 ? 'warning' : 'neutral'}
+            Icon={Activity}
+            hintIcon={CircleDot}
+          />
         </div>
-
-        {/* REST API Gateway */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-start justify-between transition-colors">
-          <div>
-            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">REST API Gateway</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">Active & Ready</div>
-            <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-2 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> 99.98% Uptime
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <Server className="w-4 h-4" />
-          </div>
-        </div>
-
-        {/* Security & SSRF Protection */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-start justify-between transition-colors">
-          <div>
-            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Security Shield</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-              {capabilities?.security_audit_enabled ? 'Hardened & Audited' : 'Dialer Active'}
-            </div>
-            <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-2 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" /> SSRF Defense Active
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
-        </div>
-
-        {/* QA Review & Coverage Stats */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-start justify-between transition-colors">
-          <div>
-            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">QA Verification</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-              {qaStats.total > 0 ? `${qaStats.pass}/${qaStats.total} Passed` : 'Tracking Active'}
-            </div>
-            <div className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-2 flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5" /> {qaStats.fail} Issues Tracked
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-            <Activity className="w-4 h-4" />
-          </div>
-        </div>
-      </div>
       )}
 
-      {/* Live Diagnostics Log Console */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+      {/* ============================================================
+          LIVE DIAGNOSTICS TERMINAL
+          ============================================================ */}
+      <div
+        className="rounded-[var(--r-lg)] overflow-hidden"
+        style={{
+          background: '#0A0B0D',
+          border: '1px solid #23272E',
+          boxShadow: 'var(--shadow-lg)',
+        }}
+      >
+        {/* header */}
+        <div
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3"
+          style={{ borderBottom: '1px solid #23272E' }}
+        >
           <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-white tracking-wide">Live Diagnostics Terminal</h2>
+            <Terminal className="w-3.5 h-3.5" style={{ color: '#22D3EE' }} />
+            <span className="text-[12px] font-medium" style={{ color: '#E8EAED' }}>
+              Diagnostics
+            </span>
+            <span
+              className="inline-flex items-center gap-1 h-5 px-1.5 rounded mono text-[10px]"
+              style={{ background: '#1F1F24', color: '#A1A1AA' }}
+            >
+              {filteredLogs.length} entries
+            </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <select
               value={container}
               onChange={(e) => setContainer(e.target.value)}
-              className="bg-slate-800 border border-slate-700 text-xs font-medium text-slate-200 rounded-lg px-2.5 py-1.5 outline-none"
+              className="h-7 px-2 rounded mono text-[11px] outline-none cursor-pointer"
+              style={{
+                background: '#111317',
+                border: '1px solid #23272E',
+                color: '#D4D4D8',
+              }}
             >
               <option value="api-gateway">api-gateway</option>
               <option value="ai-engine">ai-nim-deepseek</option>
@@ -206,29 +364,121 @@ export const HealthView: React.FC = () => {
               <option value="db-engine">db-engine</option>
             </select>
 
-            <input
-              type="text"
-              value={logSearch}
-              onChange={(e) => setLogSearch(e.target.value)}
-              placeholder="Filter logs..."
-              className="bg-slate-800 border border-slate-700 text-xs font-medium text-slate-200 rounded-lg px-3 py-1.5 placeholder:text-slate-500 outline-none w-36 sm:w-48"
-            />
+            <div
+              className="flex items-center gap-1.5 h-7 px-2 rounded"
+              style={{
+                background: '#111317',
+                border: '1px solid #23272E',
+              }}
+            >
+              <Search className="w-3 h-3 shrink-0" style={{ color: '#71717A' }} />
+              <input
+                ref={logSearchRef}
+                type="text"
+                value={logSearch}
+                onChange={(e) => setLogSearch(e.target.value)}
+                placeholder="Filter logs…"
+                className="bg-transparent outline-none mono text-[11px] w-24 sm:w-40"
+                style={{ color: '#E8EAED' }}
+              />
+              {logSearch && (
+                <button
+                  onClick={() => setLogSearch('')}
+                  className="shrink-0"
+                  style={{ color: '#71717A' }}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={copyAllLogs}
+              className="inline-flex items-center gap-1 h-7 px-2 rounded mono text-[11px] font-medium transition-colors"
+              style={{
+                background: copiedLogs ? '#4ADE80' : '#1F1F24',
+                color: copiedLogs ? '#0A0B0D' : '#A1A1AA',
+              }}
+              onMouseEnter={(e) => {
+                if (!copiedLogs) e.currentTarget.style.background = '#28282E';
+              }}
+              onMouseLeave={(e) => {
+                if (!copiedLogs) e.currentTarget.style.background = '#1F1F24';
+              }}
+              title="Copy filtered logs"
+            >
+              {copiedLogs ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              <span className="hidden sm:inline">{copiedLogs ? 'Copied' : 'Copy'}</span>
+            </button>
           </div>
         </div>
 
-        <div className="bg-slate-950 rounded-xl p-4 font-mono text-xs text-emerald-400 min-h-48 max-h-80 overflow-y-auto space-y-1.5 select-text">
-          {filteredLogs.map((log, idx) => (
-            <div key={idx} className="leading-relaxed hover:bg-slate-900/60 px-1 py-0.5 rounded">
-              <span className="text-slate-500 mr-2">[{new Date().toISOString().substring(11, 19)}]</span>
-              {log}
+        {/* log body */}
+        <div
+          className="p-4 mono text-[11.5px] leading-[1.7] min-h-[200px] max-h-[400px] overflow-y-auto select-text"
+          style={{ color: '#D4D4D8' }}
+        >
+          {filteredLogs.length === 0 ? (
+            <div style={{ color: '#71717A' }} className="italic">
+              No log entries match "{logSearch}".
             </div>
-          ))}
-          {filteredLogs.length === 0 && (
-            <div className="text-slate-500 italic">No log entries matching filter "{logSearch}".</div>
+          ) : (
+            filteredLogs.map((log, idx) => {
+              const level = detectLevel(log);
+              const meta = levelMeta[level];
+              const ts = new Date().toISOString().substring(11, 19);
+              return (
+                <div
+                  key={idx}
+                  className="flex items-start gap-2.5 py-0.5 px-1 rounded transition-colors"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <span className="shrink-0 tabular-nums" style={{ color: '#52525B' }}>
+                    {ts}
+                  </span>
+                  <span
+                    className="shrink-0 text-[10px] font-semibold px-1 rounded"
+                    style={{
+                      background: `color-mix(in srgb, ${meta.dot} 15%, transparent)`,
+                      color: meta.dot,
+                      minWidth: 34,
+                      textAlign: 'center' as const,
+                      lineHeight: '16px',
+                      marginTop: 1,
+                    }}
+                  >
+                    {meta.tag}
+                  </span>
+                  <span className="min-w-0 break-words" style={{ color: '#E8EAED' }}>
+                    {log}
+                  </span>
+                </div>
+              );
+            })
           )}
+        </div>
+
+        {/* footer */}
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-2 mono text-[10.5px]"
+          style={{ borderTop: '1px solid #23272E', color: '#71717A' }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ADE80' }} />
+              live
+            </span>
+            <span className="hidden sm:inline">container: {container}</span>
+          </div>
+          <span>press ⌘K to filter</span>
         </div>
       </div>
     </div>
   );
 };
-

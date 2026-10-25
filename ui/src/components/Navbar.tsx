@@ -2,25 +2,28 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Menu,
   Lock,
-  Search,
   ShieldCheck,
-  ChevronRight,
+  ChevronDown,
   Sparkles,
   KeyRound,
   EyeOff,
   Sliders,
   Settings,
   UploadCloud,
-  ChevronDown,
   Layers,
-  ExternalLink,
-  Zap,
   Code2,
   FileSpreadsheet,
+  Rows3,
+  Rows4,
+  Home,
+  BookOpen,
+  Zap,
+  Activity,
+  FileJson,
+  CircleDot,
 } from 'lucide-react';
 import { Workspace, WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { useTheme } from '../context/ThemeContext';
-import { Sun, Moon, MonitorSmartphone } from 'lucide-react';
 
 export interface NavItem {
   label: string;
@@ -64,6 +67,17 @@ interface NavbarProps {
   maskPII?: boolean;
 }
 
+const getPageMeta = (path: string) => {
+  if (path === '/' || path === '' || path === '/landing')
+    return { title: 'Overview', Icon: Home };
+  if (path === '/docs' || path === '/docs/index.html' || path === '/swagger')
+    return { title: 'Sandbox', Icon: Zap };
+  if (path.startsWith('/guide')) return { title: 'Guide', Icon: BookOpen };
+  if (path === '/dashboard' || path === '/health')
+    return { title: 'Health', Icon: Activity };
+  return { title: 'Explorer', Icon: FileJson };
+};
+
 export const Navbar: React.FC<NavbarProps> = ({
   config,
   currentPath,
@@ -82,340 +96,372 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSDKGenerator,
   onOpenTenantSettings,
   onToggleMobileSidebar,
-  onOpenSearch,
   onOpenCredentials,
   onOpenQAReport,
   hasCredentials = false,
   activeEnv = 'default',
   maskPII = false,
+  onOpenSearch,
 }) => {
-  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
-  const settingsMenuRef = useRef<HTMLDivElement>(null);
-  const { mode: themeMode, setMode: setThemeMode, isDark } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useTheme();
 
-  const cycleTheme = () => {
-    setThemeMode(themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light');
-  };
+  const { density, setDensity } = useTheme();
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target as Node)) {
-        setIsSettingsMenuOpen(false);
-      }
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const getPageMeta = () => {
-    if (currentPath === '/' || currentPath === '' || currentPath === '/landing') {
-      return { title: 'Overview', icon: '🏠', badge: 'Hub' };
-    }
-    if (currentPath === '/docs' || currentPath === '/docs/index.html' || currentPath === '/swagger') {
-      return { title: 'API Sandbox', icon: '⚡', badge: 'Live Test' };
-    }
-    if (currentPath.startsWith('/guide')) {
-      return { title: 'Interactive Guide', icon: '📖', badge: 'Reference' };
-    }
-    if (currentPath === '/dashboard' || currentPath === '/health') {
-      return { title: 'System Health', icon: '📊', badge: 'Telemetry' };
-    }
-    return { title: 'API Explorer', icon: '📄', badge: 'Spec' };
+  const { title: pageTitle, Icon: PageIcon } = getPageMeta(currentPath);
+  const isProd = /prod|production/i.test(activeEnv || '');
+  const showEnv = activeEnv && activeEnv !== 'default';
+
+  const brandLabel =
+    (config.title || 'go').replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toLowerCase() || 'go';
+
+  const iconBtn: React.CSSProperties = {
+    background: 'transparent',
+    border: '1px solid transparent',
+    color: 'var(--text-secondary)',
+    borderRadius: 'var(--r-sm)',
+    height: 32,
+    width: 32,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: '0 0 auto',
+    transition: 'all 0.15s var(--ease)',
   };
 
-  const pageMeta = getPageMeta();
-
   return (
-    <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-800/80 transition-colors duration-200">
-      <div className="w-full px-3 sm:px-6 lg:px-8 h-15 flex items-center justify-between gap-2 sm:gap-4">
-        
-        {/* Left Section: Mobile Drawer Trigger & Workspace Switcher + Breadcrumb */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <button
-            onClick={onToggleMobileSidebar}
-            className="lg:hidden p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 transition-all cursor-pointer shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95 shadow-2xs border border-slate-200/60 dark:border-slate-700/60"
-            aria-label="Toggle navigation drawer"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+    <header
+      className="sticky top-0 z-40 flex items-center gap-2 px-3 sm:px-4"
+      style={{
+        height: 'var(--topbar-h)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(20px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+        borderBottom: '1px solid var(--border-subtle)',
+      }}
+    >
+      {/* mobile toggle */}
+      <button
+        onClick={onToggleMobileSidebar}
+        className="lg:hidden"
+        style={iconBtn}
+        aria-label="Open navigation"
+      >
+        <Menu className="w-[16px] h-[16px]" />
+      </button>
 
-          {/* Workspace Switcher in Navbar */}
-          {workspaces.length > 0 && onSelectService && (
-            <div className="shrink-0 max-w-[150px] sm:max-w-xs">
-              <WorkspaceSwitcher
-                workspaces={workspaces}
-                activeWorkspaceId={activeWorkspaceId}
-                activeServiceId={activeServiceId}
-                writesEnabled={writesEnabled}
-                onSelectService={onSelectService}
-                onOpenImporter={onOpenImporter}
-                onOpenManager={onOpenWorkspaceManager}
-                onOpenSecurityAudit={onOpenSecurityAudit}
-              />
-            </div>
-          )}
-
-          {/* Breadcrumb Hierarchy */}
-          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0" />
-            <span className="inline-flex items-center gap-1.5 text-slate-900 dark:text-slate-100 font-semibold bg-slate-100/80 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200/70 dark:border-slate-700/80 shadow-2xs shrink-0">
-              <span>{pageMeta.icon}</span>
-              <span>{pageMeta.title}</span>
-            </span>
-          </nav>
+      {/* brand — mobile only */}
+      <a
+        href="/"
+        className="lg:hidden flex items-center gap-2.5 shrink-0 min-w-0"
+        title={config.title}
+      >
+        <div
+          className="w-[28px] h-[28px] rounded-[6px] grid place-items-center shrink-0"
+          style={{
+            background: 'linear-gradient(145deg, var(--accent-400), var(--accent-500))',
+            color: '#04161C',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '-0.03em',
+            boxShadow:
+              'inset 0 1px 0 rgba(255,255,255,0.35), 0 2px 6px rgba(34,211,238,0.25)',
+          }}
+        >
+          {brandLabel}
         </div>
+        <span
+          className="hidden sm:inline text-[13px] font-semibold leading-none truncate max-w-[180px]"
+          style={{ color: 'var(--text-primary)', letterSpacing: '-0.015em' }}
+        >
+          {config.title || 'API Platform'}
+        </span>
+      </a>
 
-        {/* Center Section: Unified Global Command Palette Trigger */}
-        {onOpenSearch && (
-          <div className="flex-1 max-w-sm lg:max-w-md mx-2 hidden sm:block">
-            <button
-              onClick={onOpenSearch}
-              title="Global Search & Command Palette (⌘K / Ctrl+K)"
-              className="w-full flex items-center justify-between bg-slate-100/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 rounded-xl px-3.5 py-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer shadow-2xs group min-h-[40px]"
-            >
-              <div className="flex items-center gap-2.5 truncate">
-                <Search className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors shrink-0" />
-                <span className="font-medium text-slate-600 dark:text-slate-300 truncate">Search API, schemas, endpoints...</span>
-              </div>
-              <kbd className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-mono font-bold bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-md border border-slate-200 dark:border-slate-700 shadow-2xs">
-                <span>⌘</span>K
-              </kbd>
-            </button>
+      <div
+        className="hidden lg:block h-5 w-px shrink-0"
+        style={{ background: 'var(--border-subtle)' }}
+      />
+
+      {workspaces.length > 0 && onSelectService && (
+        <div className="shrink-0 max-w-[180px]">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            activeServiceId={activeServiceId}
+            writesEnabled={writesEnabled}
+            onSelectService={onSelectService}
+            onOpenImporter={onOpenImporter}
+            onOpenManager={onOpenWorkspaceManager}
+            onOpenSecurityAudit={onOpenSecurityAudit}
+          />
+        </div>
+      )}
+
+      <div
+        className="hidden md:flex items-center gap-1.5 text-[12px] shrink-0 pl-1"
+        aria-label="Breadcrumb"
+      >
+        <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+        <span className="inline-flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+          <PageIcon className="w-[13px] h-[13px]" style={{ color: 'var(--text-tertiary)' }} />
+          {pageTitle}
+        </span>
+      </div>
+
+      <div className="flex-1" />
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        {showEnv && (
+          <div
+            className="hidden lg:inline-flex items-center gap-1.5 h-7 px-2 rounded-[var(--r-sm)]"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              fontWeight: 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}
+            title={`Environment: ${activeEnv}`}
+          >
+            <span
+              className="w-[6px] h-[6px] rounded-full shrink-0"
+              style={{
+                background: isProd ? 'var(--danger-500)' : 'var(--success-500)',
+                boxShadow: isProd ? '0 0 8px var(--danger-500)' : '0 0 6px color-mix(in srgb, var(--success-500) 50%, transparent)',
+              }}
+            />
+            {activeEnv}
           </div>
         )}
 
-        {/* Right Section: Compact Status Indicators & Unified Settings Dropdown */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          
-          {/* Mobile Search Button (Compact & Touch friendly) */}
-          {onOpenSearch && (
-            <button
-              onClick={onOpenSearch}
-              title="Search API (⌘K)"
-              className="sm:hidden p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shadow-2xs border border-slate-200/60 dark:border-slate-700/60"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Active Environment Pill */}
-          {activeEnv && activeEnv !== 'default' && (
-            <div
-              title={`Active Environment: ${activeEnv}`}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-300"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="uppercase">{activeEnv}</span>
-            </div>
-          )}
-
-          {/* Mask PII Indicator */}
-          {maskPII && (
-            <div
-              title="Real-time PII & Secrets Masking Active"
-              className="hidden xl:flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-[11px] font-bold text-purple-700 dark:text-purple-300"
-            >
-              <EyeOff className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-              <span>Masked</span>
-            </div>
-          )}
-
-          {/* Quick Credential Status (Touch-friendly Pill) */}
-          {onOpenCredentials && (
-            <button
-              onClick={onOpenCredentials}
-              title="Sandbox Authentication & Header Mapper"
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-2xs min-h-[42px] ${
-                hasCredentials
-                  ? 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300/80 dark:border-amber-800 text-amber-900 dark:text-amber-300 hover:bg-amber-100'
-                  : 'bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              <KeyRound className={`w-3.5 h-3.5 ${hasCredentials ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`} />
-              <span className="hidden sm:inline">{hasCredentials ? 'Auth Configured' : 'Auth'}</span>
-            </button>
-          )}
-
-          {/* Theme Mode Cycle Button: Light -> Dark -> System */}
-          <button
-            onClick={cycleTheme}
-            title={`Theme: ${themeMode}${themeMode === 'system' ? ' (OS preference)' : ''} — click to cycle`}
-            className="p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer min-h-[42px] min-w-[42px] flex items-center justify-center shadow-2xs border border-slate-200/60 dark:border-slate-700/60"
-            aria-label={`Current theme: ${themeMode}. Click to change theme.`}
+        {maskPII && (
+          <div
+            className="hidden xl:inline-flex items-center gap-1.5 h-7 px-2 rounded-[var(--r-sm)]"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              color: 'var(--text-secondary)',
+              fontSize: 11,
+              fontWeight: 500,
+            }}
+            title="PII masking active"
           >
-            {themeMode === 'light' ? (
-              <Sun className="w-4 h-4 text-amber-500" />
-            ) : themeMode === 'dark' ? (
-              <Moon className={`w-4 h-4 ${isDark ? 'text-indigo-300' : 'text-slate-500'}`} />
+            <EyeOff className="w-3 h-3" style={{ color: 'var(--text-tertiary)' }} />
+            Masked
+          </div>
+        )}
+
+        {onOpenCredentials && (
+          <button
+            onClick={onOpenCredentials}
+            title={hasCredentials ? 'Auth configured' : 'Configure auth'}
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[var(--r-sm)] transition-all"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              color: 'var(--text-secondary)',
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-default)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.background = 'var(--bg-raised)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-subtle)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+              e.currentTarget.style.background = 'var(--bg-surface)';
+            }}
+          >
+            {hasCredentials ? (
+              <CircleDot className="w-[13px] h-[13px]" style={{ color: 'var(--success-500)' }} />
             ) : (
-              <MonitorSmartphone className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+              <KeyRound className="w-[13px] h-[13px]" />
             )}
+            <span className="hidden md:inline">{hasCredentials ? 'Auth' : 'No auth'}</span>
+          </button>
+        )}
+
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            title="Settings"
+            style={{
+              ...iconBtn,
+              background: menuOpen ? 'var(--bg-hover)' : 'transparent',
+              color: menuOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+            }}
+            aria-expanded={menuOpen}
+          >
+            <Settings className="w-[15px] h-[15px]" />
           </button>
 
-          {/* Unified Settings & Tools Dropdown Menu */}
-          <div className="relative" ref={settingsMenuRef}>
-            <button
-              onClick={() => setIsSettingsMenuOpen(!isSettingsMenuOpen)}
-              title="Tools & Workspace Settings"
-              className={`flex items-center gap-1.5 p-2.5 sm:px-3 sm:py-2 rounded-xl border transition-all cursor-pointer shadow-2xs min-h-[42px] ${
-                isSettingsMenuOpen
-                  ? 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white'
-                  : 'bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300'
-              }`}
+          {menuOpen && (
+            <div
+              className="absolute right-0 mt-2 w-[280px] rounded-[var(--r-lg)] py-1 z-50 overflow-hidden"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-default)',
+                boxShadow: 'var(--shadow-xl)',
+              }}
             >
-              <Settings className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-              <span className="hidden sm:inline text-xs font-semibold">Settings</span>
-              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isSettingsMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
+              <SectionLabel>Actions</SectionLabel>
+              <div className="px-1">
+                {onOpenSearch && (
+                  <MenuRow
+                    icon={<Sparkles className="w-4 h-4" />}
+                    title="Search"
+                    sub="Endpoints, tests, findings"
+                    onClick={() => { setMenuOpen(false); onOpenSearch(); }}
+                  />
+                )}
+                {onOpenQAReport && (
+                  <MenuRow
+                    icon={<FileSpreadsheet className="w-4 h-4" />}
+                    title="QA Report"
+                    sub="Test results & audit"
+                    onClick={() => { setMenuOpen(false); onOpenQAReport(); }}
+                  />
+                )}
+                {liveSpecEditingEnabled && onOpenLiveSpec && (
+                  <MenuRow
+                    icon={<Code2 className="w-4 h-4" />}
+                    title="Edit Spec"
+                    sub="Live JSON/YAML editing"
+                    onClick={() => { setMenuOpen(false); onOpenLiveSpec(); }}
+                  />
+                )}
+                {securityAuditEnabled && onOpenSecurityAudit && (
+                  <MenuRow
+                    icon={<ShieldCheck className="w-4 h-4" />}
+                    title="Security Audit"
+                    sub="OWASP compliance scan"
+                    onClick={() => { setMenuOpen(false); onOpenSecurityAudit(); }}
+                  />
+                )}
+                {onOpenAITests && (
+                  <MenuRow
+                    icon={<Sparkles className="w-4 h-4" />}
+                    title="AI Test Studio"
+                    sub="Synthesize test suites"
+                    onClick={() => { setMenuOpen(false); onOpenAITests(); }}
+                  />
+                )}
+                {onOpenSDKGenerator && (
+                  <MenuRow
+                    icon={<Layers className="w-4 h-4" />}
+                    title="Export SDK"
+                    sub="TypeScript · Go · Python"
+                    onClick={() => { setMenuOpen(false); onOpenSDKGenerator(); }}
+                  />
+                )}
+                {writesEnabled && onOpenImporter && (
+                  <MenuRow
+                    icon={<UploadCloud className="w-4 h-4" />}
+                    title="Import Spec"
+                    sub="Upload or fetch OpenAPI"
+                    onClick={() => { setMenuOpen(false); onOpenImporter(); }}
+                  />
+                )}
+                {onOpenTenantSettings && (
+                  <MenuRow
+                    icon={<Sliders className="w-4 h-4" />}
+                    title="Tenant Settings"
+                    sub="Quotas, themes, billing"
+                    onClick={() => { setMenuOpen(false); onOpenTenantSettings(); }}
+                  />
+                )}
+              </div>
 
-            {/* Dropdown Content */}
-            {isSettingsMenuOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xl py-2 z-50 animate-in fade-in-50 zoom-in-95 duration-150">
-                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Workspace Actions
-                  </span>
-                </div>
-
-                <div className="p-1 space-y-0.5">
-                  {/* QA Sprint Report */}
-                  {onOpenQAReport && (
+              <div className="mt-1 pt-2 px-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <SectionLabel>Density</SectionLabel>
+                <div className="flex gap-1 pb-1">
+                  {(['comfortable', 'compact'] as const).map((d) => (
                     <button
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onOpenQAReport();
+                      key={d}
+                      onClick={() => setDensity(d)}
+                      className="flex-1 h-7 rounded-[var(--r-sm)] text-[11.5px] font-medium flex items-center justify-center gap-1.5 transition-all"
+                      style={{
+                        background: density === d ? 'var(--bg-hover)' : 'transparent',
+                        color: density === d ? 'var(--text-primary)' : 'var(--text-tertiary)',
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
                     >
-                      <FileSpreadsheet className="w-4 h-4 text-amber-500 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">QA Sprint Report</div>
-                        <div className="text-[10px] text-slate-500">Test pass rate, bugs & markdown audit</div>
-                      </div>
+                      {d === 'compact' ? <Rows4 className="w-3 h-3" /> : <Rows3 className="w-3 h-3" />}
+                      {d === 'compact' ? 'Compact' : 'Comfortable'}
                     </button>
-                  )}
-
-                  {/* Live Spec Editor */}
-                  {liveSpecEditingEnabled && onOpenLiveSpec && (
-                    <button
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onOpenLiveSpec();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
-                    >
-                      <Code2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">Edit OpenAPI Spec</div>
-                        <div className="text-[10px] text-slate-500">Live JSON/YAML modification & history</div>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Security Audit */}
-                  {securityAuditEnabled && onOpenSecurityAudit && (
-                    <button
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onOpenSecurityAudit();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
-                    >
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">Run Security Audit</div>
-                        <div className="text-[10px] text-slate-500">OWASP compliance & vulnerability scan</div>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* AI DeepSeek Tests */}
-                  {onOpenAITests && (
-                    <button
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onOpenAITests();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
-                    >
-                      <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">AI Test Studio</div>
-                        <div className="text-[10px] text-slate-500">DeepSeek v4.1 & Multi-LLM test synthesis</div>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Export Client SDK */}
-                  {onOpenSDKGenerator && (
-                    <button
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onOpenSDKGenerator();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
-                    >
-                      <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">Export Client SDK</div>
-                        <div className="text-[10px] text-slate-500">Generate TypeScript, Go, Python packages</div>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Schema Importer */}
-                  {writesEnabled && onOpenImporter && (
-                    <button
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onOpenImporter();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
-                    >
-                      <UploadCloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">Import OpenAPI Spec</div>
-                        <div className="text-[10px] text-slate-500">Upload JSON/YAML or fetch URL</div>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* SaaS Tenant Hub */}
-                  {onOpenTenantSettings && (
-                    <button
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onOpenTenantSettings();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-left"
-                    >
-                      <Sliders className="w-4 h-4 text-sky-500 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">Tenant & Billing Hub</div>
-                        <div className="text-[10px] text-slate-500">Quotas, white-label themes & Stripe</div>
-                      </div>
-                    </button>
-                  )}
-                </div>
-
-                <div className="px-3 py-1.5 mt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400 font-mono">v2.0 Enterprise</span>
-                  <a
-                    href="/docs/logout"
-                    className="flex items-center gap-1 text-rose-600 hover:text-rose-700 dark:text-rose-400 font-semibold"
-                  >
-                    <Lock className="w-3 h-3" />
-                    <span>Lock Session</span>
-                  </a>
+                  ))}
                 </div>
               </div>
-            )}
-          </div>
 
+              <div
+                className="mt-1 pt-1.5 px-3 py-1.5 flex items-center justify-between text-[11px]"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <span className="mono" style={{ color: 'var(--text-tertiary)' }}>
+                  v{__APP_VERSION__}
+                </span>
+                <a
+                  href="/docs/logout"
+                  className="inline-flex items-center gap-1 transition-colors"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <Lock className="w-3 h-3" />
+                  Lock
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
   );
 };
 
+const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase"
+    style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+  >
+    {children}
+  </div>
+);
 
+const MenuRow: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+  onClick: () => void;
+}> = ({ icon, title, sub, onClick }) => (
+  <button
+    onClick={onClick}
+    className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded-[var(--r-sm)] text-left transition-colors"
+    style={{ color: 'var(--text-secondary)' }}
+    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+  >
+    <span className="mt-0.5 shrink-0" style={{ color: 'var(--text-tertiary)' }}>{icon}</span>
+    <div className="min-w-0 flex-1">
+      <div className="text-[12.5px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+        {title}
+      </div>
+      <div className="text-[11px] leading-tight truncate" style={{ color: 'var(--text-tertiary)' }}>
+        {sub}
+      </div>
+    </div>
+  </button>
+);

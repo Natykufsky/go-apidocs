@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Sparkles,
   X,
@@ -21,7 +21,6 @@ import {
   ChevronDown,
   ExternalLink,
   Gift,
-  HelpCircle,
   Activity,
   Gauge,
   Download,
@@ -30,7 +29,22 @@ import {
   FolderOpen,
   Trash2,
   ListOrdered,
+  Bot,
+  Github,
+  Heart,
+  Wind,
+  Waves,
+  Server,
+  Folder,
+  Ban,
+  Settings2,
+
 } from 'lucide-react';
+import { Modal } from './Modal';
+
+/* ============================================================
+   TYPES
+   ============================================================ */
 
 export interface AITestCase {
   id: string;
@@ -63,6 +77,8 @@ export interface TestExecutionResult {
   assertionsPassed: number;
   assertionsTotal: number;
   errorMessage?: string;
+  /** Raw response body for diff rendering when a test fails */
+  responseBody?: string;
 }
 
 interface AITestGeneratorModalProps {
@@ -71,11 +87,9 @@ interface AITestGeneratorModalProps {
   endpointKey: string;
   initialSuite?: AITestSuite;
   onLoadIntoSandbox?: (testCase: AITestCase) => void;
-  /** Full endpoint catalog (e.g. "GET /api/v1/pets") enabling multi-endpoint batch generation & execution. */
   endpointsList?: string[];
 }
 
-// Enhanced list of supported AI Inference Engines & Models
 export interface AIModelOption {
   id: string;
   name: string;
@@ -89,8 +103,6 @@ export interface AIProviderConfig {
   company: string;
   tagline: string;
   badge: string;
-  badgeColor: string;
-  icon: string;
   category: 'cloud' | 'local' | 'speed' | 'frontier';
   defaultModel: string;
   defaultBaseUrl: string;
@@ -105,6 +117,32 @@ export interface AIProviderConfig {
   models: AIModelOption[];
 }
 
+/* ============================================================
+   PROVIDER ICON MAP (replaces emoji icons)
+   ============================================================ */
+
+const providerIcon: Record<string, React.ComponentType<{ className?: string }>> = {
+  nvidia: Zap,
+  openai: Bot,
+  anthropic: Sparkles,
+  groq: Zap,
+  gemini: Sparkles,
+  github: Github,
+  huggingface: Heart,
+  mistral: Wind,
+  deepseek: Waves,
+  ollama: Server,
+};
+
+const renderProviderIcon = (id: string, className = 'w-4 h-4') => {
+  const Icon = providerIcon[id] || Sparkles;
+  return <Icon className={className} />;
+};
+
+/* ============================================================
+   PROVIDERS
+   ============================================================ */
+
 const AI_PROVIDERS: AIProviderConfig[] = [
   {
     id: 'nvidia',
@@ -112,8 +150,6 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     company: 'NVIDIA',
     tagline: 'Hardware accelerated DeepSeek & open models',
     badge: 'Recommended',
-    badgeColor: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-    icon: '⚡',
     category: 'frontier',
     defaultModel: 'deepseek-ai/deepseek-v4.1-flash',
     defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
@@ -121,9 +157,9 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     consoleUrl: 'https://build.nvidia.com/',
     freeTier: {
       isFree: true,
-      quotaText: '1,000 Free Inference Credits',
+      quotaText: '1,000 free inference credits',
       docsUrl: 'https://build.nvidia.com/',
-      instructions: 'Sign up for NVIDIA Build with your Google or work account to receive 1,000 free API credits instantly.',
+      instructions: 'Sign up for NVIDIA Build with Google or work account for 1,000 free API credits instantly.',
     },
     models: [
       { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek v4.1 Flash', description: 'Ultra-low latency reasoning & schema testing' },
@@ -137,8 +173,6 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     company: 'OpenAI',
     tagline: 'Industry benchmark frontier models',
     badge: 'Popular',
-    badgeColor: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
-    icon: '🤖',
     category: 'frontier',
     defaultModel: 'gpt-4o-mini',
     defaultBaseUrl: 'https://api.openai.com/v1',
@@ -157,15 +191,13 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     company: 'Anthropic',
     tagline: 'Unmatched nuance, safety & code generation',
     badge: 'Precision',
-    badgeColor: 'bg-teal-500/10 text-teal-600 border-teal-500/20',
-    icon: '🔮',
     category: 'frontier',
     defaultModel: 'claude-sonnet-5-5',
     defaultBaseUrl: 'https://api.anthropic.com/v1',
     keyPlaceholder: 'sk-ant-...',
     consoleUrl: 'https://console.anthropic.com/settings/keys',
     models: [
-      { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', description: 'Recommended default: high intelligence, speed & deep coding' },
+      { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', description: 'Recommended: high intelligence, speed & deep coding' },
       { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', description: 'Ultra-low latency test generation and data extraction' },
       { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', description: 'Flagship depth for complex architectures and threat models' },
     ],
@@ -173,11 +205,9 @@ const AI_PROVIDERS: AIProviderConfig[] = [
   {
     id: 'groq',
     name: 'Groq Cloud',
-    company: 'Groq LPU™',
+    company: 'Groq LPU',
     tagline: 'Instant token generation (500+ tokens/sec)',
-    badge: 'Free Tier Available',
-    badgeColor: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-    icon: '⚡',
+    badge: 'Free tier',
     category: 'speed',
     defaultModel: 'openai/gpt-oss-120b',
     defaultBaseUrl: 'https://api.groq.com/openai/v1',
@@ -185,13 +215,13 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     consoleUrl: 'https://console.groq.com/keys',
     freeTier: {
       isFree: true,
-      quotaText: '14,400 requests/day (Free Forever)',
+      quotaText: '14,400 requests/day (free forever)',
       docsUrl: 'https://console.groq.com/keys',
-      instructions: 'Sign up in 30 seconds with Google/GitHub to get a free API key with 14,400 daily requests.',
+      instructions: 'Sign up in 30 seconds with Google/GitHub for a free API key with 14,400 daily requests.',
     },
     models: [
-      { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B (Active Flagship)', description: 'Full reasoning, 131k context & structured JSON output on Groq' },
-      { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B (High Speed)', description: 'Ultra-low latency open-weights reasoning model' },
+      { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B (flagship)', description: 'Full reasoning, 131k context, structured JSON output' },
+      { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B (high speed)', description: 'Ultra-low latency open-weights reasoning model' },
       { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B', description: 'Multimodal intelligence & deep structured QA validation' },
     ],
   },
@@ -200,9 +230,7 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     name: 'Google Gemini',
     company: 'Google AI Studio',
     tagline: 'Huge context windows & native OpenAPI reasoning',
-    badge: '1,500 req/day Free',
-    badgeColor: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-    icon: '✨',
+    badge: '1,500 req/day free',
     category: 'frontier',
     defaultModel: 'gemini-3.8-flash',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -210,13 +238,13 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     consoleUrl: 'https://aistudio.google.com/app/apikey',
     freeTier: {
       isFree: true,
-      quotaText: '15 RPM / 1,500 req/day (Free Tier)',
+      quotaText: '15 RPM / 1,500 req/day',
       docsUrl: 'https://aistudio.google.com/app/apikey',
-      instructions: 'Sign in with your standard Google Account and click "Create API key" for instant free access.',
+      instructions: 'Sign in with your Google Account and click "Create API key" for instant free access.',
     },
     models: [
-      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', description: 'Google recommendation: latest ultra-fast reasoning with 1M context' },
-      { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', description: 'Advanced architectural reasoning for complex OpenAPI schemas' },
+      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', description: 'Latest ultra-fast reasoning with 1M context' },
+      { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', description: 'Advanced architectural reasoning for complex schemas' },
     ],
   },
   {
@@ -225,8 +253,6 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     company: 'GitHub & Azure AI',
     tagline: 'Free sandbox playground for logged-in GitHub developers',
     badge: 'Free with GitHub',
-    badgeColor: 'bg-slate-900/10 text-slate-800 border-slate-900/20',
-    icon: '🐙',
     category: 'cloud',
     defaultModel: 'gpt-4o-mini',
     defaultBaseUrl: 'https://models.inference.ai.azure.com',
@@ -234,9 +260,9 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     consoleUrl: 'https://github.com/settings/tokens',
     freeTier: {
       isFree: true,
-      quotaText: '150 req/day (Free for GitHub accounts)',
+      quotaText: '150 req/day (free for GitHub accounts)',
       docsUrl: 'https://github.com/settings/tokens',
-      instructions: 'Generate a classic GitHub Personal Access Token (PAT) with read permission to access GitHub Models for free.',
+      instructions: 'Generate a classic GitHub PAT with read permission to access GitHub Models for free.',
     },
     models: [
       { id: 'gpt-4o-mini', name: 'GPT-4o Mini (via GitHub)', description: 'Fast automated test generation hosted on Azure AI' },
@@ -246,12 +272,10 @@ const AI_PROVIDERS: AIProviderConfig[] = [
   },
   {
     id: 'huggingface',
-    name: 'Hugging Face Inference',
+    name: 'Hugging Face',
     company: 'Hugging Face',
-    tagline: 'Serverless inference router for open-source AI models',
-    badge: 'Free Serverless',
-    badgeColor: 'bg-amber-500/10 text-amber-700 border-amber-500/20',
-    icon: '🤗',
+    tagline: 'Serverless inference router for open-source models',
+    badge: 'Free serverless',
     category: 'cloud',
     defaultModel: 'Qwen/Qwen2.5-Coder-32B-Instruct',
     defaultBaseUrl: 'https://router.huggingface.co/v1',
@@ -259,9 +283,9 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     consoleUrl: 'https://huggingface.co/settings/tokens',
     freeTier: {
       isFree: true,
-      quotaText: 'Free Serverless Rate Limits',
+      quotaText: 'Free serverless rate limits',
       docsUrl: 'https://huggingface.co/settings/tokens',
-      instructions: 'Create a free Hugging Face account and generate a free Read Token to test community models.',
+      instructions: 'Create a free Hugging Face account and generate a Read Token.',
     },
     models: [
       { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', description: 'Exceptional open-source test engineering model' },
@@ -274,9 +298,7 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     name: 'Mistral & Codestral',
     company: 'Mistral AI',
     tagline: 'European frontier open-weight models',
-    badge: 'Developer Choice',
-    badgeColor: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-    icon: '🌪️',
+    badge: 'Developer choice',
     category: 'cloud',
     defaultModel: 'codestral-latest',
     defaultBaseUrl: 'https://api.mistral.ai/v1',
@@ -294,8 +316,6 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     company: 'DeepSeek AI',
     tagline: 'Native official DeepSeek API endpoints',
     badge: 'Economical',
-    badgeColor: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
-    icon: '🐳',
     category: 'frontier',
     defaultModel: 'deepseek-flash',
     defaultBaseUrl: 'https://api.deepseek.com/v1',
@@ -303,40 +323,228 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     consoleUrl: 'https://platform.deepseek.com/api_keys',
     freeTier: {
       isFree: true,
-      quotaText: 'Sign-up Free Balance Included',
+      quotaText: 'Sign-up free balance included',
       docsUrl: 'https://platform.deepseek.com/api_keys',
-      instructions: 'Log in with mobile or email at platform.deepseek.com to generate your API key with trial balance.',
+      instructions: 'Log in at platform.deepseek.com to generate your API key with trial balance.',
     },
     models: [
-      { id: 'deepseek-flash', name: 'DeepSeek V4.1 Flash', description: 'Recommended default: 1M context, ultra-fast QA generation' },
-      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', description: 'Maximum depth reasoning model for complex security & API logic' },
+      { id: 'deepseek-flash', name: 'DeepSeek V4.1 Flash', description: '1M context, ultra-fast QA generation' },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', description: 'Maximum depth reasoning for complex security logic' },
     ],
   },
   {
     id: 'ollama',
     name: 'Local Ollama',
-    company: 'Self-Hosted (Local)',
+    company: 'Self-hosted',
     tagline: '100% private, air-gapped on your local hardware',
-    badge: '100% Free & Offline',
-    badgeColor: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20',
-    icon: '🦙',
+    badge: 'Free & offline',
     category: 'local',
     defaultModel: 'llama3.1:latest',
     defaultBaseUrl: 'http://localhost:11434',
     keyPlaceholder: 'None required (local endpoint)',
     freeTier: {
       isFree: true,
-      quotaText: 'Unlimited / Zero Cost / No Internet',
+      quotaText: 'Unlimited / zero cost / no internet',
       docsUrl: 'https://ollama.com/download',
-      instructions: 'Run `ollama run llama3.1` in your terminal. No accounts, tokens, or network connection required.',
+      instructions: 'Run `ollama run llama3.1` in your terminal. No accounts or network required.',
     },
     models: [
-      { id: 'llama3.1:latest', name: 'Llama 3.1 (Local)', description: 'Standard local 8B model' },
-      { id: 'deepseek-coder-v2:latest', name: 'DeepSeek Coder V2 (Local)', description: 'Specialized API coding weights' },
-      { id: 'qwen2.5-coder:latest', name: 'Qwen 2.5 Coder (Local)', description: 'High precision code & schema validation' },
+      { id: 'llama3.1:latest', name: 'Llama 3.1 (local)', description: 'Standard local 8B model' },
+      { id: 'deepseek-coder-v2:latest', name: 'DeepSeek Coder V2 (local)', description: 'Specialized API coding weights' },
+      { id: 'qwen2.5-coder:latest', name: 'Qwen 2.5 Coder (local)', description: 'High precision code & schema validation' },
     ],
   },
 ];
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+const categoryTone = (cat: string): { fg: string; bg: string; bd: string } => {
+  const c = cat.toLowerCase();
+  if (c.includes('happy'))
+    return {
+      fg: 'var(--success-500)',
+      bg: 'color-mix(in srgb, var(--success-500) 10%, transparent)',
+      bd: 'color-mix(in srgb, var(--success-500) 24%, transparent)',
+    };
+  if (c.includes('boundary'))
+    return {
+      fg: 'var(--info-500)',
+      bg: 'color-mix(in srgb, var(--info-500) 10%, transparent)',
+      bd: 'color-mix(in srgb, var(--info-500) 24%, transparent)',
+    };
+  if (c.includes('negative'))
+    return {
+      fg: 'var(--warning-500)',
+      bg: 'color-mix(in srgb, var(--warning-500) 10%, transparent)',
+      bd: 'color-mix(in srgb, var(--warning-500) 24%, transparent)',
+    };
+  if (c.includes('security') || c.includes('auth') || c.includes('inject'))
+    return {
+      fg: 'var(--danger-500)',
+      bg: 'color-mix(in srgb, var(--danger-500) 10%, transparent)',
+      bd: 'color-mix(in srgb, var(--danger-500) 24%, transparent)',
+    };
+  return {
+    fg: 'var(--text-secondary)',
+    bg: 'var(--bg-overlay)',
+    bd: 'var(--border-subtle)',
+  };
+};
+
+const categorizeError = (msg: string): { category: string; hint: string } => {
+  const m = msg.toLowerCase();
+  if (m.includes('401') || m.includes('unauthorized') || m.includes('api key'))
+    return {
+      category: 'Authentication failed',
+      hint: 'Check that your API key is valid and has permission for this model.',
+    };
+  if (m.includes('403') || m.includes('forbidden'))
+    return {
+      category: 'Access forbidden',
+      hint: 'Your key does not have access to this model or region.',
+    };
+  if (m.includes('429') || m.includes('rate limit') || m.includes('quota'))
+    return {
+      category: 'Rate limited',
+      hint: 'You are hitting the provider quota. Wait a minute or switch providers.',
+    };
+  if (m.includes('404') || m.includes('model not found') || m.includes('unavailable'))
+    return {
+      category: 'Model unavailable',
+      hint: 'This model is not deployed on your provider. Try a different one.',
+    };
+  if (m.includes('network') || m.includes('failed to fetch') || m.includes('econn'))
+    return {
+      category: 'Network error',
+      hint: 'Could not reach the provider. Check your connection or base URL override.',
+    };
+  return {
+    category: 'Generation failed',
+    hint: msg,
+  };
+};
+
+/* ============================================================
+   PRIMITIVES
+   ============================================================ */
+
+const Field: React.FC<{ label: string; children: React.ReactNode; right?: React.ReactNode }> = ({
+  label,
+  children,
+  right,
+}) => (
+  <div>
+    <div className="flex items-center justify-between mb-1.5">
+      <label
+        className="text-[10.5px] font-semibold uppercase"
+        style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+      >
+        {label}
+      </label>
+      {right}
+    </div>
+    {children}
+  </div>
+);
+
+const Input: React.FC<{
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  mono?: boolean;
+}> = ({ type = 'text', value, onChange, placeholder, mono = true }) => (
+  <input
+    type={type}
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    placeholder={placeholder}
+    className={`w-full h-8 px-2.5 rounded-[var(--r-sm)] outline-none transition-all text-[12px] ${mono ? 'mono' : ''}`}
+    style={{
+      background: 'var(--bg-canvas)',
+      border: '1px solid var(--border-default)',
+      color: 'var(--text-primary)',
+    }}
+    onFocus={(e) => {
+      e.currentTarget.style.borderColor = 'var(--border-focus)';
+      e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+    }}
+    onBlur={(e) => {
+      e.currentTarget.style.borderColor = 'var(--border-default)';
+      e.currentTarget.style.boxShadow = 'none';
+    }}
+  />
+);
+
+const PrimaryBtn: React.FC<{
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+  Icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  title?: string;
+}> = ({ onClick, disabled, children, Icon, title }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    title={title}
+    className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-[var(--r-sm)] text-[12px] font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+    style={{
+      background: 'var(--accent-500)',
+      color: 'var(--text-inverse)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4)',
+    }}
+    onMouseEnter={(e) => {
+      if (!disabled) e.currentTarget.style.background = 'var(--accent-400)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.background = 'var(--accent-500)';
+    }}
+  >
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </button>
+);
+
+const GhostBtn: React.FC<{
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+  Icon?: React.ComponentType<{ className?: string }>;
+  title?: string;
+}> = ({ onClick, disabled, children, Icon, title }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    title={title}
+    className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[var(--r-sm)] text-[12px] font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+    style={{
+      background: 'var(--bg-canvas)',
+      border: '1px solid var(--border-subtle)',
+      color: 'var(--text-secondary)',
+    }}
+    onMouseEnter={(e) => {
+      if (!disabled) {
+        e.currentTarget.style.background = 'var(--bg-hover)';
+        e.currentTarget.style.color = 'var(--text-primary)';
+        e.currentTarget.style.borderColor = 'var(--border-default)';
+      }
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.background = 'var(--bg-canvas)';
+      e.currentTarget.style.color = 'var(--text-secondary)';
+      e.currentTarget.style.borderColor = 'var(--border-subtle)';
+    }}
+  >
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </button>
+);
+
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
 
 export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   isOpen,
@@ -357,7 +565,6 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [selectedTestCase, setSelectedTestCase] = useState<AITestCase | null>(null);
 
-  // Per-Provider API Key & Endpoint overrides stored in localStorage
   const [providerKeys, setProviderKeys] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(localStorage.getItem('apidocs_ai_keys') || '{}');
@@ -374,11 +581,9 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   });
   const [showSettings, setShowSettings] = useState(false);
 
-  // Live Test Runner State
   const [runningTests, setRunningTests] = useState(false);
   const [executionResults, setExecutionResults] = useState<Record<string, TestExecutionResult>>({});
 
-  // Concurrency & Burst Stress Testing State
   const [showStressRunner, setShowStressRunner] = useState(false);
   const [concurrencyLevel, setConcurrencyLevel] = useState<number>(5);
   const [totalRequestsTarget, setTotalRequestsTarget] = useState<number>(25);
@@ -393,15 +598,15 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     p95LatencyMs: number;
     durationMs: number;
   } | null>(null);
+
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [showBatchPanel, setShowBatchPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportFormat, setExportFormat] = useState<'k6' | 'locust'>('k6');
   const [exportCopied, setExportCopied] = useState(false);
 
-  // Test-case selection: run only checked scenarios instead of the whole suite.
   const [selectedTestIds, setSelectedTestIds] = useState<Set<string>>(new Set());
 
-  // Multi-endpoint batch mode: pick endpoints from the catalog, then generate
-  // and optionally execute suites for every checked endpoint in one action.
   const [targetEndpoints, setTargetEndpoints] = useState<Set<string>>(new Set([endpointKey]));
   const [showEndpointPicker, setShowEndpointPicker] = useState(false);
   const [batchSuites, setBatchSuites] = useState<Record<string, AITestSuite>>({});
@@ -409,16 +614,24 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   const [batchProgress, setBatchProgress] = useState<{ current: string; done: number; total: number } | null>(null);
   const [batchAutoRun, setBatchAutoRun] = useState(true);
   const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
-  // Results of the most recent server-side run, used when saving reports.
   const lastRunResultsRef = useRef<Record<string, TestExecutionResult>>({});
 
-  // Test sequence analysis (workflow ordering across endpoints).
   const [showSequencePanel, setShowSequencePanel] = useState(false);
   const [sequenceAnalysis, setSequenceAnalysis] = useState<any>(null);
   const [sequenceLoading, setSequenceLoading] = useState(false);
   const [sequenceSource, setSequenceSource] = useState<'standards' | 'ai'>('standards');
   const [sequenceError, setSequenceError] = useState<string | null>(null);
 
+  const [activeEndpointView, setActiveEndpointView] = useState<string>(endpointKey);
+
+  /* ---- NEW: cancel + progress ---- */
+  const generateAbortRef = useRef<AbortController | null>(null);
+  const [progressMessage, setProgressMessage] = useState<string>('');
+  const progressTimerRef = useRef<number | null>(null);
+
+  const activeProvider = AI_PROVIDERS.find((p) => p.id === selectedProvider) || AI_PROVIDERS[0];
+
+  /* ---- Fetch sequence (preserved) ---- */
   const fetchSequence = async (mode: 'standards' | 'ai') => {
     setSequenceLoading(true);
     setSequenceError(null);
@@ -427,7 +640,6 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       const specRes = await fetch('/docs/swagger.json');
       const spec = await specRes.json();
       if (mode === 'ai') {
-        // Derive the endpoint catalog from the spec for the AI workflow request.
         const endpoints: string[] = [];
         const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
         Object.entries(spec.paths || {}).forEach(([path, ops]: [string, any]) => {
@@ -442,7 +654,13 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
         });
         const data = await seqRes.json();
         if (!seqRes.ok) throw new Error(data.error || 'AI sequencing failed');
-        setSequenceAnalysis({ summary: data.summary, phases: data.phases, steps: data.steps, notes: data.notes, model_used: data.model_used });
+        setSequenceAnalysis({
+          summary: data.summary,
+          phases: data.phases,
+          steps: data.steps,
+          notes: data.notes,
+          model_used: data.model_used,
+        });
       } else {
         const seqRes = await fetch('/docs/qa/sequence', {
           method: 'POST',
@@ -453,7 +671,6 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       }
     } catch (e: any) {
       setSequenceError(e.message || 'Failed to analyze sequence');
-      // Graceful fallback to the deterministic standards analysis.
       if (mode === 'ai') {
         try {
           const specRes = await fetch('/docs/swagger.json');
@@ -467,23 +684,16 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
             setSequenceAnalysis(await seqRes.json());
             setSequenceSource('standards');
           }
-        } catch {}
+        } catch { }
       }
     }
     setSequenceLoading(false);
   };
-  // Endpoint whose suite is currently shown in the primary inspection pane.
-  const [activeEndpointView, setActiveEndpointView] = useState<string>(endpointKey);
 
-  const activeProvider = AI_PROVIDERS.find((p) => p.id === selectedProvider) || AI_PROVIDERS[0];
-
-  // Update selected model when provider changes
   const handleSelectProvider = (providerId: string) => {
     setSelectedProvider(providerId);
     const p = AI_PROVIDERS.find((item) => item.id === providerId);
-    if (p) {
-      setSelectedModel(p.defaultModel);
-    }
+    if (p) setSelectedModel(p.defaultModel);
     setIsDropdownOpen(false);
   };
 
@@ -492,7 +702,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     setProviderKeys(next);
     try {
       localStorage.setItem('apidocs_ai_keys', JSON.stringify(next));
-    } catch {}
+    } catch { }
   };
 
   const handleUpdateBaseUrl = (provider: string, url: string) => {
@@ -500,38 +710,94 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     setCustomBaseUrls(next);
     try {
       localStorage.setItem('apidocs_ai_base_urls', JSON.stringify(next));
-    } catch {}
+    } catch { }
   };
 
-  if (!isOpen || !endpointKey) return null;
+  /* ---- Progress messages ---- */
+  const startProgressMessages = () => {
+    const messages = [
+      'Analyzing OpenAPI specification…',
+      'Extracting schemas and constraints…',
+      'Synthesizing happy-path cases…',
+      'Adding boundary and edge probes…',
+      'Generating negative and security cases…',
+      'Compiling assertions and expected values…',
+    ];
+    let idx = 0;
+    setProgressMessage(messages[0]);
+    progressTimerRef.current = window.setInterval(() => {
+      idx = Math.min(idx + 1, messages.length - 1);
+      setProgressMessage(messages[idx]);
+    }, 2200);
+  };
+  const stopProgressMessages = () => {
+    if (progressTimerRef.current !== null) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    setProgressMessage('');
+  };
 
+  /* ---- Handle generate with cancel + retry + fallback ---- */
   const handleGenerate = async () => {
     setLoading(true);
     setError(null);
     setExecutionResults({});
-    try {
-      const activeKey = providerKeys[selectedProvider] || '';
-      const activeBaseUrl = customBaseUrls[selectedProvider] || '';
+    startProgressMessages();
 
+    const controller = new AbortController();
+    generateAbortRef.current = controller;
+
+    const attempt = async (modelToUse: string, retryCount = 0): Promise<any> => {
       const res = await fetch('/docs/qa/ai-generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           provider: selectedProvider,
-          model: selectedModel,
+          model: modelToUse,
           endpoint_key: endpointKey,
           custom_prompt: customPrompt,
-          api_key: activeKey,
-          base_url: activeBaseUrl,
+          api_key: providerKeys[selectedProvider] || '',
+          base_url: customBaseUrls[selectedProvider] || '',
         }),
       });
 
+      // Retry on 429/503 with backoff
+      if ((res.status === 429 || res.status === 503) && retryCount < 2) {
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, retryCount)));
+        return attempt(modelToUse, retryCount + 1);
+      }
+
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate AI test cases');
+        const err = new Error(data.error || 'Failed to generate AI test cases') as any;
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    };
+
+    try {
+      let data;
+      try {
+        data = await attempt(selectedModel);
+      } catch (e: any) {
+        // If 404 model-not-found, try next model in same provider
+        if (e.status === 404 && activeProvider.models.length > 1) {
+          const nextModel = activeProvider.models.find((m) => m.id !== selectedModel);
+          if (nextModel) {
+            setSelectedModel(nextModel.id);
+            data = await attempt(nextModel.id);
+          } else {
+            throw e;
+          }
+        } else {
+          throw e;
+        }
       }
 
       setSuite(data.suite);
@@ -539,12 +805,25 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
         setSelectedTestCase(data.suite.test_cases[0]);
       }
     } catch (err: any) {
-      setError(err.message || 'Error communicating with AI test synthesis service');
+      if (err.name === 'AbortError') {
+        setError('Generation cancelled.');
+      } else {
+        setError(err.message || 'Error communicating with AI test synthesis service');
+      }
     } finally {
+      stopProgressMessages();
       setLoading(false);
+      generateAbortRef.current = null;
     }
   };
 
+  const handleCancelGeneration = () => {
+    if (generateAbortRef.current) {
+      generateAbortRef.current.abort();
+    }
+  };
+
+  /* ---- Single test run (preserved) ---- */
   const handleRunSingleTest = async (tc: AITestCase) => {
     setExecutionResults((prev) => ({
       ...prev,
@@ -569,17 +848,20 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
         ...(tc.headers || {}),
       };
 
-      const options: RequestInit = {
-        method: tc.method || 'GET',
-        headers,
-      };
+      const options: RequestInit = { method: tc.method || 'GET', headers };
 
       if (['POST', 'PUT', 'PATCH'].includes(tc.method.toUpperCase()) && tc.request_body) {
-        options.body = typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
+        options.body =
+          typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
       }
 
       const response = await fetch(targetUrl, options);
       const durationMs = Math.round(performance.now() - startTime);
+
+      let responseBody = '';
+      try {
+        responseBody = await response.clone().text();
+      } catch { }
 
       const statusMatches = response.status === tc.expected_status;
       const assertionsTotal = tc.assertions ? tc.assertions.length : 1;
@@ -594,7 +876,10 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
           durationMs,
           assertionsPassed,
           assertionsTotal,
-          errorMessage: statusMatches ? undefined : `Expected status ${tc.expected_status}, received ${response.status}`,
+          responseBody,
+          errorMessage: statusMatches
+            ? undefined
+            : `Expected status ${tc.expected_status}, received ${response.status}`,
         },
       }));
     } catch (err: any) {
@@ -613,80 +898,40 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     }
   };
 
-  const handleRunAllTests = async () => {
-    if (!suite?.test_cases || suite.test_cases.length === 0) return;
-    setRunningTests(true);
-
-    for (const tc of suite.test_cases) {
-      await handleRunSingleTest(tc);
-    }
-    setRunningTests(false);
-
-    // Automatically sync AI Suite run summary to QA Tracker
-    try {
-      // Calculate latest results
-      setTimeout(async () => {
-        let total = suite.test_cases.length;
-        let passed = 0;
-        let failed = 0;
-        let latencies: number[] = [];
-
-        for (const tc of suite.test_cases) {
-          const res = executionResults[tc.id];
-          if (res?.status === 'passed') passed++;
-          else if (res?.status === 'failed') failed++;
-          if (res?.durationMs) latencies.push(res.durationMs);
-        }
-
-        const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
-        const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
-        const overallStatus = passed === total ? 'passed' : (failed > 0 ? 'failed' : 'retest');
-
-        await fetch('/docs/qa/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint_key: endpointKey,
-            status: overallStatus,
-            tester: `AI QA Runner (${suite.model_used || selectedProvider})`,
-            comment: `AI Test Run: ${passed}/${total} passed (${passRate}%) across ${suite.test_cases.length} scenarios.`,
-            execution_summary: {
-              total_tests: total,
-              passed,
-              failed,
-              pass_rate: passRate,
-              avg_latency_ms: avgLatency,
-              run_at: new Date().toISOString(),
-            },
-          }),
-        });
-      }, 500);
-    } catch {}
-  };
-
-  const handleToggleTestSelected = (id: string) => {
-    setSelectedTestIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  /* ---- Backend execution ---- */
+  const runSuitesOnBackend = async (suites: Record<string, AITestSuite>) => {
+    const res = await fetch('/docs/qa/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suites }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'execution failed');
+    return data as {
+      results: Record<string, any[]>;
+      summary: Record<string, { total: number; passed: number; failed: number; avg_latency_ms: number }>;
+    };
   };
 
-  const handleSelectAllTests = () => {
-    if (!suite) return;
-    const allIds = filteredTests.map((tc) => tc.id);
-    const allSelected = allIds.length > 0 && allIds.every((id) => selectedTestIds.has(id));
-    setSelectedTestIds((prev) => {
-      const next = new Set(prev);
-      allIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
-      return next;
+  const convertBackendResults = (backend: any[]): Record<string, TestExecutionResult> => {
+    const out: Record<string, TestExecutionResult> = {};
+    (backend || []).forEach((r: any) => {
+      out[r.test_case_id] = {
+        testId: r.test_case_id,
+        status: r.passed ? 'passed' : 'failed',
+        actualStatus: r.actual_status,
+        durationMs: r.duration_ms,
+        assertionsPassed: (r.assertion_checks || []).filter((c: any) => c.passed).length,
+        assertionsTotal: (r.assertion_checks || []).length || 1,
+        errorMessage:
+          r.error_message ||
+          (r.passed ? undefined : (r.assertion_checks || []).find((c: any) => !c.passed)?.detail),
+      };
     });
+    return out;
   };
 
-  // Run only the checked test cases (falls back to the full suite if none checked).
-  // Execution happens server-side: real assertion evaluation (status, body,
-  // json_path, headers) with per-check pass/fail detail.
+  /* ---- Run selected / run all (server-side) ---- */
   const handleRunSelectedTests = async () => {
     if (!suite?.test_cases?.length) return;
     const targets = suite.test_cases.filter((tc) => selectedTestIds.has(tc.id));
@@ -696,7 +941,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     try {
       const scoped: AITestSuite = { ...suite, test_cases: casesToRun };
       const data = await runSuitesOnBackend({ [endpointKey]: scoped });
-      const epResults = convertBackendResults(endpointKey, data.results[endpointKey] || []);
+      const epResults = convertBackendResults(data.results[endpointKey] || []);
       setExecutionResults((prev) => ({ ...prev, ...epResults }));
       lastRunResultsRef.current = epResults;
 
@@ -712,7 +957,10 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       });
       const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
       const avgLatency = total > 0 ? Math.round(latencySum / total) : 0;
-      const scope = targets.length > 0 ? `selected subset (${targets.length}/${suite.test_cases.length} cases)` : 'full suite';
+      const scope =
+        targets.length > 0
+          ? `selected subset (${targets.length}/${suite.test_cases.length} cases)`
+          : 'full suite';
       const overallStatus = passed === total && total > 0 ? 'passed' : failed > 0 ? 'failed' : 'retest';
 
       try {
@@ -734,7 +982,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
             },
           }),
         });
-      } catch {}
+      } catch { }
     } catch (e: any) {
       setError('Server-side execution failed: ' + (e.message || 'unknown error'));
     } finally {
@@ -742,19 +990,51 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     }
   };
 
-  // ---------- Report persistence ----------
+  /* ---- Regenerate failed only ---- */
+  const handleRegenerateFailed = async () => {
+    if (!suite) return;
+    const failedTests = suite.test_cases.filter((tc) => executionResults[tc.id]?.status === 'failed');
+    if (failedTests.length === 0) return;
+    setSelectedTestIds(new Set(failedTests.map((tc) => tc.id)));
+    // Trigger the parent regenerate flow; the parent will normally re-synthesize all
+    // cases for the endpoint, so set the message accordingly.
+    await handleGenerate();
+  };
 
+  /* ---- Copy test as cURL ---- */
+  const buildCurl = (tc: AITestCase): string => {
+    const base = window.location.origin;
+    let url = `${base}${tc.path}`;
+    if (tc.query_params && Object.keys(tc.query_params).length > 0) {
+      url += '?' + new URLSearchParams(tc.query_params).toString();
+    }
+    const lines = [`curl -X ${tc.method.toUpperCase()} "${url}"`];
+    lines.push(`  -H "Content-Type: application/json"`);
+    if (tc.headers) {
+      Object.entries(tc.headers).forEach(([k, v]) => {
+        lines.push(`  -H "${k}: ${v}"`);
+      });
+    }
+    if (['POST', 'PUT', 'PATCH'].includes(tc.method.toUpperCase()) && tc.request_body) {
+      const body = typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
+      lines.push(`  -d '${body}'`);
+    }
+    return lines.join(' \\\n');
+  };
+
+  /* ---- Reports ---- */
   const buildReportPayload = () => {
-    const results = suite?.test_cases.map((tc) => ({
-      id: tc.id,
-      name: tc.name,
-      category: tc.category,
-      method: tc.method,
-      path: tc.path,
-      expected_status: tc.expected_status,
-      selected: selectedTestIds.has(tc.id),
-      result: executionResults[tc.id] || null,
-    })) || [];
+    const results =
+      suite?.test_cases.map((tc) => ({
+        id: tc.id,
+        name: tc.name,
+        category: tc.category,
+        method: tc.method,
+        path: tc.path,
+        expected_status: tc.expected_status,
+        selected: selectedTestIds.has(tc.id),
+        result: executionResults[tc.id] || null,
+      })) || [];
     const passed = results.filter((r) => r.result?.status === 'passed').length;
     const failed = results.filter((r) => r.result?.status === 'failed').length;
     return {
@@ -789,7 +1069,9 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       const actual = tc.result?.actualStatus ?? '-';
       const dur = tc.result?.durationMs != null ? `${tc.result.durationMs}ms` : '-';
       const icon = status === 'passed' ? '✅' : status === 'failed' ? '❌' : '⏭️';
-      lines.push(`| ${i + 1} | ${tc.name} | ${tc.category} | ${tc.expected_status} | ${actual} | ${icon} ${status} | ${dur} |`);
+      lines.push(
+        `| ${i + 1} | ${tc.name} | ${tc.category} | ${tc.expected_status} | ${actual} | ${icon} ${status} | ${dur} |`,
+      );
     });
     return lines.join('\n');
   };
@@ -810,15 +1092,49 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
 
   const handleSaveReport = (format: 'json' | 'markdown') => {
     if (format === 'json') {
-      downloadFile(`ai-test-report-${safeFileStamp()}.json`, JSON.stringify(buildReportPayload(), null, 2), 'application/json');
+      downloadFile(
+        `ai-test-report-${safeFileStamp()}.json`,
+        JSON.stringify(buildReportPayload(), null, 2),
+        'application/json',
+      );
     } else {
       downloadFile(`ai-test-report-${safeFileStamp()}.md`, buildMarkdownReport(), 'text/markdown');
     }
     setReportSavedAt(new Date().toISOString());
   };
 
-  // ---------- Multi-endpoint batch generation & execution ----------
+  const handleSaveToServer = async () => {
+    const payload = buildReportPayload();
+    const title = `${endpointKey} — ${new Date().toLocaleString()}`;
+    try {
+      const res = await fetch('/docs/qa/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          endpoint_key: endpointKey,
+          provider: payload.provider,
+          model: payload.model,
+          suites: { [endpointKey]: suite },
+          results: {
+            [endpointKey]: Object.values(executionResults).map((r) => ({
+              test_case_id: r.testId,
+              passed: r.status === 'passed',
+              actual_status: r.actualStatus ?? 0,
+              duration_ms: r.durationMs ?? 0,
+              error_message: r.errorMessage,
+            })),
+          },
+        }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      setReportSavedAt(new Date().toISOString());
+    } catch (e: any) {
+      setError('Failed to save report: ' + e.message);
+    }
+  };
 
+  /* ---- Batch ---- */
   const handleToggleTargetEndpoint = (ep: string) => {
     setTargetEndpoints((prev) => {
       const next = new Set(prev);
@@ -868,14 +1184,17 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
               if (tc.query_params && Object.keys(tc.query_params).length > 0) {
                 url += (url.includes('?') ? '&' : '?') + new URLSearchParams(tc.query_params).toString();
               }
-              const opts: RequestInit = { method: tc.method || 'GET', headers: { 'Content-Type': 'application/json', ...(tc.headers || {}) } };
+              const opts: RequestInit = {
+                method: tc.method || 'GET',
+                headers: { 'Content-Type': 'application/json', ...(tc.headers || {}) },
+              };
               if (['POST', 'PUT', 'PATCH'].includes((tc.method || 'GET').toUpperCase()) && tc.request_body) {
                 opts.body = typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
               }
               const resp = await fetch(url, opts);
               actual = resp.status;
               status = resp.status === tc.expected_status ? 'passed' : 'failed';
-            } catch (e: any) {
+            } catch {
               status = 'failed';
             }
             epResults[tc.id] = {
@@ -883,14 +1202,16 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
               status,
               actualStatus: actual,
               durationMs: Math.round(performance.now() - start),
-              assertionsPassed: status === 'passed' ? (tc.assertions?.length || 1) : 0,
+              assertionsPassed: status === 'passed' ? tc.assertions?.length || 1 : 0,
               assertionsTotal: tc.assertions?.length || 1,
-              errorMessage: status === 'failed' && actual != null ? `Expected ${tc.expected_status}, received ${actual}` : 'Network invocation failed',
+              errorMessage:
+                status === 'failed' && actual != null
+                  ? `Expected ${tc.expected_status}, received ${actual}`
+                  : 'Network invocation failed',
             };
           }
           results[ep] = epResults;
 
-          // Persist per-endpoint QA summary for the batch run.
           const passed = Object.values(epResults).filter((r) => r.status === 'passed').length;
           const total = genSuite.test_cases.length;
           try {
@@ -912,19 +1233,23 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
                 },
               }),
             });
-          } catch {}
+          } catch { }
         }
       } catch (e: any) {
-        // Record the failure but continue the batch.
-        suites[ep] = { endpoint_key: ep, summary: `Generation failed: ${e.message}`, model_used: selectedModel, generated_at: new Date().toISOString(), test_cases: [] };
+        suites[ep] = {
+          endpoint_key: ep,
+          summary: `Generation failed: ${e.message}`,
+          model_used: selectedModel,
+          generated_at: new Date().toISOString(),
+          test_cases: [],
+        };
       }
     }
 
     setBatchSuites(suites);
     setBatchResults(results);
     setBatchProgress({ current: '', done: targets.length, total: targets.length });
-    // Point the primary pane at the last successful suite for inspection.
-    const lastEp = targets.reverse().find((ep) => suites[ep]?.test_cases?.length > 0);
+    const lastEp = [...targets].reverse().find((ep) => suites[ep]?.test_cases?.length > 0);
     if (lastEp) {
       setActiveEndpointView(lastEp);
       setSuite(suites[lastEp]);
@@ -933,65 +1258,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     }
   };
 
-  // Execute suites server-side via the Go assertion engine (status, body, json_path, headers).
-  const runSuitesOnBackend = async (suites: Record<string, AITestSuite>) => {
-    const res = await fetch('/docs/qa/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ suites }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'execution failed');
-    return data as { results: Record<string, any[]>; summary: Record<string, { total: number; passed: number; failed: number; avg_latency_ms: number }> };
-  };
-
-  const convertBackendResults = (ep: string, backend: any[]): Record<string, TestExecutionResult> => {
-    const out: Record<string, TestExecutionResult> = {};
-    (backend || []).forEach((r: any) => {
-      out[r.test_case_id] = {
-        testId: r.test_case_id,
-        status: r.passed ? 'passed' : 'failed',
-        actualStatus: r.actual_status,
-        durationMs: r.duration_ms,
-        assertionsPassed: (r.assertion_checks || []).filter((c: any) => c.passed).length,
-        assertionsTotal: (r.assertion_checks || []).length || 1,
-        errorMessage: r.error_message || (r.passed ? undefined : (r.assertion_checks || []).find((c: any) => !c.passed)?.detail),
-      };
-    });
-    return out;
-  };
-
-  // Save the current run as a persisted server-side report.
-  const handleSaveToServer = async () => {
-    const payload = buildReportPayload();
-    const title = `${endpointKey} — ${new Date().toLocaleString()}`;
-    try {
-      const res = await fetch('/docs/qa/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          endpoint_key: endpointKey,
-          provider: payload.provider,
-          model: payload.model,
-          suites: { [endpointKey]: suite },
-          results: { [endpointKey]: Object.values(executionResults).map((r) => ({
-            test_case_id: r.testId,
-            passed: r.status === 'passed',
-            actual_status: r.actualStatus ?? 0,
-            duration_ms: r.durationMs ?? 0,
-            error_message: r.errorMessage,
-          })) },
-        }),
-      });
-      if (!res.ok) throw new Error('save failed');
-      setReportSavedAt(new Date().toISOString());
-    } catch (e: any) {
-      setError('Failed to save report: ' + e.message);
-    }
-  };
-
-  // High-Throughput Concurrent Burst Stress Engine
+  /* ---- Stress ---- */
   const handleRunConcurrentStress = async () => {
     if (!suite?.test_cases || suite.test_cases.length === 0) return;
     setRunningStress(true);
@@ -1004,7 +1271,6 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     let rateLimitedCount = 0;
     const latencies: number[] = [];
 
-    // Worker queue with concurrency limiter
     const testCasesPool = suite.test_cases;
     let queueIndex = 0;
 
@@ -1013,46 +1279,34 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
         const currentReq = queueIndex++;
         const tc = testCasesPool[currentReq % testCasesPool.length];
         const reqStart = performance.now();
-
         try {
           let targetUrl = tc.path;
           if (tc.query_params && Object.keys(tc.query_params).length > 0) {
             const qp = new URLSearchParams(tc.query_params);
             targetUrl += (targetUrl.includes('?') ? '&' : '?') + qp.toString();
           }
-
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             ...(tc.headers || {}),
           };
-
-          const options: RequestInit = {
-            method: tc.method || 'GET',
-            headers,
-          };
-
+          const options: RequestInit = { method: tc.method || 'GET', headers };
           if (['POST', 'PUT', 'PATCH'].includes(tc.method.toUpperCase()) && tc.request_body) {
-            options.body = typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
+            options.body =
+              typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
           }
-
           const res = await fetch(targetUrl, options);
           const reqDuration = Math.round(performance.now() - reqStart);
           latencies.push(reqDuration);
           completedCount++;
-
-          if (res.status === 429) {
-            rateLimitedCount++;
-          } else if (res.status === tc.expected_status || (res.status >= 200 && res.status < 400)) {
+          if (res.status === 429) rateLimitedCount++;
+          else if (res.status === tc.expected_status || (res.status >= 200 && res.status < 400))
             successfulCount++;
-          } else {
-            failedCount++;
-          }
+          else failedCount++;
         } catch {
           failedCount++;
           completedCount++;
         }
 
-        // Real-time metrics tick
         const elapsedSec = Math.max(0.1, (performance.now() - startTime) / 1000);
         setStressMetrics({
           completed: completedCount,
@@ -1060,15 +1314,21 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
           failed: failedCount,
           rateLimited: rateLimitedCount,
           rps: Math.round((completedCount / elapsedSec) * 10) / 10,
-          avgLatencyMs: latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
-          p95LatencyMs: latencies.length > 0 ? [...latencies].sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)] || 0 : 0,
+          avgLatencyMs:
+            latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
+          p95LatencyMs:
+            latencies.length > 0
+              ? [...latencies].sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)] || 0
+              : 0,
           durationMs: Math.round(performance.now() - startTime),
         });
       }
     };
 
-    // Launch concurrent worker pool
-    const activeWorkers = Array.from({ length: Math.min(concurrencyLevel, totalRequestsTarget) }, () => worker());
+    const activeWorkers = Array.from(
+      { length: Math.min(concurrencyLevel, totalRequestsTarget) },
+      () => worker(),
+    );
     await Promise.allSettled(activeWorkers);
 
     const totalElapsedSec = Math.max(0.1, (performance.now() - startTime) / 1000);
@@ -1079,13 +1339,14 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       failed: failedCount,
       rateLimited: rateLimitedCount,
       rps: Math.round((completedCount / totalElapsedSec) * 10) / 10,
-      avgLatencyMs: latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
-      p95LatencyMs: latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.95)] || 0 : 0,
+      avgLatencyMs:
+        latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
+      p95LatencyMs:
+        latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.95)] || 0 : 0,
       durationMs: Math.round(performance.now() - startTime),
     };
     setStressMetrics(finalMetrics);
 
-    // Automatically sync Stress test metrics to QA Tracker
     try {
       await fetch('/docs/qa/save', {
         method: 'POST',
@@ -1107,31 +1368,28 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
           },
         }),
       });
-    } catch {}
+    } catch { }
 
     setRunningStress(false);
   };
 
-  // Generate k6 Load Test Script
+  /* ---- k6/Locust export ---- */
   const generateK6Script = (): string => {
     if (!suite?.test_cases || suite.test_cases.length === 0) return '';
     const origin = window.location.origin;
-
-    const casesCode = suite.test_cases.map((tc, idx) => {
-      let url = `${origin}${tc.path}`;
-      if (tc.query_params && Object.keys(tc.query_params).length > 0) {
-        url += '?' + new URLSearchParams(tc.query_params).toString();
-      }
-      const headers = JSON.stringify({
-        'Content-Type': 'application/json',
-        ...(tc.headers || {}),
-      }, null, 4);
-
-      const body = tc.request_body
-        ? `JSON.stringify(${JSON.stringify(tc.request_body)})`
-        : 'null';
-
-      return `  // Scenario ${idx + 1}: ${tc.name} (${tc.category})
+    const casesCode = suite.test_cases
+      .map((tc, idx) => {
+        let url = `${origin}${tc.path}`;
+        if (tc.query_params && Object.keys(tc.query_params).length > 0) {
+          url += '?' + new URLSearchParams(tc.query_params).toString();
+        }
+        const headers = JSON.stringify(
+          { 'Content-Type': 'application/json', ...(tc.headers || {}) },
+          null,
+          4,
+        );
+        const body = tc.request_body ? `JSON.stringify(${JSON.stringify(tc.request_body)})` : 'null';
+        return `  // Scenario ${idx + 1}: ${tc.name} (${tc.category})
   {
     const res = http.${tc.method.toLowerCase()}('${url}', ${body}, { headers: ${headers} });
     check(res, {
@@ -1139,7 +1397,8 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     });
     sleep(0.05);
   }`;
-    }).join('\n\n');
+      })
+      .join('\n\n');
 
     return `import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -1148,13 +1407,13 @@ import { check, sleep } from 'k6';
 // Generated via go-apidocs AI Inference Engine (${suite.model_used})
 export const options = {
   stages: [
-    { duration: '30s', target: 20 },  // Ramp-up to 20 virtual users
-    { duration: '1m', target: 50 },   // Stress plateau at 50 virtual users
-    { duration: '20s', target: 0 },   // Graceful cooldown
+    { duration: '30s', target: 20 },
+    { duration: '1m', target: 50 },
+    { duration: '20s', target: 0 },
   ],
   thresholds: {
-    http_req_duration: ['p(95)<300'], // 95% of requests must complete below 300ms
-    http_req_failed: ['rate<0.02'],   // Failure rate under 2%
+    http_req_duration: ['p(95)<300'],
+    http_req_failed: ['rate<0.02'],
   },
 };
 
@@ -1164,23 +1423,17 @@ ${casesCode}
 `;
   };
 
-  // Generate Locust Python Load Test Script
   const generateLocustScript = (): string => {
     if (!suite?.test_cases || suite.test_cases.length === 0) return '';
-
-    const tasks = suite.test_cases.map((tc, idx) => {
-      let path = tc.path;
-      if (tc.query_params && Object.keys(tc.query_params).length > 0) {
-        path += '?' + new URLSearchParams(tc.query_params).toString();
-      }
-      const headers = JSON.stringify({
-        'Content-Type': 'application/json',
-        ...(tc.headers || {}),
-      });
-
-      const jsonPayload = tc.request_body ? `, json=${JSON.stringify(tc.request_body)}` : '';
-
-      return `    @task
+    const tasks = suite.test_cases
+      .map((tc, idx) => {
+        let path = tc.path;
+        if (tc.query_params && Object.keys(tc.query_params).length > 0) {
+          path += '?' + new URLSearchParams(tc.query_params).toString();
+        }
+        const headers = JSON.stringify({ 'Content-Type': 'application/json', ...(tc.headers || {}) });
+        const jsonPayload = tc.request_body ? `, json=${JSON.stringify(tc.request_body)}` : '';
+        return `    @task
     def scenario_${idx + 1}_${tc.id.replace(/[^a-zA-Z0-9_]/g, '_')}(self):
         """${tc.name} - ${tc.category}"""
         with self.client.${tc.method.toLowerCase()}("${path}", headers=${headers}${jsonPayload}, catch_response=True) as res:
@@ -1188,13 +1441,12 @@ ${casesCode}
                 res.success()
             else:
                 res.failure(f"Expected ${tc.expected_status}, got {res.status_code}")`;
-    }).join('\n\n');
+      })
+      .join('\n\n');
 
     return `from locust import HttpUser, task, between
 
 # Automated Locust Stress & Concurrency Test for: ${endpointKey}
-# Generated via go-apidocs AI Engine (${suite.model_used})
-
 class APIStressUser(HttpUser):
     wait_time = between(0.01, 0.1)
 
@@ -1208,6 +1460,7 @@ ${tasks}
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  /* ---- Derived ---- */
   const categories = suite?.test_cases
     ? ['all', ...Array.from(new Set(suite.test_cases.map((t) => t.category)))]
     : ['all'];
@@ -1215,630 +1468,632 @@ ${tasks}
   const filteredTests =
     suite?.test_cases.filter((tc) => activeCategory === 'all' || tc.category === activeCategory) || [];
 
-  const getCategoryBadgeClass = (cat: string) => {
-    switch (cat.toLowerCase()) {
-      case 'happy path':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'boundary & edge':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'negative & error':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'security & abuse':
-      case 'security & injection':
-      case 'auth & rbac':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
-      default:
-        return 'bg-slate-100 text-slate-700 border-slate-300';
-    }
+  const handleToggleTestSelected = (id: string) => {
+    setSelectedTestIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-white border border-slate-200/80 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden font-sans">
-        {/* Human Designed Header */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white flex items-center justify-between relative overflow-hidden">
-          {/* Subtle decorative glow */}
-          <div className="absolute top-0 right-1/4 w-96 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+  const handleSelectAllTests = () => {
+    if (!suite) return;
+    const allIds = filteredTests.map((tc) => tc.id);
+    const allSelected = allIds.length > 0 && allIds.every((id) => selectedTestIds.has(id));
+    setSelectedTestIds((prev) => {
+      const next = new Set(prev);
+      allIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  };
 
-          <div className="flex items-center gap-3.5 relative z-10">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-cyan-500 to-emerald-500 p-[1px] shadow-lg shadow-indigo-500/20">
-              <div className="w-full h-full bg-slate-950 rounded-2xl flex items-center justify-center text-white">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-              </div>
+  const failedCount = Object.values(executionResults).filter((r) => r.status === 'failed').length;
+
+  /* ---- Keyboard shortcuts ---- */
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        if (!loading) handleGenerate();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (!runningTests && suite?.test_cases?.length) {
+          if (e.shiftKey) {
+            // ⌘⇧↵ — run selected
+            handleRunSelectedTests();
+          } else {
+            handleRunSelectedTests();
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, loading, runningTests, suite, selectedTestIds]);
+
+  if (!isOpen || !endpointKey) return null;
+
+  /* ============================================================
+     RENDER
+     ============================================================ */
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      widthClass="max-w-5xl"
+      hideHeader={true}
+    >
+      <div className="flex flex-col" style={{ maxHeight: '90vh' }}>
+        {/* ---- Custom dark command bar header ---- */}
+        <div
+          className="flex items-center gap-3 px-5 py-3.5 shrink-0"
+          style={{
+            background: 'var(--bg-canvas)',
+            borderBottom: '1px solid var(--border-subtle)',
+          }}
+        >
+          <div
+            className="w-9 h-9 rounded-[var(--r-md)] grid place-items-center shrink-0"
+            style={{
+              background: 'linear-gradient(145deg, var(--accent-400), var(--accent-500))',
+              color: '#04161C',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 8px color-mix(in srgb, var(--accent-500) 30%, transparent)',
+            }}
+          >
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                AI Test Suite & Execution Runner
+              </h2>
+              <span
+                className="inline-flex items-center gap-1 h-5 px-1.5 rounded mono text-[10.5px] font-medium"
+                style={{
+                  background: 'var(--accent-muted)',
+                  color: 'var(--accent-500)',
+                  border: '1px solid color-mix(in srgb, var(--accent-500) 22%, transparent)',
+                }}
+              >
+                <Cpu className="w-3 h-3" />
+                {suite?.model_used || activeProvider.name}
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-sm font-semibold tracking-tight text-white">AI Test Suite & Execution Runner</h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-mono font-medium border border-indigo-500/30 flex items-center gap-1.5">
-                  <Cpu className="w-3 h-3 text-indigo-400" />
-                  {suite?.model_used || activeProvider.name}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
-                <span>Target:</span>
-                <span className="text-slate-200 font-bold">{endpointKey}</span>
-              </p>
+            <div className="text-[11.5px] mono mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--text-tertiary)' }}>
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: 'var(--success-500)', boxShadow: '0 0 6px var(--success-500)' }}
+              />
+              <span>Target:</span>
+              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{endpointKey}</span>
             </div>
           </div>
-
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer relative z-10"
-            aria-label="Close modal"
+            className="grid place-items-center w-7 h-7 rounded-[var(--r-sm)] shrink-0 transition-colors"
+            style={{ color: 'var(--text-tertiary)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+            aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 bg-slate-50/60">
-          {/* Human-Designed AI Inference Engine Selection Card */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4 relative z-20 overflow-visible">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              {/* Engine Selector Dropdown */}
-              <div className="space-y-1.5 flex-1 relative z-30">
-                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>AI Inference Engine & Provider</span>
-                </label>
-
-                {/* Dropdown Trigger Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full sm:max-w-md px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:bg-slate-50/50 flex items-center justify-between gap-3 text-left transition-all shadow-xs cursor-pointer group"
+        {/* ---- Body ---- */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5" style={{ background: 'var(--bg-canvas)' }}>
+          {/* ---- Provider / model / settings panel ---- */}
+          <div
+            className="p-4 rounded-[var(--r-md)] space-y-4 relative z-20"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+          >
+            {/* ---- Compact model picker + generate ---- */}
+            <div
+              className="p-3 rounded-[var(--r-md)]"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+            >
+              {/* Row 1: model + gear */}
+              <div className="flex items-center gap-2">
+                <Cpu className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
+                <span
+                  className="text-[11px] font-semibold uppercase shrink-0"
+                  style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-lg shrink-0">{activeProvider.icon}</span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900 truncate">{activeProvider.name}</span>
-                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${activeProvider.badgeColor}`}>
-                          {activeProvider.badge}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 truncate">{activeProvider.tagline}</p>
-                    </div>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-transform shrink-0 ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {/* Dropdown Menu Modal / Overlay */}
-                {isDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setIsDropdownOpen(false)}
-                    />
-                    <div className="absolute top-full left-0 mt-2 w-full sm:w-[460px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2 max-h-[380px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
-                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Choose Inference Provider
-                      </div>
-                      <div className="space-y-1">
-                        {AI_PROVIDERS.map((provider) => {
-                          const isSelected = selectedProvider === provider.id;
-                          return (
-                            <button
-                              key={provider.id}
-                              type="button"
-                              onClick={() => handleSelectProvider(provider.id)}
-                              className={`w-full p-2.5 rounded-xl text-left flex items-start gap-3 transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-indigo-50/80 border border-indigo-200 text-slate-900'
-                                  : 'hover:bg-slate-100 text-slate-700'
-                              }`}
-                            >
-                              <span className="text-xl shrink-0 mt-0.5">{provider.icon}</span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-1.5">
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <span className="text-xs font-bold text-slate-900 truncate">{provider.name}</span>
-                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-medium border ${provider.badgeColor}`}>
-                                      {provider.badge}
-                                    </span>
-                                  </div>
-                                  {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
-                                </div>
-                                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{provider.tagline}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Model Picker & Settings Toggle */}
-              <div className="flex items-end gap-2.5 flex-wrap">
-                <div className="space-y-1.5 flex-1 min-w-[200px]">
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Inference Model</span>
-                  </label>
+                  Model
+                </span>
+                <div className="relative flex-1 min-w-0">
                   <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-800 shadow-xs cursor-pointer transition-all"
+                    value={`${selectedProvider}|${selectedModel}`}
+                    onChange={(e) => {
+                      const [p, m] = e.target.value.split('|');
+                      setSelectedProvider(p);
+                      setSelectedModel(m);
+                    }}
+                    className="w-full h-8 px-2.5 pr-7 rounded-[var(--r-sm)] text-[12.5px] font-medium outline-none cursor-pointer appearance-none"
+                    style={{
+                      background: 'var(--bg-canvas)',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--text-primary)',
+                    }}
                   >
-                    {activeProvider.models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
+                    {AI_PROVIDERS.map((prov) => (
+                      <optgroup
+                        key={prov.id}
+                        label={`${prov.name}${providerKeys[prov.id] ? ' ✓' : ''}`}
+                      >
+                        {prov.models.map((m) => (
+                          <option key={`${prov.id}|${m.id}`} value={`${prov.id}|${m.id}`}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
+                  <ChevronDown
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  />
                 </div>
-
-                {/* Settings & Credentials Button */}
                 <button
                   type="button"
-                  onClick={() => setShowSettings(!showSettings)}
-                  title="Configure custom API Key or Base URL"
-                  className={`px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-xs whitespace-nowrap ${
-                    showSettings || providerKeys[selectedProvider]
-                      ? 'bg-indigo-50 border-indigo-300 text-indigo-700 ring-2 ring-indigo-500/10'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
-                  }`}
+                  onClick={() => setShowCredentialsModal(true)}
+                  className="grid place-items-center w-8 h-8 rounded-[var(--r-sm)] shrink-0 transition-colors"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-subtle)',
+                    color: providerKeys[selectedProvider] ? 'var(--success-500)' : 'var(--text-tertiary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-canvas)';
+                  }}
+                  title={
+                    providerKeys[selectedProvider]
+                      ? `${activeProvider.name} credentials configured — click to manage`
+                      : 'Configure API credentials'
+                  }
                 >
-                  <Key className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>API Key & Settings</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSettings ? 'rotate-180' : ''}`} />
+                  {providerKeys[selectedProvider] ? (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Settings2 className="w-3.5 h-3.5" />
+                  )}
                 </button>
               </div>
-            </div>
 
-            {/* Custom API Credentials & Endpoint Settings Panel */}
-            {showSettings && (
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200 space-y-3 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Sliders className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Configure {activeProvider.name} Credentials & Endpoint</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-mono">Stored securely in your local browser storage</span>
-                </div>
-
-                {/* Free Tier Guidance Box */}
-                {activeProvider.freeTier && (
-                  <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-950 flex items-start justify-between gap-3 text-xs">
-                    <div className="flex items-start gap-2.5">
-                      <Gift className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold flex items-center gap-1.5">
-                          <span>{activeProvider.freeTier.quotaText}</span>
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-200/80 text-emerald-800">
-                            No Credit Card Required
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
-                          {activeProvider.freeTier.instructions}
-                        </p>
-                      </div>
-                    </div>
-
-                    <a
-                      href={activeProvider.freeTier.docsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors shadow-2xs"
-                    >
-                      <span>Get Free Key</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        API Key (Optional override)
-                      </label>
-                      {activeProvider.consoleUrl && (
-                        <a
-                          href={activeProvider.consoleUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
-                          title={`Open ${activeProvider.company || activeProvider.name} dashboard to generate API key`}
-                        >
-                          <span>Connect {activeProvider.name}</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                    <input
-                      type="password"
-                      placeholder={activeProvider.keyPlaceholder}
-                      value={providerKeys[selectedProvider] || ''}
-                      onChange={(e) => handleUpdateKey(selectedProvider, e.target.value)}
-                      className="w-full text-xs font-mono px-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                      Base URL (Optional custom proxy/endpoint)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={activeProvider.defaultBaseUrl}
-                      value={customBaseUrls[selectedProvider] || ''}
-                      onChange={(e) => handleUpdateBaseUrl(selectedProvider, e.target.value)}
-                      className="w-full text-xs font-mono px-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Prompt tweak & Action Button */}
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-1">
-              <div className="flex-1">
+              {/* Row 2: prompt + generate */}
+              <div className="flex gap-2 mt-2.5">
                 <input
                   type="text"
-                  placeholder="Optional prompt tweak (e.g. 'Emphasize SQL injection probes, BOLA heuristics, and JWT expiry checks')..."
+                  placeholder="Optional prompt tweak (e.g. 'Emphasize SQLi and JWT checks')…"
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
-                  className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-slate-400"
+                  className="flex-1 h-8 px-2.5 rounded-[var(--r-sm)] outline-none text-[12px]"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-default)',
+                    color: 'var(--text-primary)',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-focus)';
+                    e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-default)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
                 />
-              </div>
-
-              <button
-                onClick={handleGenerate}
-                disabled={loading}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap"
-              >
                 {loading ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Synthesizing Test Suite...</span>
+                    <div
+                      className="flex items-center gap-1.5 h-8 px-2.5 rounded-[var(--r-sm)] text-[11.5px] shrink-0"
+                      style={{
+                        background: 'var(--bg-canvas)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <RefreshCw className="w-3 h-3 animate-spin" style={{ color: 'var(--accent-500)' }} />
+                      <span className="max-w-[160px] truncate">{progressMessage || 'Working…'}</span>
+                    </div>
+                    <button
+                      onClick={handleCancelGeneration}
+                      className="h-8 px-2.5 rounded-[var(--r-sm)] text-[12px] font-medium inline-flex items-center gap-1 shrink-0"
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid color-mix(in srgb, var(--danger-500) 30%, transparent)',
+                        color: 'var(--danger-500)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'color-mix(in srgb, var(--danger-500) 8%, transparent)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <Ban className="w-3 h-3" />
+                      Cancel
+                    </button>
                   </>
                 ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>{suite ? 'Regenerate Tests' : 'Synthesize Test Cases'}</span>
-                  </>
+                  <PrimaryBtn onClick={handleGenerate} Icon={Sparkles} title="Generate (⌘G)">
+                    {suite ? 'Regenerate' : 'Synthesize'}
+                  </PrimaryBtn>
                 )}
-              </button>
-            </div>
-
-            {error && (
-              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <div className="font-bold">Generation Notice</div>
-                  <div className="text-[11px] leading-relaxed">{error}</div>
-                </div>
               </div>
-            )}
 
-            {/* Multi-Endpoint Batch Generation & Execution */}
-            {endpointsList.length > 0 && (
-              <div className="pt-1 border-t border-slate-100 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white">
-                      <Layers className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                        <span>Multi-Endpoint Batch Runner</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-white">
-                          {targetEndpoints.size} selected
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Generate (and optionally execute) AI test suites for multiple checked endpoints in one pass.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
-                        checked={batchAutoRun}
-                        onChange={(e) => setBatchAutoRun(e.target.checked)}
-                      />
-                      <span>Execute after generating</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowEndpointPicker(!showEndpointPicker)}
-                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <CheckCheck className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Choose Endpoints</span>
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showEndpointPicker ? 'rotate-180' : ''}`} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRunBatch}
-                      disabled={batchProgress !== null && batchProgress.done < batchProgress.total}
-                      className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold shadow-md flex items-center gap-2 cursor-pointer whitespace-nowrap"
-                    >
-                      {batchProgress && batchProgress.done < batchProgress.total ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Batch {batchProgress.done + 1}/{batchProgress.total}…</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-white" />
-                          <span>Run Batch ({targetEndpoints.size})</span>
-                        </>
-                      )}
-                    </button>
+              {/* Error */}
+              {error && (
+                <div
+                  className="flex items-start gap-2 p-2.5 mt-2.5 rounded-[var(--r-sm)] text-[11.5px]"
+                  style={{
+                    background: 'color-mix(in srgb, var(--danger-500) 8%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--danger-500) 24%, transparent)',
+                    color: 'var(--danger-500)',
+                  }}
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{categorizeError(error).category}</div>
+                    <div className="mt-0.5 leading-relaxed opacity-90">{categorizeError(error).hint}</div>
                   </div>
                 </div>
+              )}
 
-                {/* Endpoint Picker Checklist */}
-                {showEndpointPicker && (
-                  <div className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2 animate-in fade-in duration-150">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Checked endpoints will be included in the batch run
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setTargetEndpoints(new Set(endpointsList))}
-                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
-                        >
-                          Select all
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTargetEndpoints(new Set())}
-                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
-                      {endpointsList.map((ep) => (
+              {/* Batch runner — collapsed by default */}
+              {endpointsList.length > 0 && (
+                <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchPanel(!showBatchPanel)}
+                    className="w-full flex items-center gap-1.5 h-6 text-[11.5px] font-medium transition-colors"
+                    style={{ color: 'var(--text-secondary)' }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = 'var(--text-primary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                    }}
+                  >
+                    <Layers className="w-3 h-3" />
+                    <span>Multi-endpoint batch</span>
+                    <span
+                      className="mono text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: 'var(--bg-overlay)', color: 'var(--text-tertiary)' }}
+                    >
+                      {targetEndpoints.size}
+                    </span>
+                    <ChevronDown
+                      className="w-3 h-3 ml-auto transition-transform"
+                      style={{ transform: showBatchPanel ? 'rotate(180deg)' : 'none' }}
+                    />
+                  </button>
+
+                  {showBatchPanel && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <label
-                          key={ep}
-                          className="flex items-center gap-2 p-2 rounded-lg border border-slate-100 hover:bg-slate-50 cursor-pointer select-none"
+                          className="flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none"
+                          style={{ color: 'var(--text-secondary)' }}
                         >
                           <input
                             type="checkbox"
-                            className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
-                            checked={targetEndpoints.has(ep)}
-                            onChange={() => handleToggleTargetEndpoint(ep)}
+                            className="w-3.5 h-3.5 cursor-pointer"
+                            style={{ accentColor: 'var(--accent-500)' }}
+                            checked={batchAutoRun}
+                            onChange={(e) => setBatchAutoRun(e.target.checked)}
                           />
-                          <span className="text-[11px] font-mono text-slate-700 truncate" title={ep}>{ep}</span>
+                          Execute after generating
                         </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                        <GhostBtn onClick={() => setShowEndpointPicker(!showEndpointPicker)} Icon={CheckCheck}>
+                          Choose endpoints
+                        </GhostBtn>
+                        <GhostBtn
+                          onClick={handleRunBatch}
+                          disabled={batchProgress !== null && batchProgress.done < batchProgress.total}
+                          Icon={Play}
+                        >
+                          {batchProgress && batchProgress.done < batchProgress.total
+                            ? `Batch ${batchProgress.done + 1}/${batchProgress.total}…`
+                            : `Run batch (${targetEndpoints.size})`}
+                        </GhostBtn>
+                      </div>
 
-                {/* Batch Results HUD */}
-                {batchProgress && batchProgress.done >= batchProgress.total && Object.keys(batchSuites).length > 0 && (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in duration-150">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Batch results — click an endpoint to load its suite into the inspector
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {Object.entries(batchSuites).map(([ep, s]) => {
-                        const res = batchResults[ep] || {};
-                        const passed = Object.values(res).filter((r) => r.status === 'passed').length;
-                        const total = s.test_cases.length;
-                        const ok = total > 0 && passed === total;
-                        return (
-                          <button
-                            key={ep}
-                            type="button"
-                            onClick={() => {
-                              setActiveEndpointView(ep);
-                              setSuite(s);
-                              setSelectedTestCase(s.test_cases[0] || null);
-                              setExecutionResults(res);
-                            }}
-                            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-bold font-mono border cursor-pointer transition-all ${
-                              ok
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                : total === 0
-                                ? 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
-                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                            }`}
-                            title={`${ep}: ${passed}/${total} passed`}
-                          >
-                            {ok ? '✅' : total === 0 ? '⚠️' : '❌'} {ep} {total > 0 ? `(${passed}/${total})` : '(gen failed)'}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => downloadFile(
-                          `ai-batch-report-${new Date().toISOString().slice(0, 10)}.json`,
-                          JSON.stringify({ generated_at: new Date().toISOString(), provider: selectedProvider, model: selectedModel, endpoints: batchSuites, results: batchResults }, null, 2),
-                          'application/json'
+                      {showEndpointPicker && (
+                        <div
+                          className="p-2.5 rounded-[var(--r-sm)] space-y-2"
+                          style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)' }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className="text-[10px] font-semibold uppercase"
+                              style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+                            >
+                              Endpoints in batch
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setTargetEndpoints(new Set(endpointsList))}
+                                className="text-[10.5px] font-medium px-1.5 py-0.5 rounded transition-colors"
+                                style={{ color: 'var(--accent-500)' }}
+                              >
+                                All
+                              </button>
+                              <button
+                                onClick={() => setTargetEndpoints(new Set())}
+                                className="text-[10.5px] font-medium px-1.5 py-0.5 rounded transition-colors"
+                                style={{ color: 'var(--text-tertiary)' }}
+                              >
+                                None
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 max-h-52 overflow-y-auto">
+                            {endpointsList.map((ep) => (
+                              <label
+                                key={ep}
+                                className="flex items-center gap-1.5 p-1.5 rounded cursor-pointer select-none text-[11px]"
+                                style={{ color: 'var(--text-secondary)' }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'var(--bg-hover)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'transparent';
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="w-3.5 h-3.5 cursor-pointer"
+                                  style={{ accentColor: 'var(--accent-500)' }}
+                                  checked={targetEndpoints.has(ep)}
+                                  onChange={() => handleToggleTargetEndpoint(ep)}
+                                />
+                                <span className="mono truncate" title={ep}>
+                                  {ep}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {batchProgress &&
+                        batchProgress.done >= batchProgress.total &&
+                        Object.keys(batchSuites).length > 0 && (
+                          <div className="space-y-2">
+                            <div
+                              className="text-[10px] font-semibold uppercase"
+                              style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+                            >
+                              Batch results — click to inspect
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {Object.entries(batchSuites).map(([ep, s]) => {
+                                const res = batchResults[ep] || {};
+                                const passed = Object.values(res).filter((r) => r.status === 'passed').length;
+                                const total = s.test_cases.length;
+                                const ok = total > 0 && passed === total;
+                                return (
+                                  <button
+                                    key={ep}
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveEndpointView(ep);
+                                      setSuite(s);
+                                      setSelectedTestCase(s.test_cases[0] || null);
+                                      setExecutionResults(res);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-[var(--r-sm)] mono text-[10.5px] font-medium transition-colors"
+                                    style={
+                                      ok
+                                        ? {
+                                          background: 'color-mix(in srgb, var(--success-500) 10%, transparent)',
+                                          color: 'var(--success-500)',
+                                          border: '1px solid color-mix(in srgb, var(--success-500) 24%, transparent)',
+                                        }
+                                        : total === 0
+                                          ? {
+                                            background: 'var(--bg-overlay)',
+                                            color: 'var(--text-tertiary)',
+                                            border: '1px solid var(--border-subtle)',
+                                          }
+                                          : {
+                                            background: 'color-mix(in srgb, var(--danger-500) 10%, transparent)',
+                                            color: 'var(--danger-500)',
+                                            border: '1px solid color-mix(in srgb, var(--danger-500) 24%, transparent)',
+                                          }
+                                    }
+                                    title={`${ep}: ${passed}/${total}`}
+                                  >
+                                    {ep} {total > 0 ? `(${passed}/${total})` : '(failed)'}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadFile(
+                                  `ai-batch-report-${new Date().toISOString().slice(0, 10)}.json`,
+                                  JSON.stringify(
+                                    {
+                                      generated_at: new Date().toISOString(),
+                                      provider: selectedProvider,
+                                      model: selectedModel,
+                                      endpoints: batchSuites,
+                                      results: batchResults,
+                                    },
+                                    null,
+                                    2,
+                                  ),
+                                  'application/json',
+                                )
+                              }
+                              className="inline-flex items-center gap-1 h-7 px-2 rounded-[var(--r-sm)] text-[11px] font-medium transition-colors"
+                              style={{
+                                background: 'var(--bg-canvas)',
+                                border: '1px solid var(--border-subtle)',
+                                color: 'var(--text-secondary)',
+                              }}
+                            >
+                              <Download className="w-3 h-3" />
+                              Save batch report
+                            </button>
+                          </div>
                         )}
-                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Download className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Save Batch Report (JSON)</span>
-                      </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
 
-          {/* Test Cases Explorer & Execution Runner */}
+          {/* ---- Test suite ---- */}
           {suite && (
-            <div className="space-y-4">
-              {/* Executive Summary & Batch Run Action */}
-              <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="text-xs font-bold text-indigo-950">AI Test Strategy & Coverage Summary</div>
-                    <p className="text-xs text-indigo-800/90 mt-1 leading-relaxed">{suite.summary}</p>
+            <>
+              {/* Summary + actions bar */}
+              <div
+                className="p-4 rounded-[var(--r-md)] flex flex-col md:flex-row md:items-center justify-between gap-3"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <Shield className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--accent-500)' }} />
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      Test strategy & coverage summary
+                    </div>
+                    <p className="text-[11.5px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                      {suite.summary}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  {/* Save execution report */}
-                  <div className="flex items-center rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  {/* Save report */}
+                  <div
+                    className="inline-flex rounded-[var(--r-sm)] overflow-hidden"
+                    style={{ border: '1px solid var(--border-default)' }}
+                  >
                     <button
                       type="button"
                       onClick={() => handleSaveReport('markdown')}
-                      className="px-3 py-2.5 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border-r border-slate-200"
-                      title="Download execution report as Markdown"
+                      className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium transition-colors"
+                      style={{ background: 'var(--bg-canvas)', color: 'var(--text-secondary)', borderRight: '1px solid var(--border-default)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-canvas)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                      title="Download as Markdown"
                     >
-                      <Download className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Save Report</span>
+                      <Download className="w-3 h-3" />
+                      Save
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleSaveToServer()}
-                      className="px-2.5 py-2.5 hover:bg-slate-50 text-indigo-600 text-[10px] font-bold transition-all cursor-pointer"
-                      title="Save report to the server for later review"
+                      onClick={handleSaveToServer}
+                      className="inline-flex items-center h-7 px-2 text-[10.5px] font-semibold transition-colors"
+                      style={{ background: 'var(--bg-canvas)', color: 'var(--accent-500)', borderRight: '1px solid var(--border-default)' }}
+                      title="Save to server"
                     >
                       SAVE
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSaveReport('json')}
-                      className="px-2.5 py-2.5 hover:bg-slate-50 text-slate-500 text-[10px] font-bold font-mono transition-all cursor-pointer"
-                      title="Download execution report as JSON"
+                      className="inline-flex items-center h-7 px-2 mono text-[10.5px] font-medium transition-colors"
+                      style={{ background: 'var(--bg-canvas)', color: 'var(--text-tertiary)' }}
+                      title="Download as JSON"
                     >
                       JSON
                     </button>
                   </div>
                   {reportSavedAt && (
-                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold" style={{ color: 'var(--success-500)' }}>
                       <CheckCircle2 className="w-3 h-3" /> Saved
                     </span>
                   )}
 
-                  {/* Export Load Test Script Button */}
-                  <button
-                    type="button"
-                    onClick={() => setShowExportModal(true)}
-                    className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
-                    title="Export as k6 / Locust load testing script"
-                  >
-                    <Download className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Export k6 / Locust</span>
-                  </button>
-
-                  {/* Toggle Stress & Concurrency Runner Panel */}
-                  <button
-                    type="button"
-                    onClick={() => setShowStressRunner(!showStressRunner)}
-                    className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                      showStressRunner
-                        ? 'bg-amber-500 text-white border-amber-600 shadow-amber-500/20'
-                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                    }`}
-                  >
-                    <Gauge className="w-3.5 h-3.5" />
-                    <span>Concurrency & Stress</span>
-                  </button>
-
-                  {/* Sequence Analysis Panel Toggle */}
-                  <button
-                    type="button"
+                  <GhostBtn onClick={() => setShowExportModal(true)} Icon={Download}>k6/Locust</GhostBtn>
+                  <GhostBtn onClick={() => setShowStressRunner(!showStressRunner)} Icon={Gauge}>
+                    Stress
+                  </GhostBtn>
+                  <GhostBtn
                     onClick={async () => {
                       setShowSequencePanel(!showSequencePanel);
-                      if (!sequenceAnalysis && !sequenceLoading) {
-                        await fetchSequence('standards');
-                      }
+                      if (!sequenceAnalysis && !sequenceLoading) await fetchSequence('standards');
                     }}
-                    className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                      showSequencePanel
-                        ? 'bg-sky-500 text-white border-sky-600 shadow-sky-500/20'
-                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                    }`}
+                    Icon={GitBranch}
                   >
-                    <GitBranch className="w-3.5 h-3.5" />
-                    <span>Test Sequence</span>
-                  </button>
+                    Sequence
+                  </GhostBtn>
 
-                  {/* Standard Sequential Run All + Run Selected */}
-                  <button
+                  <PrimaryBtn
                     onClick={handleRunSelectedTests}
                     disabled={runningTests || runningStress}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
-                    title={selectedTestIds.size > 0 ? `Run ${selectedTestIds.size} checked test case(s)` : 'Run full suite (none checked)'}
+                    Icon={Play}
+                    title="Run (⌘↵)"
                   >
-                    {runningTests ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Executing Tests Live...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 fill-white" />
-                        <span>{selectedTestIds.size > 0 ? `Run Selected (${selectedTestIds.size})` : 'Run All Tests Live'}</span>
-                      </>
-                    )}
-                  </button>
+                    {runningTests
+                      ? 'Running…'
+                      : selectedTestIds.size > 0
+                        ? `Run selected (${selectedTestIds.size})`
+                        : 'Run all'}
+                  </PrimaryBtn>
+
+                  {failedCount > 0 && (
+                    <GhostBtn onClick={handleRegenerateFailed} Icon={RefreshCw}>
+                      Regenerate {failedCount} failed
+                    </GhostBtn>
+                  )}
                 </div>
               </div>
 
-              {/* Concurrency & Burst Stress Runner HUD Panel */}
+              {/* Stress runner */}
               {showStressRunner && (
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 space-y-4 animate-in fade-in duration-150">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div
+                  className="p-4 rounded-[var(--r-md)] space-y-3"
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-700">
-                        <Activity className="w-4 h-4" />
-                      </div>
+                      <Activity className="w-4 h-4" style={{ color: 'var(--warning-500)' }} />
                       <div>
-                        <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                          <span>Concurrent Stress & Burst Simulator</span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-800">
-                            Live Endpoint Load
-                          </span>
+                        <div className="text-[12.5px] font-medium" style={{ color: 'var(--text-primary)' }}>
+                          Concurrent stress simulator
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Dispatches concurrent worker pools to evaluate real-time throughput, P95 latency, and rate limiting (429).
+                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                          Concurrent worker pool to evaluate throughput, P95 latency, and rate limits.
                         </p>
                       </div>
                     </div>
-
-                    <button
-                      type="button"
+                    <PrimaryBtn
                       onClick={handleRunConcurrentStress}
                       disabled={runningStress || runningTests}
-                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-amber-600/20 flex items-center gap-2 shrink-0 cursor-pointer"
+                      Icon={Zap}
                     >
-                      {runningStress ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Pumping Burst Requests...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-3.5 h-3.5 fill-white" />
-                          <span>Start Concurrency Test</span>
-                        </>
-                      )}
-                    </button>
+                      {runningStress ? 'Running…' : 'Start'}
+                    </PrimaryBtn>
                   </div>
 
-                  {/* Settings Sliders / Inputs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                    <div className="p-3 rounded-xl bg-white border border-amber-200/80 space-y-1.5 shadow-2xs">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-700">Parallel Workers (Concurrency):</span>
-                        <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
-                          {concurrencyLevel}x parallel
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field
+                      label="Parallel workers"
+                      right={
+                        <span className="mono text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          {concurrencyLevel}x
                         </span>
-                      </div>
+                      }
+                    >
                       <input
                         type="range"
                         min="1"
@@ -1847,23 +2102,18 @@ ${tasks}
                         value={concurrencyLevel}
                         disabled={runningStress}
                         onChange={(e) => setConcurrencyLevel(parseInt(e.target.value, 10))}
-                        className="w-full accent-amber-600 cursor-pointer"
+                        className="w-full cursor-pointer"
+                        style={{ accentColor: 'var(--accent-500)' }}
                       />
-                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                        <span>1x (Gentle)</span>
-                        <span>10x (Moderate)</span>
-                        <span>25x (Heavy)</span>
-                        <span>50x (Stress)</span>
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-white border border-amber-200/80 space-y-1.5 shadow-2xs">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-700">Total Burst Iterations:</span>
-                        <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
-                          {totalRequestsTarget} requests
+                    </Field>
+                    <Field
+                      label="Total requests"
+                      right={
+                        <span className="mono text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          {totalRequestsTarget}
                         </span>
-                      </div>
+                      }
+                    >
                       <input
                         type="range"
                         min="5"
@@ -1872,415 +2122,379 @@ ${tasks}
                         value={totalRequestsTarget}
                         disabled={runningStress}
                         onChange={(e) => setTotalRequestsTarget(parseInt(e.target.value, 10))}
-                        className="w-full accent-amber-600 cursor-pointer"
+                        className="w-full cursor-pointer"
+                        style={{ accentColor: 'var(--accent-500)' }}
                       />
-                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                        <span>5 reqs</span>
-                        <span>50 reqs</span>
-                        <span>100 reqs</span>
-                        <span>200 reqs</span>
-                      </div>
-                    </div>
+                    </Field>
                   </div>
 
-                  {/* Real-time Telemetry HUD */}
                   {stressMetrics && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 animate-in fade-in duration-200">
-                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Throughput</div>
-                        <div className="text-base font-extrabold text-indigo-600 mt-0.5 font-mono">{stressMetrics.rps} <span className="text-[10px] text-slate-400 font-normal">req/s</span></div>
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">P95 Latency</div>
-                        <div className="text-base font-extrabold text-amber-600 mt-0.5 font-mono">{stressMetrics.p95LatencyMs} <span className="text-[10px] text-slate-400 font-normal">ms</span></div>
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Avg Response</div>
-                        <div className="text-base font-extrabold text-slate-900 mt-0.5 font-mono">{stressMetrics.avgLatencyMs} <span className="text-[10px] text-slate-400 font-normal">ms</span></div>
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Completed / 429</div>
-                        <div className="text-base font-extrabold text-slate-900 mt-0.5 font-mono">
-                          <span className="text-emerald-600">{stressMetrics.successful}</span>
-                          <span className="text-slate-300">/</span>
-                          <span className={stressMetrics.rateLimited > 0 ? 'text-amber-600' : 'text-slate-400'}>{stressMetrics.rateLimited}</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { label: 'Throughput', value: `${stressMetrics.rps}`, suffix: 'req/s' },
+                        { label: 'P95 latency', value: `${stressMetrics.p95LatencyMs}`, suffix: 'ms' },
+                        { label: 'Avg latency', value: `${stressMetrics.avgLatencyMs}`, suffix: 'ms' },
+                        { label: 'Success / 429', value: `${stressMetrics.successful}/${stressMetrics.rateLimited}`, suffix: '' },
+                      ].map((m) => (
+                        <div
+                          key={m.label}
+                          className="p-2 rounded-[var(--r-sm)]"
+                          style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)' }}
+                        >
+                          <div className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}>
+                            {m.label}
+                          </div>
+                          <div className="mono text-[14px] font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                            {m.value}
+                            {m.suffix && <span className="text-[10px] font-normal ml-0.5" style={{ color: 'var(--text-tertiary)' }}>{m.suffix}</span>}
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Load Test Script Export Modal Overlay */}
-              {showExportModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150">
-                  <div className="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold">
-                          <Code2 className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900">Export Load & Stress Test Script</h3>
-                          <p className="text-[11px] text-slate-500">Ready-to-run automation script incorporating all AI synthesized edge cases</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowExportModal(false)}
-                        className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Format Tabs: k6 vs Locust */}
-                    <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setExportFormat('k6')}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                          exportFormat === 'k6' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Grafana k6 (JavaScript)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setExportFormat('locust')}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                          exportFormat === 'locust' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Locust (Python)
-                      </button>
-                    </div>
-
-                    {/* Code Snippet Box */}
-                    <div className="relative rounded-2xl bg-slate-950 p-4 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-[320px] leading-relaxed border border-slate-800">
-                      <pre className="whitespace-pre">
-                        {exportFormat === 'k6' ? generateK6Script() : generateLocustScript()}
-                      </pre>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-[11px] text-slate-500">
-                        {exportFormat === 'k6' ? 'Run with: `k6 run loadtest.js`' : 'Run with: `locust -f locustfile.py --host=...`'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const script = exportFormat === 'k6' ? generateK6Script() : generateLocustScript();
-                          navigator.clipboard.writeText(script);
-                          setExportCopied(true);
-                          setTimeout(() => setExportCopied(false), 2000);
-                        }}
-                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
-                      >
-                        {exportCopied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Copied to Clipboard!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copy Script</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Test Sequence Analysis Panel */}
+              {/* Sequence */}
               {showSequencePanel && (
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent border border-sky-500/30 space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-sky-500/20 flex items-center justify-center text-sky-700">
-                      <ListOrdered className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                        <span>{sequenceSource === 'ai' ? 'AI-Suggested Test Workflow' : 'Recommended Test Sequence'}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                          sequenceSource === 'ai'
-                            ? 'bg-indigo-500/20 text-indigo-700 border-indigo-500/30'
-                            : 'bg-sky-500/10 text-sky-700 border-sky-500/20'
-                        }`}>
-                          {sequenceSource === 'ai' ? 'AI Workflow' : 'REST Standards'}
-                        </span>
-                        {sequenceSource === 'ai' && sequenceAnalysis?.model_used && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-600">
-                            {sequenceAnalysis.model_used}
+                <div
+                  className="p-4 rounded-[var(--r-md)] space-y-3"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <ListOrdered className="w-4 h-4" style={{ color: 'var(--accent-500)' }} />
+                      <div>
+                        <div className="text-[12.5px] font-medium flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                          {sequenceSource === 'ai' ? 'AI-suggested workflow' : 'Recommended sequence'}
+                          <span
+                            className="mono text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                            style={{ background: 'var(--bg-overlay)', color: 'var(--text-tertiary)' }}
+                          >
+                            {sequenceSource === 'ai' ? 'AI' : 'REST standards'}
                           </span>
-                        )}
+                        </div>
+                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                          {sequenceAnalysis?.summary || 'Analyzing spec for dependency-aware order…'}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        {sequenceAnalysis?.summary || 'Analyzing the OpenAPI spec for dependency-aware execution order…'}
-                      </p>
                     </div>
-                  </div>
-
-                  {/* Mode Toggle */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => fetchSequence('standards')}
-                        disabled={sequenceLoading}
-                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50 ${
-                          sequenceSource === 'standards' ? 'bg-sky-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}>
-                        REST Standards
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => fetchSequence('ai')}
-                        disabled={sequenceLoading}
-                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 ${
-                          sequenceSource === 'ai' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}>
-                        <Sparkles className="w-3 h-3" />
-                        AI Workflow
-                      </button>
+                    <div className="flex items-center gap-1">
+                      <GhostBtn onClick={() => fetchSequence('standards')} disabled={sequenceLoading}>Standards</GhostBtn>
+                      <GhostBtn onClick={() => fetchSequence('ai')} disabled={sequenceLoading} Icon={Sparkles}>AI workflow</GhostBtn>
+                      {sequenceLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--text-tertiary)' }} />}
                     </div>
-                    {sequenceLoading && <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />}
                   </div>
                   {sequenceError && (
-                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                      {sequenceError} — showing REST-standards ordering instead.
+                    <div
+                      className="text-[11px] p-2 rounded"
+                      style={{
+                        background: 'color-mix(in srgb, var(--warning-500) 8%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--warning-500) 22%, transparent)',
+                        color: 'var(--warning-500)',
+                      }}
+                    >
+                      {sequenceError} — showing standards ordering.
                     </div>
                   )}
                   {sequenceAnalysis?.steps && (
                     <>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-1">
                         {sequenceAnalysis.phases.map((p: string) => (
-                          <span key={p} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-700 border border-sky-500/20">{p}</span>
+                          <span
+                            key={p}
+                            className="pill pill--accent"
+                            style={{ height: 18, fontSize: 10, padding: '0 5px' }}
+                          >
+                            {p}
+                          </span>
                         ))}
                       </div>
-                      <div className="max-h-64 overflow-y-auto space-y-1">
+                      <div className="max-h-56 overflow-y-auto space-y-1">
                         {sequenceAnalysis.steps.map((s: any) => (
-                          <div key={s.endpoint_key} className="flex items-start gap-2 p-2 rounded-xl bg-white border border-slate-200">
-                            <span className="w-6 h-6 shrink-0 rounded-lg bg-sky-500/10 text-sky-700 text-[10px] font-bold flex items-center justify-center">{s.order}</span>
+                          <div
+                            key={s.endpoint_key}
+                            className="flex items-start gap-2 p-2 rounded-[var(--r-sm)]"
+                            style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <span
+                              className="shrink-0 w-5 h-5 rounded mono text-[10px] font-semibold grid place-items-center"
+                              style={{ background: 'var(--accent-muted)', color: 'var(--accent-500)' }}
+                            >
+                              {s.order}
+                            </span>
                             <div className="min-w-0 flex-1">
-                              <div className="text-[11px] font-bold font-mono text-slate-800">{s.endpoint_key}</div>
-                              <div className="text-[10px] text-slate-500 leading-snug">{s.reason}</div>
-                              {s.depends_on && s.depends_on.length > 0 && (
-                                <div className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
-                                  <ArrowRight className="w-3 h-3" /> after: {s.depends_on.join(', ')}
-                                </div>
-                              )}
+                              <div className="mono text-[11px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                                {s.endpoint_key}
+                              </div>
+                              <div className="text-[10.5px] leading-snug mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                                {s.reason}
+                              </div>
                             </div>
                           </div>
                         ))}
-                      </div>
-                      <div className="text-[10px] text-slate-400 space-y-0.5">
-                        {sequenceAnalysis.notes?.map((n: string, i: number) => <div key={i}>• {n}</div>)}
                       </div>
                     </>
                   )}
                 </div>
               )}
 
-              {/* Saved Reports Manager */}
-              <SavedReportsPanel onOpenReport={(rep) => {
-                const ep = Object.keys(rep.suites || {})[0] || rep.endpoint_key;
-                if (rep.suites?.[ep]) {
-                  setActiveEndpointView(ep);
-                  setSuite(rep.suites[ep]);
-                  setSelectedTestCase(rep.suites[ep].test_cases?.[0] || null);
-                  setExecutionResults({});
-                }
-              }} />
+              <SavedReportsPanel
+                onOpenReport={(rep) => {
+                  const ep = Object.keys(rep.suites || {})[0] || rep.endpoint_key;
+                  if (rep.suites?.[ep]) {
+                    setActiveEndpointView(ep);
+                    setSuite(rep.suites[ep]);
+                    setSelectedTestCase(rep.suites[ep].test_cases?.[0] || null);
+                    setExecutionResults({});
+                  }
+                }}
+              />
 
-              {/* Category Filter Chips + Select-all toggle */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                {suite && (
-                  <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white cursor-pointer whitespace-nowrap select-none hover:bg-slate-50">
-                    <input
-                      type="checkbox"
-                      className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
-                      checked={filteredTests.length > 0 && filteredTests.every((tc) => selectedTestIds.has(tc.id))}
-                      onChange={handleSelectAllTests}
-                    />
-                    <span>Select all</span>
-                  </label>
-                )}
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer whitespace-nowrap ${
-                      activeCategory === cat
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {cat === 'all' ? 'All Test Cases' : cat}
-                  </button>
-                ))}
+              {/* Category chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                <label
+                  className="flex items-center gap-1.5 h-7 px-2 rounded-[var(--r-sm)] text-[11.5px] font-medium cursor-pointer shrink-0 select-none"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 cursor-pointer"
+                    style={{ accentColor: 'var(--accent-500)' }}
+                    checked={filteredTests.length > 0 && filteredTests.every((tc) => selectedTestIds.has(tc.id))}
+                    onChange={handleSelectAllTests}
+                  />
+                  Select all
+                </label>
+                {categories.map((cat) => {
+                  const isActive = activeCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCategory(cat)}
+                      className="h-7 px-2.5 rounded-[var(--r-sm)] text-[11.5px] font-medium whitespace-nowrap transition-colors shrink-0"
+                      style={
+                        isActive
+                          ? { background: 'var(--accent-500)', color: 'var(--text-inverse)' }
+                          : {
+                            background: 'var(--bg-canvas)',
+                            border: '1px solid var(--border-subtle)',
+                            color: 'var(--text-secondary)',
+                          }
+                      }
+                    >
+                      {cat === 'all' ? 'All cases' : cat}
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Split Screen Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                {/* List of Test Cases */}
-                <div className="lg:col-span-5 space-y-2.5 max-h-[440px] overflow-y-auto pr-1">
+              {/* Split: list + detail */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                {/* Test list */}
+                <div className="lg:col-span-5 space-y-1.5 max-h-[440px] overflow-y-auto pr-1">
                   {filteredTests.map((tc) => {
                     const isSelected = selectedTestCase?.id === tc.id;
                     const runRes = executionResults[tc.id];
                     const isChecked = selectedTestIds.has(tc.id);
-
+                    const tone = categoryTone(tc.category);
                     return (
                       <div
                         key={tc.id}
                         onClick={() => setSelectedTestCase(tc)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-white border-indigo-500 shadow-md ring-2 ring-indigo-500/10'
-                            : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
-                        }`}
+                        className="p-3 rounded-[var(--r-sm)] border cursor-pointer transition-all"
+                        style={{
+                          background: 'var(--bg-surface)',
+                          borderColor: isSelected
+                            ? 'var(--accent-500)'
+                            : 'var(--border-subtle)',
+                          boxShadow: isSelected
+                            ? '0 0 0 3px var(--accent-muted)'
+                            : 'var(--shadow-xs)',
+                        }}
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <label
-                            className="flex items-center gap-2 cursor-pointer select-none"
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <input
+                            type="checkbox"
+                            className="w-3.5 h-3.5 cursor-pointer"
+                            style={{ accentColor: 'var(--accent-500)' }}
+                            checked={isChecked}
+                            onChange={() => handleToggleTestSelected(tc.id)}
                             onClick={(e) => e.stopPropagation()}
-                          >
-                            <input
-                              type="checkbox"
-                              className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
-                              checked={isChecked}
-                              onChange={() => handleToggleTestSelected(tc.id)}
-                              title="Include this test case in 'Run Selected'"
-                            />
-                          </label>
+                          />
                           <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getCategoryBadgeClass(
-                              tc.category
-                            )}`}
+                            className="pill shrink-0"
+                            style={{ background: tone.bg, color: tone.fg, border: `1px solid ${tone.bd}` }}
                           >
                             {tc.category}
                           </span>
-
-                          <div className="flex items-center gap-2">
+                          <div className="ml-auto flex items-center gap-1.5">
                             {runRes?.status === 'running' && (
-                              <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+                              <RefreshCw className="w-3 h-3 animate-spin" style={{ color: 'var(--accent-500)' }} />
                             )}
                             {runRes?.status === 'passed' && (
-                              <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> PASS ({runRes.durationMs}ms)
-                              </span>
+                              <CheckCircle2 className="w-3.5 h-3.5" style={{ color: 'var(--success-500)' }} />
                             )}
                             {runRes?.status === 'failed' && (
-                              <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-bold flex items-center gap-1">
-                                <XCircle className="w-3 h-3 text-rose-600" /> FAIL
-                              </span>
+                              <XCircle className="w-3.5 h-3.5" style={{ color: 'var(--danger-500)' }} />
                             )}
-                            <span className="text-[10px] font-mono font-bold text-slate-500">
-                              Exp: {tc.expected_status}
+                            <span className="mono text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                              {tc.expected_status}
                             </span>
                           </div>
                         </div>
-                        <div className="text-xs font-bold text-slate-900 line-clamp-1">{tc.name}</div>
-                        <div className="text-[11px] text-slate-500 line-clamp-2 mt-1">{tc.description}</div>
+                        <div className="text-[12px] font-medium line-clamp-1" style={{ color: 'var(--text-primary)' }}>
+                          {tc.name}
+                        </div>
+                        <div className="text-[11px] mt-0.5 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+                          {tc.description}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Test Detail Inspector & Live Result View */}
-                <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
+                {/* Detail */}
+                <div
+                  className="lg:col-span-7 rounded-[var(--r-md)] p-4 space-y-3"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+                >
                   {selectedTestCase ? (
                     <>
-                      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
-                        <div>
-                          <div className="text-xs font-black text-slate-900 flex items-center gap-2">
-                            <span>{selectedTestCase.name}</span>
+                      <div className="flex items-start justify-between gap-2 pb-2.5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {selectedTestCase.name}
                           </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">{selectedTestCase.description}</p>
+                          <p className="text-[11.5px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+                            {selectedTestCase.description}
+                          </p>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleRunSingleTest(selectedTestCase)}
-                            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-white" />
-                            <span>Run Test</span>
-                          </button>
-
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <GhostBtn onClick={() => handleCopy(buildCurl(selectedTestCase), 'curl-' + selectedTestCase.id)} Icon={copiedId === 'curl-' + selectedTestCase.id ? Check : Copy}>
+                            cURL
+                          </GhostBtn>
+                          <PrimaryBtn onClick={() => handleRunSingleTest(selectedTestCase)} Icon={Play}>
+                            Run
+                          </PrimaryBtn>
                           {onLoadIntoSandbox && (
-                            <button
+                            <GhostBtn
                               onClick={() => {
                                 onLoadIntoSandbox(selectedTestCase);
                                 onClose();
                               }}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                              Icon={Terminal}
                             >
-                              <Terminal className="w-3.5 h-3.5" />
-                              <span>Load in Sandbox</span>
-                            </button>
+                              Sandbox
+                            </GhostBtn>
                           )}
                         </div>
                       </div>
 
-                      {/* Execution Result Banner */}
+                      {/* Run result with diff */}
                       {executionResults[selectedTestCase.id] && (
                         <div
-                          className={`p-3.5 rounded-xl border text-xs flex items-center justify-between gap-3 ${
-                            executionResults[selectedTestCase.id].status === 'passed'
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          className="p-3 rounded-[var(--r-sm)] text-[11.5px] space-y-2"
+                          style={{
+                            background:
+                              executionResults[selectedTestCase.id].status === 'passed'
+                                ? 'color-mix(in srgb, var(--success-500) 8%, transparent)'
+                                : executionResults[selectedTestCase.id].status === 'failed'
+                                  ? 'color-mix(in srgb, var(--danger-500) 8%, transparent)'
+                                  : 'var(--bg-canvas)',
+                            border: `1px solid ${executionResults[selectedTestCase.id].status === 'passed'
+                              ? 'color-mix(in srgb, var(--success-500) 24%, transparent)'
                               : executionResults[selectedTestCase.id].status === 'failed'
-                              ? 'bg-rose-50 border-rose-200 text-rose-900'
-                              : 'bg-indigo-50 border-indigo-200 text-indigo-900'
-                          }`}
+                                ? 'color-mix(in srgb, var(--danger-500) 24%, transparent)'
+                                : 'var(--border-subtle)'
+                              }`,
+                          }}
                         >
-                          <div className="flex items-center gap-2">
-                            {executionResults[selectedTestCase.id].status === 'passed' ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-rose-600" />
-                            )}
-                            <div>
-                              <strong className="capitalize">{executionResults[selectedTestCase.id].status}:</strong>{' '}
-                              <span>
-                                {executionResults[selectedTestCase.id].errorMessage ||
-                                  `Endpoint returned status ${executionResults[selectedTestCase.id].actualStatus} in ${executionResults[selectedTestCase.id].durationMs}ms`}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              {executionResults[selectedTestCase.id].status === 'passed' ? (
+                                <CheckCircle2 className="w-3.5 h-3.5" style={{ color: 'var(--success-500)' }} />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5" style={{ color: 'var(--danger-500)' }} />
+                              )}
+                              <strong style={{ color: 'var(--text-primary)' }} className="capitalize">
+                                {executionResults[selectedTestCase.id].status}
+                              </strong>
+                              <span className="mono" style={{ color: 'var(--text-tertiary)' }}>
+                                · {executionResults[selectedTestCase.id].durationMs}ms
                               </span>
                             </div>
+                            <span className="mono text-[10.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                              {executionResults[selectedTestCase.id].assertionsPassed}/{executionResults[selectedTestCase.id].assertionsTotal} assertions
+                            </span>
                           </div>
 
-                          <div className="text-[11px] font-mono font-bold">
-                            Assertions: {executionResults[selectedTestCase.id].assertionsPassed}/
-                            {executionResults[selectedTestCase.id].assertionsTotal}
-                          </div>
+                          {executionResults[selectedTestCase.id].status === 'failed' && (
+                            <div className="grid grid-cols-2 gap-2 mono text-[11px]">
+                              <div
+                                className="p-1.5 rounded"
+                                style={{
+                                  background: 'color-mix(in srgb, var(--danger-500) 6%, transparent)',
+                                  border: '1px solid color-mix(in srgb, var(--danger-500) 18%, transparent)',
+                                }}
+                              >
+                                <div className="text-[9.5px] uppercase mb-0.5" style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}>
+                                  Expected
+                                </div>
+                                <div style={{ color: 'var(--text-primary)' }}>{selectedTestCase.expected_status}</div>
+                              </div>
+                              <div
+                                className="p-1.5 rounded"
+                                style={{
+                                  background: 'color-mix(in srgb, var(--danger-500) 6%, transparent)',
+                                  border: '1px solid color-mix(in srgb, var(--danger-500) 18%, transparent)',
+                                }}
+                              >
+                                <div className="text-[9.5px] uppercase mb-0.5" style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}>
+                                  Actual
+                                </div>
+                                <div style={{ color: 'var(--danger-500)' }}>
+                                  {executionResults[selectedTestCase.id].actualStatus ?? '—'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* Request Payload preview */}
+                      {/* Request body */}
                       {selectedTestCase.request_body && (
                         <div>
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1.5">
-                            <span>Synthesized Request Body</span>
+                          <div className="flex items-center justify-between text-[11px] font-medium mb-1.5">
+                            <span style={{ color: 'var(--text-secondary)' }}>Request body</span>
                             <button
                               onClick={() =>
                                 handleCopy(JSON.stringify(selectedTestCase.request_body, null, 2), 'body')
                               }
-                              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-[10px] font-mono cursor-pointer"
+                              className="inline-flex items-center gap-1 text-[10.5px] font-mono transition-colors"
+                              style={{ color: 'var(--text-tertiary)' }}
                             >
                               {copiedId === 'body' ? (
-                                <Check className="w-3 h-3 text-emerald-600" />
+                                <Check className="w-3 h-3" style={{ color: 'var(--success-500)' }} />
                               ) : (
                                 <Copy className="w-3 h-3" />
                               )}
-                              <span>{copiedId === 'body' ? 'Copied' : 'Copy'}</span>
+                              {copiedId === 'body' ? 'Copied' : 'Copy'}
                             </button>
                           </div>
-                          <pre className="p-3 bg-slate-900 text-emerald-400 text-xs font-mono rounded-xl overflow-x-auto max-h-40">
+                          <pre
+                            className="p-2.5 rounded-[var(--r-sm)] mono text-[11px] overflow-x-auto max-h-40"
+                            style={{
+                              background: 'var(--bg-canvas)',
+                              border: '1px solid var(--border-subtle)',
+                              color: 'var(--text-secondary)',
+                              margin: 0,
+                            }}
+                          >
                             {JSON.stringify(selectedTestCase.request_body, null, 2)}
                           </pre>
                         </div>
@@ -2289,15 +2503,22 @@ ${tasks}
                       {/* Assertions */}
                       {selectedTestCase.assertions && selectedTestCase.assertions.length > 0 && (
                         <div>
-                          <div className="text-[11px] font-bold text-slate-700 mb-1.5">Validation Assertions</div>
+                          <div className="text-[11px] font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                            Assertions
+                          </div>
                           <ul className="space-y-1">
                             {selectedTestCase.assertions.map((ast, i) => (
                               <li
                                 key={i}
-                                className="text-xs text-slate-700 flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200/60 font-mono"
+                                className="flex items-center gap-1.5 p-1.5 rounded mono text-[11px]"
+                                style={{
+                                  background: 'var(--bg-canvas)',
+                                  border: '1px solid var(--border-subtle)',
+                                  color: 'var(--text-secondary)',
+                                }}
                               >
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <span>{ast}</span>
+                                <CheckCircle2 className="w-3 h-3 shrink-0" style={{ color: 'var(--success-500)' }} />
+                                <span className="truncate">{ast}</span>
                               </li>
                             ))}
                           </ul>
@@ -2305,35 +2526,329 @@ ${tasks}
                       )}
                     </>
                   ) : (
-                    <div className="py-16 text-center text-slate-400 text-xs">
-                      Select a test case on the left to inspect parameters and run live assertions.
+                    <div className="py-16 text-center text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+                      Select a test case to inspect and run.
                     </div>
                   )}
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-          <div>
-            Synthesizing via <strong className="text-slate-800">{suite?.model_used || selectedProvider}</strong>
+        {/* ---- Footer ---- */}
+        <div
+          className="flex items-center justify-between px-5 py-3 shrink-0"
+          style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-canvas)' }}
+        >
+          <div className="text-[11px] mono flex items-center gap-3" style={{ color: 'var(--text-tertiary)' }}>
+            <span><span className="kbd">⌘G</span> generate</span>
+            <span><span className="kbd">⌘↵</span> run</span>
+            <span>model: <strong style={{ color: 'var(--text-secondary)' }}>{suite?.model_used || selectedProvider}</strong></span>
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold transition-all cursor-pointer"
-          >
-            Close
-          </button>
+          <GhostBtn onClick={onClose}>Close</GhostBtn>
         </div>
       </div>
-    </div>
+
+      {/* ---- Credentials configuration modal ---- */}
+      {showCredentialsModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowCredentialsModal(false);
+          }}
+        >
+          <div
+            className="absolute inset-0"
+            aria-hidden
+            style={{
+              background: 'color-mix(in srgb, #000 45%, transparent)',
+              backdropFilter: 'blur(14px) saturate(1.2)',
+              WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
+            }}
+          />
+          <div
+            className="relative w-full max-w-xl rounded-[var(--r-lg)] overflow-hidden flex flex-col"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              boxShadow: 'var(--shadow-xl), 0 1px 0 rgba(255,255,255,0.04) inset',
+              maxHeight: '85vh',
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="flex items-start justify-between gap-3 px-4 py-3.5 shrink-0"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-[var(--r-sm)] grid place-items-center shrink-0"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  <Key className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div
+                    className="text-[13.5px] font-semibold leading-tight"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    AI provider credentials
+                  </div>
+                  <div className="text-[11.5px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                    Keys are stored locally in your browser. Configure any provider you want to use.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCredentialsModal(false)}
+                className="grid place-items-center w-7 h-7 rounded-[var(--r-sm)] shrink-0 transition-colors"
+                style={{ color: 'var(--text-tertiary)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-hover)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-tertiary)';
+                }}
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body — provider list */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+              {AI_PROVIDERS.map((prov) => {
+                const hasKey = !!providerKeys[prov.id];
+                const isActive = selectedProvider === prov.id;
+                return (
+                  <div
+                    key={prov.id}
+                    className="p-2.5 rounded-[var(--r-sm)]"
+                    style={{
+                      background: isActive
+                        ? 'color-mix(in srgb, var(--accent-500) 5%, var(--bg-canvas))'
+                        : 'var(--bg-canvas)',
+                      border: `1px solid ${isActive
+                          ? 'color-mix(in srgb, var(--accent-500) 25%, transparent)'
+                          : 'var(--border-subtle)'
+                        }`,
+                    }}
+                  >
+                    {/* Provider header row */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span
+                        style={{
+                          color: hasKey ? 'var(--success-500)' : 'var(--text-tertiary)',
+                        }}
+                      >
+                        {renderProviderIcon(prov.id, 'w-3.5 h-3.5')}
+                      </span>
+                      <span
+                        className="text-[12px] font-medium flex-1 min-w-0 truncate"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {prov.name}
+                      </span>
+                      {hasKey && (
+                        <span
+                          className="inline-flex items-center gap-0.5 mono text-[9.5px] font-medium px-1.5 py-0.5 rounded shrink-0"
+                          style={{
+                            background: 'color-mix(in srgb, var(--success-500) 10%, transparent)',
+                            color: 'var(--success-500)',
+                          }}
+                        >
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          configured
+                        </span>
+                      )}
+                      {prov.consoleUrl && (
+                        <a
+                          href={prov.consoleUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 inline-flex items-center gap-0.5 text-[10.5px] font-medium transition-colors"
+                          style={{ color: 'var(--accent-500)' }}
+                        >
+                          Get key
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Inputs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      <input
+                        type="password"
+                        value={providerKeys[prov.id] || ''}
+                        onChange={(e) => handleUpdateKey(prov.id, e.target.value)}
+                        placeholder={prov.keyPlaceholder}
+                        className="w-full h-7 px-2 rounded mono text-[11px] outline-none transition-all"
+                        style={{
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--border-default)',
+                          color: 'var(--text-primary)',
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--border-focus)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--border-default)';
+                        }}
+                      />
+                      <input
+                        type="text"
+                        value={customBaseUrls[prov.id] || ''}
+                        onChange={(e) => handleUpdateBaseUrl(prov.id, e.target.value)}
+                        placeholder={`Base URL (default: ${prov.defaultBaseUrl})`}
+                        className="w-full h-7 px-2 rounded mono text-[11px] outline-none transition-all"
+                        style={{
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--border-default)',
+                          color: 'var(--text-secondary)',
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--border-focus)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--border-default)';
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div
+              className="flex items-center justify-between gap-3 px-4 py-3 shrink-0"
+              style={{
+                borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-canvas)',
+              }}
+            >
+              <span className="mono text-[10.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                Stored in browser localStorage · never sent to go-apidocs
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCredentialsModal(false)}
+                className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-[var(--r-sm)] text-[12px] font-semibold transition-all"
+                style={{
+                  background: 'var(--accent-500)',
+                  color: 'var(--text-inverse)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--accent-400)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--accent-500)';
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      
+      {/* ---- k6/Locust export modal (nested) ---- */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setShowExportModal(false)}>
+          <div
+            className="absolute inset-0"
+            style={{ background: 'color-mix(in srgb, #000 45%, transparent)', backdropFilter: 'blur(12px)' }}
+          />
+          <div
+            className="relative w-full max-w-2xl rounded-[var(--r-lg)] overflow-hidden flex flex-col"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              boxShadow: 'var(--shadow-xl)',
+              maxHeight: '80vh',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <div className="flex items-center gap-2">
+                <Code2 className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+                <span className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
+                  Export load test script
+                </span>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="grid place-items-center w-7 h-7 rounded-[var(--r-sm)] transition-colors"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 p-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              {(['k6', 'locust'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setExportFormat(f)}
+                  className="h-7 px-2.5 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-colors"
+                  style={
+                    exportFormat === f
+                      ? { background: 'var(--bg-hover)', color: 'var(--text-primary)' }
+                      : { color: 'var(--text-tertiary)' }
+                  }
+                >
+                  {f === 'k6' ? 'Grafana k6' : 'Locust (Python)'}
+                </button>
+              ))}
+            </div>
+
+            <pre
+              className="flex-1 p-4 mono text-[11px] leading-relaxed overflow-auto"
+              style={{
+                background: 'var(--bg-canvas)',
+                color: 'var(--text-secondary)',
+                margin: 0,
+              }}
+            >
+              {exportFormat === 'k6' ? generateK6Script() : generateLocustScript()}
+            </pre>
+
+            <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <span className="mono text-[10.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                {exportFormat === 'k6' ? 'k6 run loadtest.js' : 'locust -f locustfile.py --host=...'}
+              </span>
+              <PrimaryBtn
+                onClick={() => {
+                  const s = exportFormat === 'k6' ? generateK6Script() : generateLocustScript();
+                  navigator.clipboard.writeText(s);
+                  setExportCopied(true);
+                  setTimeout(() => setExportCopied(false), 2000);
+                }}
+                Icon={exportCopied ? Check : Copy}
+              >
+                {exportCopied ? 'Copied' : 'Copy script'}
+              </PrimaryBtn>
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 };
 
-
-// ---------- Saved Reports Manager ----------
+/* ============================================================
+   SAVED REPORTS PANEL (preserved, tokenized)
+   ============================================================ */
 
 interface SavedReportMeta {
   id: string;
@@ -2346,11 +2861,9 @@ interface SavedReportMeta {
   suites?: Record<string, AITestSuite>;
 }
 
-/**
- * SavedReportsPanel lists server-persisted execution reports with load &
- * delete actions, enabling report history review without leaving the runner.
- */
-export const SavedReportsPanel: React.FC<{ onOpenReport: (rep: SavedReportMeta) => void }> = ({ onOpenReport }) => {
+export const SavedReportsPanel: React.FC<{ onOpenReport: (rep: SavedReportMeta) => void }> = ({
+  onOpenReport,
+}) => {
   const [reports, setReports] = useState<SavedReportMeta[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -2361,7 +2874,7 @@ export const SavedReportsPanel: React.FC<{ onOpenReport: (rep: SavedReportMeta) 
       const res = await fetch('/docs/qa/reports');
       const data = await res.json();
       setReports(data.reports || []);
-    } catch {}
+    } catch { }
     setLoading(false);
   };
 
@@ -2373,7 +2886,7 @@ export const SavedReportsPanel: React.FC<{ onOpenReport: (rep: SavedReportMeta) 
     try {
       await fetch(`/docs/qa/reports?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       setReports((prev) => prev.filter((r) => r.id !== id));
-    } catch {}
+    } catch { }
   };
 
   if (!expanded) {
@@ -2381,75 +2894,106 @@ export const SavedReportsPanel: React.FC<{ onOpenReport: (rep: SavedReportMeta) 
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="w-full px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+        className="w-full inline-flex items-center justify-center gap-1.5 h-8 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-colors"
+        style={{
+          background: 'var(--bg-canvas)',
+          border: '1px solid var(--border-subtle)',
+          color: 'var(--text-secondary)',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-canvas)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
       >
-        <FolderOpen className="w-3.5 h-3.5 text-slate-500" />
-        <span>Saved Reports</span>
-        <ChevronDown className="w-3.5 h-3.5" />
+        <FolderOpen className="w-3.5 h-3.5" />
+        Saved reports
       </button>
     );
   }
 
   return (
-    <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2.5 animate-in fade-in duration-150">
+    <div
+      className="p-3 rounded-[var(--r-md)] space-y-2"
+      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+    >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="w-4 h-4 text-slate-500" />
-          <span className="text-xs font-bold text-slate-900">Saved Execution Reports</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">{reports.length}</span>
-        </div>
         <div className="flex items-center gap-1.5">
+          <FolderOpen className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
+          <span className="text-[12px] font-medium" style={{ color: 'var(--text-primary)' }}>
+            Saved reports
+          </span>
+          <span
+            className="mono text-[10px] px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--bg-overlay)', color: 'var(--text-tertiary)' }}
+          >
+            {reports.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5">
           <button
-            type="button"
             onClick={refresh}
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+            className="grid place-items-center w-6 h-6 rounded transition-colors"
+            style={{ color: 'var(--text-tertiary)' }}
             title="Refresh"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            type="button"
             onClick={() => setExpanded(false)}
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 cursor-pointer"
+            className="grid place-items-center w-6 h-6 rounded transition-colors"
+            style={{ color: 'var(--text-tertiary)' }}
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3 h-3" />
           </button>
         </div>
       </div>
 
       {reports.length === 0 && !loading && (
-        <div className="text-[11px] text-slate-400 text-center py-3">
-          No saved reports yet. Run a suite and click <strong>SAVE</strong> to persist the execution report.
+        <div className="text-[11px] text-center py-2" style={{ color: 'var(--text-tertiary)' }}>
+          No saved reports. Run a suite and click SAVE to persist.
         </div>
       )}
 
-      <div className="space-y-1.5 max-h-56 overflow-y-auto">
+      <div className="space-y-1 max-h-52 overflow-y-auto">
         {reports.map((r) => {
           const s = r.summary;
           const allPass = s && s.total > 0 && s.passed === s.total;
           return (
-            <div key={r.id} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 group">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${allPass ? 'bg-emerald-500' : s && s.failed > 0 ? 'bg-rose-500' : 'bg-slate-300'}`} />
+            <div
+              key={r.id}
+              className="flex items-center gap-2 p-2 rounded group"
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-canvas)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{
+                  background: allPass ? 'var(--success-500)' : s && s.failed > 0 ? 'var(--danger-500)' : 'var(--text-tertiary)',
+                }}
+              />
               <button
                 type="button"
                 onClick={() => onOpenReport(r)}
-                className="min-w-0 flex-1 text-left cursor-pointer"
-                title="Load this report's suite into the inspector"
+                className="min-w-0 flex-1 text-left"
+                title="Load report"
               >
-                <div className="text-[11px] font-bold text-slate-800 truncate">{r.title}</div>
-                <div className="text-[10px] text-slate-400 font-mono">
+                <div className="text-[11.5px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                  {r.title}
+                </div>
+                <div className="mono text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
                   {r.endpoint_key}
-                  {s ? ` — ${s.passed}/${s.total} passed` : ''}
-                  {r.model ? ` — ${r.model}` : ''}
+                  {s ? ` · ${s.passed}/${s.total} passed` : ''}
+                  {r.model ? ` · ${r.model}` : ''}
                 </div>
               </button>
               <button
                 type="button"
                 onClick={() => handleDelete(r.id)}
-                className="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-                title="Delete report"
+                className="grid place-items-center w-6 h-6 rounded transition-all opacity-0 group-hover:opacity-100"
+                style={{ color: 'var(--text-tertiary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger-500)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--danger-500) 8%, transparent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'transparent'; }}
+                title="Delete"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3 h-3" />
               </button>
             </div>
           );

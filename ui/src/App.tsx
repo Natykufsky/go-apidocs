@@ -64,6 +64,8 @@ export const App: React.FC = () => {
     setActiveModule,
     selectService,
     refreshWorkspaces,
+    lastLockedSelection,
+    clearLockedSelection,
   } = useWorkspace();
   const { qaData, stats: qaStats, endpoints: allEndpointsList, modules: availableModules, saveRecord, resetQA, setQAData } = useQA();
   const toast = useToast();
@@ -106,7 +108,7 @@ export const App: React.FC = () => {
       const next = !prev;
       try {
         localStorage.setItem('apidocs_sidebar_collapsed', String(next));
-      } catch (e) {}
+      } catch (e) { }
       return next;
     });
   };
@@ -184,18 +186,20 @@ export const App: React.FC = () => {
           document.title = data.title;
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Handle Workspace & Service Selection (with server-authoritative lock check)
   const handleSelectService = (wsId: string, svcId: string) => {
-    const targetWs = workspaces.find((w) => w.id === wsId);
-    if (targetWs && targetWs.is_locked && targetWs.is_unlocked === false) {
-      setUnlockTargetWs({ id: wsId, name: targetWs.name });
+    const ok = selectService(wsId, svcId);
+    if (!ok && lastLockedSelection) {
+      setUnlockTargetWs({
+        id: lastLockedSelection.workspaceId,
+        name: lastLockedSelection.workspaceName,
+      });
       setIsUnlockModalOpen(true);
-      return;
+      clearLockedSelection();
     }
-    selectService(wsId, svcId);
   };
 
   const handleModuleChange = (mod: string) => {
@@ -448,7 +452,7 @@ export const App: React.FC = () => {
           if (tc.request_body) {
             try {
               sessionStorage.setItem('apidocs_sandbox_preload', JSON.stringify(tc.request_body));
-            } catch (e) {}
+            } catch (e) { }
           }
           handleNavigate('/docs');
         }}

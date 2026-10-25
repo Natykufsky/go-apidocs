@@ -1,5 +1,4 @@
 import React from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, HelpCircle, FlaskConical } from 'lucide-react';
 
 export interface QAStats {
   passed: number;
@@ -13,49 +12,90 @@ interface QABarProps {
   stats: QAStats;
 }
 
+const Stat: React.FC<{
+  dot: string;
+  label: string;
+  value: number;
+}> = ({ dot, label, value }) => (
+  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+    <span
+      className="w-[6px] h-[6px] rounded-full shrink-0"
+      style={{ background: dot }}
+      aria-hidden="true"
+    />
+    <span className="text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>
+      {label}
+    </span>
+    <span
+      className="mono text-[11.5px]"
+      style={{
+        color: value > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)',
+        fontWeight: 500,
+      }}
+    >
+      {value}
+    </span>
+  </span>
+);
+
 export const QABar: React.FC<QABarProps> = ({ stats }) => {
   const testedCount = stats.passed + stats.retest + stats.failed;
   const percentage = stats.total > 0 ? Math.round((testedCount / stats.total) * 100) : 0;
 
   return (
-    <div className="bg-slate-100/90 border-b border-slate-200 px-4 py-2.5 shadow-sm">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs">
-        {/* Progress bar */}
-        <div className="flex items-center gap-3 flex-1 min-w-[240px]">
-          <span className="font-bold text-slate-700 whitespace-nowrap inline-flex items-center gap-1.5">
-            <FlaskConical className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
-            QA Coverage:
+    <div
+      className="px-4 py-2"
+      style={{
+        background: 'var(--bg-surface)',
+        borderBottom: '1px solid var(--border-subtle)',
+      }}
+    >
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-x-5 gap-y-2">
+        {/* Coverage bar */}
+        <div className="flex items-center gap-2.5 flex-1 min-w-[220px]">
+          <span
+            className="text-[11.5px] font-medium whitespace-nowrap"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Coverage
           </span>
-          <div className="flex-1 max-w-xs h-2.5 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
+          <div
+            className="flex-1 max-w-[260px] h-[5px] rounded-full overflow-hidden"
+            style={{ background: 'var(--bg-overlay)' }}
+            role="progressbar"
+            aria-valuenow={percentage}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="QA coverage"
+          >
             <div
-              className="h-full bg-gradient-to-r from-emerald-600 to-teal-500 transition-all duration-500"
-              style={{ width: `${percentage}%` }}
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${percentage}%`, background: 'var(--accent-500)' }}
             />
           </div>
-          <span className="text-slate-600 font-mono font-semibold">
-            {testedCount} / {stats.total} ({percentage}%)
+          <span
+            className="mono text-[11.5px] whitespace-nowrap"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {percentage}%
           </span>
         </div>
 
-        {/* Counter badges */}
-        <div className="flex items-center gap-4 text-xs font-semibold">
-          <span className="text-slate-700 inline-flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
-            Passed: <strong className="text-emerald-600">{stats.passed}</strong>
-          </span>
-          <span className="text-slate-700 inline-flex items-center gap-1">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
-            Retest: <strong className="text-amber-600">{stats.retest}</strong>
-          </span>
-          <span className="text-slate-700 inline-flex items-center gap-1">
-            <XCircle className="w-3.5 h-3.5 text-red-600" aria-hidden="true" />
-            Bugs: <strong className="text-red-600">{stats.failed}</strong>
-          </span>
-          <span className="text-slate-600 inline-flex items-center gap-1">
-            <HelpCircle className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-            Untested: <strong className="text-slate-800">{stats.untested}</strong>
-          </span>
+        {/* Counters */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <Stat dot="var(--success-500)" label="Passed" value={stats.passed} />
+          <Stat dot="var(--warning-500)" label="Retest" value={stats.retest} />
+          <Stat dot="var(--danger-500)" label="Bugs" value={stats.failed} />
+          <Stat dot="var(--text-tertiary)" label="Untested" value={stats.untested} />
         </div>
+
+        {/* Total */}
+        <span
+          className="mono text-[11px] ml-auto hidden sm:inline"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          {testedCount} / {stats.total}
+        </span>
       </div>
     </div>
   );

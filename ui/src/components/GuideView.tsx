@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   BookOpen,
   Search,
-  Code2,
   Copy,
   Check,
   ChevronRight,
   Terminal,
-  Layers,
   Sparkles,
   ExternalLink,
   ShieldCheck,
   Zap,
+  Play,
+  X,
+  FileJson,
+  Loader2,
 } from 'lucide-react';
 import { StoredCredentials } from './CredentialManagerModal';
 
@@ -33,6 +35,80 @@ interface EndpointDoc {
   operationId?: string;
 }
 
+/* ---------- method pill helper ---------- */
+const methodPill = (m: string): React.CSSProperties => {
+  const map: Record<string, { bg: string; fg: string; bd: string }> = {
+    GET: {
+      bg: 'color-mix(in srgb, var(--info-500) 12%, transparent)',
+      fg: 'var(--info-500)',
+      bd: 'color-mix(in srgb, var(--info-500) 26%, transparent)',
+    },
+    POST: {
+      bg: 'color-mix(in srgb, var(--success-500) 12%, transparent)',
+      fg: 'var(--success-500)',
+      bd: 'color-mix(in srgb, var(--success-500) 26%, transparent)',
+    },
+    PUT: {
+      bg: 'color-mix(in srgb, var(--warning-500) 12%, transparent)',
+      fg: 'var(--warning-500)',
+      bd: 'color-mix(in srgb, var(--warning-500) 26%, transparent)',
+    },
+    PATCH: {
+      bg: 'color-mix(in srgb, var(--warning-500) 12%, transparent)',
+      fg: 'var(--warning-500)',
+      bd: 'color-mix(in srgb, var(--warning-500) 26%, transparent)',
+    },
+    DELETE: {
+      bg: 'color-mix(in srgb, var(--danger-500) 12%, transparent)',
+      fg: 'var(--danger-500)',
+      bd: 'color-mix(in srgb, var(--danger-500) 26%, transparent)',
+    },
+  };
+  const c = map[m] || {
+    bg: 'var(--bg-overlay)',
+    fg: 'var(--text-secondary)',
+    bd: 'var(--border-subtle)',
+  };
+  return {
+    background: c.bg,
+    color: c.fg,
+    border: `1px solid ${c.bd}`,
+    fontFamily: 'var(--font-mono)',
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    padding: '2px 6px',
+    borderRadius: 4,
+    textTransform: 'uppercase' as const,
+    lineHeight: 1.4,
+    display: 'inline-flex',
+    alignItems: 'center',
+    flexShrink: 0,
+  };
+};
+
+/* ---------- error code pill ---------- */
+const statusPill = (code: string): React.CSSProperties => {
+  const s = code.startsWith('2')
+    ? { bg: 'color-mix(in srgb, var(--success-500) 12%, transparent)', fg: 'var(--success-500)' }
+    : code.startsWith('4')
+    ? { bg: 'color-mix(in srgb, var(--warning-500) 12%, transparent)', fg: 'var(--warning-500)' }
+    : code.startsWith('5')
+    ? { bg: 'color-mix(in srgb, var(--danger-500) 12%, transparent)', fg: 'var(--danger-500)' }
+    : { bg: 'var(--bg-overlay)', fg: 'var(--text-secondary)' };
+  return {
+    background: s.bg,
+    color: s.fg,
+    fontFamily: 'var(--font-mono)',
+    fontSize: 11,
+    fontWeight: 600,
+    padding: '2px 7px',
+    borderRadius: 4,
+    lineHeight: 1.4,
+    flexShrink: 0,
+  };
+};
+
 export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credentials = {} }) => {
   const [spec, setSpec] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -41,8 +117,8 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
   const [activeEndpointKey, setActiveEndpointKey] = useState<string>('');
   const [snippetLang, setSnippetLang] = useState<'curl' | 'go' | 'node' | 'python'>('curl');
   const [copied, setCopied] = useState<boolean>(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // Fetch OpenAPI spec JSON
   useEffect(() => {
     setLoading(true);
     fetch(specUrl)
@@ -54,11 +130,9 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
       .catch(() => setLoading(false));
   }, [specUrl]);
 
-  // Parse all endpoints from spec preserving explicit tag ordering (01, 02, 03...)
   const { endpoints, tags } = useMemo(() => {
-    if (!spec || !spec.paths) return { endpoints: [], tags: [] };
+    if (!spec || !spec.paths) return { endpoints: [], tags: [] as string[] };
 
-    // 1. Extract declared tags in exact spec order (e.g. 01. Auth, 02. Multi-Tenant...)
     const declaredTags: string[] = Array.isArray(spec.tags)
       ? spec.tags.map((t: any) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
       : [];
@@ -77,9 +151,7 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
           const op = pathItem[method];
           const opTags: string[] = op.tags && op.tags.length > 0 ? op.tags : ['General'];
           opTags.forEach((t) => {
-            if (!tagOrderMap.has(t)) {
-              extraTagsSet.add(t);
-            }
+            if (!tagOrderMap.has(t)) extraTagsSet.add(t);
           });
 
           epList.push({
@@ -97,12 +169,12 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
       }
     }
 
-    // Additional tags sorted naturally
-    const extraTags = Array.from(extraTagsSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const extraTags = Array.from(extraTagsSet).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true })
+    );
     const allTags = [...declaredTags, ...extraTags];
     allTags.forEach((name, idx) => tagOrderMap.set(name, idx));
 
-    // Sort endpoints primarily by their primary tag's index in the spec (matching 01, 02, 03... order)
     epList.sort((a, b) => {
       const tagA = a.tags[0] || 'General';
       const tagB = b.tags[0] || 'General';
@@ -112,42 +184,53 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
       return a.path.localeCompare(b.path);
     });
 
-    return {
-      endpoints: epList,
-      tags: allTags,
-    };
+    return { endpoints: epList, tags: allTags };
   }, [spec]);
 
-  // Auto-select first endpoint
   useEffect(() => {
     if (endpoints.length > 0 && !activeEndpointKey) {
       setActiveEndpointKey(`${endpoints[0].method} ${endpoints[0].path}`);
     }
   }, [endpoints, activeEndpointKey]);
 
-  // Filtered endpoints
+  // Cmd+K to focus search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const filteredEndpoints = useMemo(() => {
     return endpoints.filter((ep) => {
+      const q = search.toLowerCase();
       const matchesSearch =
-        ep.path.toLowerCase().includes(search.toLowerCase()) ||
-        ep.summary?.toLowerCase().includes(search.toLowerCase()) ||
-        ep.method.toLowerCase().includes(search.toLowerCase());
+        ep.path.toLowerCase().includes(q) ||
+        ep.summary?.toLowerCase().includes(q) ||
+        ep.method.toLowerCase().includes(q);
       const matchesTag = selectedTag === 'all' || ep.tags.includes(selectedTag);
       return matchesSearch && matchesTag;
     });
   }, [endpoints, search, selectedTag]);
 
   const activeEndpoint = useMemo(() => {
-    return endpoints.find((ep) => `${ep.method} ${ep.path}` === activeEndpointKey) || endpoints[0];
+    return (
+      endpoints.find((ep) => `${ep.method} ${ep.path}` === activeEndpointKey) || endpoints[0]
+    );
   }, [endpoints, activeEndpointKey]);
 
-  // Generate multi-language code snippets
   const generateSnippet = (ep: EndpointDoc | undefined, lang: string): string => {
     if (!ep) return '';
 
     const host = window.location.origin;
     const fullUrl = `${host}${ep.path}`;
-    const token = credentials.accessToken ? `Bearer ${credentials.accessToken}` : 'Bearer <YOUR_TOKEN>';
+    const token = credentials.accessToken
+      ? `Bearer ${credentials.accessToken}`
+      : 'Bearer <YOUR_TOKEN>';
     const tenant = credentials.tenantId ? credentials.tenantId : '<TENANT_ID>';
 
     switch (lang) {
@@ -158,32 +241,31 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
         }
         return cmd;
       }
-      case 'go': {
+      case 'go':
         return `package main
 
 import (
-	"fmt"
-	"net/http"
-	"io"
+\t"fmt"
+\t"net/http"
+\t"io"
 )
 
 func main() {
-	url := "${fullUrl}"
-	req, _ := http.NewRequest("${ep.method}", url, nil)
-	req.Header.Set("Authorization", "${token}")
-	req.Header.Set("X-Tenant-ID", "${tenant}")
-	req.Header.Set("Content-Type", "application/json")
+\turl := "${fullUrl}"
+\treq, _ := http.NewRequest("${ep.method}", url, nil)
+\treq.Header.Set("Authorization", "${token}")
+\treq.Header.Set("X-Tenant-ID", "${tenant}")
+\treq.Header.Set("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer res.Body.Close()
+\tres, err := http.DefaultClient.Do(req)
+\tif err != nil {
+\t\tpanic(err)
+\t}
+\tdefer res.Body.Close()
 
-	body, _ := io.ReadAll(res.Body)
-	fmt.Println(string(body))
+\tbody, _ := io.ReadAll(res.Body)
+\tfmt.Println(string(body))
 }`;
-      }
       case 'node': {
         let code = `const url = '${fullUrl}';\n\nconst options = {\n  method: '${ep.method}',\n  headers: {\n    'Authorization': '${token}',\n    'X-Tenant-ID': '${tenant}',\n    'Content-Type': 'application/json'\n  }`;
         if (ep.method === 'POST' || ep.method === 'PUT' || ep.method === 'PATCH') {
@@ -213,253 +295,605 @@ func main() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getMethodBadgeClass = (method: string) => {
-    switch (method) {
-      case 'GET':
-        return 'bg-blue-500/10 text-blue-700 border-blue-200';
-      case 'POST':
-        return 'bg-emerald-500/10 text-emerald-700 border-emerald-200';
-      case 'PUT':
-        return 'bg-amber-500/10 text-amber-700 border-amber-200';
-      case 'DELETE':
-        return 'bg-rose-500/10 text-rose-700 border-rose-200';
-      case 'PATCH':
-        return 'bg-purple-500/10 text-purple-700 border-purple-200';
-      default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
+  /* ---------- loading ---------- */
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center py-32 bg-slate-50">
+      <div className="flex-1 flex items-center justify-center py-32">
         <div className="text-center space-y-3">
-          <BookOpen className="w-8 h-8 text-emerald-600 animate-pulse mx-auto" />
-          <div className="text-xs font-bold text-slate-700">Loading Native Developer Guide...</div>
+          <Loader2
+            className="w-6 h-6 animate-spin mx-auto"
+            style={{ color: 'var(--accent-500)' }}
+          />
+          <div className="text-[12px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+            Loading developer reference…
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-50 text-slate-900 min-h-[calc(100vh-4rem)]">
-      {/* 3-Column Modern Developer Reference Layout */}
-      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col lg:flex-row gap-6">
-        {/* Column 1: Sidebar Endpoint Navigator */}
-        <aside className="w-full lg:w-72 shrink-0 bg-white rounded-3xl border border-slate-200/90 p-4 shadow-2xs flex flex-col max-h-[85vh]">
-          {/* Search & Tag Filter */}
-          <div className="space-y-2 mb-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50">
-              <Search className="w-3.5 h-3.5 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search endpoints..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-xs text-slate-900 placeholder-slate-500 outline-none"
-              />
-            </div>
-
-            {tags.length > 0 && (
-              <select
-                value={selectedTag}
-                onChange={(e) => setSelectedTag(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 outline-none"
+    <div className="flex-1 flex flex-col" style={{ background: 'var(--bg-canvas)' }}>
+      <div className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1">
+        <div className="flex flex-col lg:flex-row gap-5 items-start">
+          {/* ============================================================
+              COLUMN 1 — Navigator
+              ============================================================ */}
+          <aside
+            className="w-full lg:w-[280px] shrink-0 flex flex-col lg:sticky lg:top-[calc(var(--topbar-h)+16px)] lg:max-h-[calc(100vh-var(--topbar-h)-32px)] rounded-[var(--r-lg)]"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            {/* search */}
+            <div className="p-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <div
+                className="flex items-center gap-2 h-8 px-2.5 rounded-[var(--r-sm)]"
+                style={{
+                  background: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-subtle)',
+                }}
               >
-                <option value="all">🌟 All Modules ({endpoints.length})</option>
-                {tags.map((t) => (
-                  <option key={t} value={t}>
-                    📁 {t}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Endpoints List */}
-          <div className="overflow-y-auto flex-1 space-y-1 pr-1">
-            {filteredEndpoints.map((ep) => {
-              const key = `${ep.method} ${ep.path}`;
-              const isSelected = key === activeEndpointKey;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setActiveEndpointKey(key)}
-                  className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-emerald-50 border border-emerald-200/90 text-emerald-950 font-bold shadow-2xs'
-                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <span
-                      className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${getMethodBadgeClass(
-                        ep.method
-                      )}`}
-                    >
-                      {ep.method}
-                    </span>
-                    <span className="text-xs truncate">{ep.path}</span>
-                  </div>
-                  {isSelected && <ChevronRight className="w-3.5 h-3.5 text-emerald-600 shrink-0 ml-1" />}
-                </button>
-              );
-            })}
-
-            {filteredEndpoints.length === 0 && (
-              <div className="p-4 text-center text-xs text-slate-500">No matching endpoints found</div>
-            )}
-          </div>
-        </aside>
-
-        {/* Column 2: Endpoint Deep Dive & Specifications */}
-        <main className="flex-1 bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-2xs overflow-y-auto max-h-[85vh] space-y-6">
-          {activeEndpoint ? (
-            <>
-              {/* Endpoint Header */}
-              <div className="space-y-3 pb-6 border-b border-slate-100">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`text-xs font-black uppercase px-2.5 py-1 rounded-lg border ${getMethodBadgeClass(
-                      activeEndpoint.method
-                    )}`}
+                <Search
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{ color: 'var(--text-tertiary)' }}
+                />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  placeholder="Search endpoints…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1 bg-transparent outline-none text-[12px]"
+                  style={{ color: 'var(--text-primary)' }}
+                />
+                {search ? (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="shrink-0 p-0.5 rounded"
+                    style={{ color: 'var(--text-tertiary)' }}
                   >
-                    {activeEndpoint.method}
-                  </span>
-                  <span className="font-mono text-sm sm:text-base font-bold text-slate-900">
-                    {activeEndpoint.path}
-                  </span>
-                </div>
-
-                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
-                  {activeEndpoint.summary}
-                </h2>
-
-                {activeEndpoint.description && (
-                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    {activeEndpoint.description}
-                  </p>
+                    <X className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <span className="kbd shrink-0">⌘K</span>
                 )}
               </div>
-
-              {/* Parameters Table */}
-              {activeEndpoint.parameters && activeEndpoint.parameters.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Request Parameters ({activeEndpoint.parameters.length})
-                  </h3>
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
-                        <tr>
-                          <th className="p-3">Name</th>
-                          <th className="p-3">In</th>
-                          <th className="p-3">Type</th>
-                          <th className="p-3">Required</th>
-                          <th className="p-3">Description</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-700">
-                        {activeEndpoint.parameters.map((param: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-slate-50/50">
-                            <td className="p-3 font-mono font-bold text-emerald-800">{param.name}</td>
-                            <td className="p-3 uppercase text-[10px] font-bold text-slate-500">{param.in}</td>
-                            <td className="p-3 font-mono text-[11px] text-slate-600">{param.schema?.type || param.type || 'string'}</td>
-                            <td className="p-3">
-                              {param.required ? (
-                                <span className="text-[10px] font-bold text-rose-600">Required</span>
-                              ) : (
-                                <span className="text-[10px] text-slate-400">Optional</span>
-                              )}
-                            </td>
-                            <td className="p-3 text-slate-600">{param.description || '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Response Codes */}
-              {activeEndpoint.responses && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Responses</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {Object.entries(activeEndpoint.responses).map(([code, resp]: [string, any]) => (
-                      <div
-                        key={code}
-                        className={`p-3 rounded-2xl border flex items-start gap-2.5 ${
-                          code.startsWith('2')
-                            ? 'bg-emerald-50/50 border-emerald-200/80 text-emerald-950'
-                            : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}
-                      >
-                        <span
-                          className={`text-xs font-black px-2 py-0.5 rounded-md ${
-                            code.startsWith('2') ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-800'
-                          }`}
-                        >
-                          {code}
-                        </span>
-                        <div className="text-xs font-medium">{resp.description || 'Response'}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-20 text-center text-xs text-slate-500">Select an endpoint to view documentation</div>
-          )}
-        </main>
-
-        {/* Column 3: Pre-Authenticated Multi-Language Code Snippets */}
-        <aside className="w-full lg:w-96 shrink-0 bg-slate-900 text-white rounded-3xl border border-slate-800 p-5 shadow-xl flex flex-col max-h-[85vh]">
-          {/* Header & Language Selector */}
-          <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-800">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-              <Terminal className="w-4 h-4 text-emerald-400" />
-              <span>Code Snippets</span>
             </div>
 
-            <div className="flex bg-slate-800 p-1 rounded-xl gap-0.5">
-              {(['curl', 'go', 'node', 'python'] as const).map((lang) => (
+            {/* tag filter pills */}
+            {tags.length > 0 && (
+              <div
+                className="px-3 py-2 flex flex-wrap gap-1"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
                 <button
-                  key={lang}
                   type="button"
-                  onClick={() => setSnippetLang(lang)}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all cursor-pointer ${
-                    snippetLang === lang ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={() => setSelectedTag('all')}
+                  className="h-6 px-2 rounded text-[11px] font-medium transition-colors"
+                  style={
+                    selectedTag === 'all'
+                      ? {
+                          background: 'var(--accent-muted)',
+                          color: 'var(--accent-500)',
+                          border: '1px solid color-mix(in srgb, var(--accent-500) 22%, transparent)',
+                        }
+                      : {
+                          background: 'transparent',
+                          color: 'var(--text-tertiary)',
+                          border: '1px solid transparent',
+                        }
+                  }
                 >
-                  {lang}
+                  All · {endpoints.length}
                 </button>
-              ))}
+                {tags.slice(0, 8).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSelectedTag(t)}
+                    title={t}
+                    className="h-6 px-2 rounded text-[11px] font-medium transition-colors truncate max-w-[140px]"
+                    style={
+                      selectedTag === t
+                        ? {
+                            background: 'var(--accent-muted)',
+                            color: 'var(--accent-500)',
+                            border: '1px solid color-mix(in srgb, var(--accent-500) 22%, transparent)',
+                          }
+                        : {
+                            background: 'var(--bg-canvas)',
+                            color: 'var(--text-tertiary)',
+                            border: '1px solid var(--border-subtle)',
+                          }
+                    }
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* endpoint list */}
+            <div className="flex-1 overflow-y-auto p-1.5">
+              {filteredEndpoints.length === 0 && (
+                <div
+                  className="px-3 py-8 text-center text-[12px]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  No endpoints match your filter.
+                </div>
+              )}
+
+              {filteredEndpoints.map((ep) => {
+                const key = `${ep.method} ${ep.path}`;
+                const isSelected = key === activeEndpointKey;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActiveEndpointKey(key)}
+                    title={`${ep.method} ${ep.path}`}
+                    className="w-full flex items-center gap-2 h-8 px-2 rounded-[var(--r-sm)] text-left transition-colors mb-0.5"
+                    style={
+                      isSelected
+                        ? {
+                            background: 'var(--accent-muted)',
+                            color: 'var(--accent-500)',
+                            boxShadow: 'inset 3px 0 0 var(--accent-500)',
+                          }
+                        : { background: 'transparent', color: 'var(--text-secondary)' }
+                    }
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = 'var(--bg-hover)';
+                        e.currentTarget.style.color = 'var(--text-primary)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-secondary)';
+                      }
+                    }}
+                  >
+                    <span style={methodPill(ep.method)}>{ep.method}</span>
+                    <span
+                      className="mono text-[11.5px] truncate flex-1"
+                      style={{ color: 'inherit' }}
+                    >
+                      {ep.path}
+                    </span>
+                    {isSelected && (
+                      <ChevronRight
+                        className="w-3 h-3 shrink-0"
+                        style={{ color: 'var(--accent-500)' }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          </div>
 
-          {/* Code Viewer */}
-          <div className="flex-1 relative rounded-2xl bg-slate-950 p-4 border border-slate-800/80 overflow-y-auto font-mono text-xs text-emerald-300 leading-relaxed">
-            <pre className="whitespace-pre-wrap break-all">{generateSnippet(activeEndpoint, snippetLang)}</pre>
-          </div>
-
-          {/* Copy Button */}
-          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
-            <span className="text-[10px] text-slate-400 font-medium">
-              {credentials.accessToken ? '🔐 Auth Token Attached' : 'Bearer <token> placeholder'}
-            </span>
-            <button
-              type="button"
-              onClick={() => handleCopy(generateSnippet(activeEndpoint, snippetLang))}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+            {/* footer count */}
+            <div
+              className="px-3 py-2 text-[11px] mono flex items-center justify-between"
+              style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied!' : 'Copy Code'}</span>
-            </button>
-          </div>
-        </aside>
+              <span>{filteredEndpoints.length} of {endpoints.length}</span>
+              <span className="inline-flex items-center gap-1">
+                <BookOpen className="w-3 h-3" />
+                {tags.length} modules
+              </span>
+            </div>
+          </aside>
+
+          {/* ============================================================
+              COLUMN 2 — Endpoint detail
+              ============================================================ */}
+          <main
+            className="flex-1 min-w-0 rounded-[var(--r-lg)] overflow-hidden"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            {activeEndpoint ? (
+              <>
+                {/* header */}
+                <div
+                  className="p-5 sm:p-6"
+                  style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                >
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span
+                      style={{
+                        ...methodPill(activeEndpoint.method),
+                        fontSize: 11,
+                        padding: '3px 8px',
+                      }}
+                    >
+                      {activeEndpoint.method}
+                    </span>
+                    <span
+                      className="mono text-[13px] sm:text-[14px] font-semibold truncate"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {activeEndpoint.path}
+                    </span>
+                    {activeEndpoint.operationId && (
+                      <span
+                        className="mono text-[10.5px] px-1.5 py-0.5 rounded ml-auto"
+                        style={{
+                          background: 'var(--bg-canvas)',
+                          border: '1px solid var(--border-subtle)',
+                          color: 'var(--text-tertiary)',
+                        }}
+                      >
+                        {activeEndpoint.operationId}
+                      </span>
+                    )}
+                  </div>
+
+                  <h1
+                    className="text-[18px] sm:text-[20px] font-semibold leading-snug mb-2"
+                    style={{ color: 'var(--text-primary)', letterSpacing: '-0.018em' }}
+                  >
+                    {activeEndpoint.summary}
+                  </h1>
+
+                  {activeEndpoint.description && (
+                    <p
+                      className="text-[13px] leading-relaxed max-w-[680px]"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {activeEndpoint.description}
+                    </p>
+                  )}
+
+                  {/* tag pills + try in sandbox */}
+                  <div className="flex flex-wrap items-center gap-2 mt-4">
+                    {activeEndpoint.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="h-5 px-1.5 inline-flex items-center rounded mono text-[10.5px]"
+                        style={{
+                          background: 'var(--bg-canvas)',
+                          border: '1px solid var(--border-subtle)',
+                          color: 'var(--text-tertiary)',
+                        }}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                    <a
+                      href="/docs"
+                      className="ml-auto inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--r-sm)] text-[12px] font-medium transition-colors"
+                      style={{
+                        background: 'var(--accent-500)',
+                        color: 'var(--text-inverse)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), 0 1px 2px rgba(0,0,0,0.4)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--accent-400)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'var(--accent-500)';
+                      }}
+                    >
+                      <Play className="w-3 h-3" />
+                      Try in sandbox
+                    </a>
+                  </div>
+                </div>
+
+                <div className="p-5 sm:p-6 space-y-7">
+                  {/* Parameters */}
+                  {activeEndpoint.parameters.length > 0 && (
+                    <section>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h2
+                          className="text-[13px] font-semibold"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          Parameters
+                        </h2>
+                        <span
+                          className="h-5 px-1.5 inline-flex items-center rounded mono text-[10.5px]"
+                          style={{
+                            background: 'var(--bg-canvas)',
+                            border: '1px solid var(--border-subtle)',
+                            color: 'var(--text-tertiary)',
+                          }}
+                        >
+                          {activeEndpoint.parameters.length}
+                        </span>
+                      </div>
+
+                      <div
+                        className="rounded-[var(--r-md)] overflow-hidden"
+                        style={{ border: '1px solid var(--border-subtle)' }}
+                      >
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[12px] border-collapse">
+                            <thead>
+                              <tr style={{ background: 'var(--bg-canvas)' }}>
+                                {['Name', 'In', 'Type', 'Required', 'Description'].map((h) => (
+                                  <th
+                                    key={h}
+                                    className="text-left px-3 py-2 font-medium whitespace-nowrap"
+                                    style={{
+                                      color: 'var(--text-tertiary)',
+                                      borderBottom: '1px solid var(--border-subtle)',
+                                    }}
+                                  >
+                                    {h}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {activeEndpoint.parameters.map((param: any, idx: number) => (
+                                <tr
+                                  key={idx}
+                                  style={{ borderTop: idx > 0 ? '1px solid var(--border-subtle)' : 'none' }}
+                                >
+                                  <td
+                                    className="px-3 py-2 mono text-[11.5px] font-medium whitespace-nowrap"
+                                    style={{ color: 'var(--accent-500)' }}
+                                  >
+                                    {param.name}
+                                  </td>
+                                  <td
+                                    className="px-3 py-2 mono text-[10.5px] uppercase"
+                                    style={{ color: 'var(--text-tertiary)' }}
+                                  >
+                                    {param.in}
+                                  </td>
+                                  <td
+                                    className="px-3 py-2 mono text-[11px]"
+                                    style={{ color: 'var(--text-secondary)' }}
+                                  >
+                                    {param.schema?.type || param.type || 'string'}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {param.required ? (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[10.5px] font-medium"
+                                        style={{ color: 'var(--danger-500)' }}
+                                      >
+                                        <span
+                                          className="w-1 h-1 rounded-full"
+                                          style={{ background: 'var(--danger-500)' }}
+                                        />
+                                        Required
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="text-[10.5px]"
+                                        style={{ color: 'var(--text-tertiary)' }}
+                                      >
+                                        Optional
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td
+                                    className="px-3 py-2 leading-relaxed"
+                                    style={{ color: 'var(--text-secondary)' }}
+                                  >
+                                    {param.description || '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Request body */}
+                  {activeEndpoint.requestBody && (
+                    <section>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h2
+                          className="text-[13px] font-semibold"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          Request body
+                        </h2>
+                        {activeEndpoint.requestBody.required && (
+                          <span
+                            className="h-5 px-1.5 inline-flex items-center rounded text-[10.5px] font-medium"
+                            style={{
+                              background: 'color-mix(in srgb, var(--danger-500) 10%, transparent)',
+                              color: 'var(--danger-500)',
+                              border: '1px solid color-mix(in srgb, var(--danger-500) 22%, transparent)',
+                            }}
+                          >
+                            required
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className="rounded-[var(--r-md)] p-3 mono text-[11.5px] overflow-x-auto"
+                        style={{
+                          background: 'var(--bg-canvas)',
+                          border: '1px solid var(--border-subtle)',
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5 mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                          <FileJson className="w-3 h-3" />
+                          application/json
+                        </div>
+                        {(() => {
+                          const content = activeEndpoint.requestBody.content;
+                          const schema = content?.['application/json']?.schema;
+                          const example =
+                            content?.['application/json']?.example ||
+                            schema?.example ||
+                            schema?.properties
+                              ? Object.fromEntries(
+                                  Object.entries(schema.properties || {}).map(([k, v]: any) => [
+                                    k,
+                                    v.example ?? v.type ?? 'value',
+                                  ])
+                                )
+                              : null;
+                          return (
+                            <pre className="whitespace-pre-wrap break-all">
+                              {example ? JSON.stringify(example, null, 2) : schema ? JSON.stringify(schema, null, 2) : '—'}
+                            </pre>
+                          );
+                        })()}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Responses */}
+                  {Object.keys(activeEndpoint.responses).length > 0 && (
+                    <section>
+                      <h2
+                        className="text-[13px] font-semibold mb-3"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        Responses
+                      </h2>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {Object.entries(activeEndpoint.responses).map(
+                          ([code, resp]: [string, any]) => (
+                            <div
+                              key={code}
+                              className="flex items-start gap-2.5 p-3 rounded-[var(--r-md)]"
+                              style={{
+                                background: 'var(--bg-canvas)',
+                                border: '1px solid var(--border-subtle)',
+                              }}
+                            >
+                              <span style={statusPill(code)}>{code}</span>
+                              <div
+                                className="text-[12px] leading-relaxed min-w-0 flex-1"
+                                style={{ color: 'var(--text-secondary)' }}
+                              >
+                                {resp.description || 'Response'}
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="py-32 text-center">
+                <BookOpen
+                  className="w-6 h-6 mx-auto mb-3"
+                  style={{ color: 'var(--text-tertiary)' }}
+                />
+                <div className="text-[12.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                  Select an endpoint to view its documentation.
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* ============================================================
+              COLUMN 3 — Code snippets (always dark — code convention)
+              ============================================================ */}
+          <aside
+            className="w-full lg:w-[380px] shrink-0 flex flex-col lg:sticky lg:top-[calc(var(--topbar-h)+16px)] lg:max-h-[calc(100vh-var(--topbar-h)-32px)] rounded-[var(--r-lg)] overflow-hidden"
+            style={{
+              background: '#0A0B0D',
+              border: '1px solid #23272E',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            {/* header */}
+            <div
+              className="flex items-center justify-between gap-2 px-4 py-3"
+              style={{ borderBottom: '1px solid #23272E' }}
+            >
+              <div className="flex items-center gap-1.5">
+                <Terminal className="w-3.5 h-3.5" style={{ color: '#22D3EE' }} />
+                <span className="text-[11.5px] font-medium" style={{ color: '#A1A1AA' }}>
+                  Snippet
+                </span>
+              </div>
+              <div className="flex gap-0.5">
+                {(['curl', 'go', 'node', 'python'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => setSnippetLang(lang)}
+                    className="h-6 px-2 rounded text-[10.5px] font-medium uppercase transition-colors"
+                    style={
+                      snippetLang === lang
+                        ? { background: '#1F1F24', color: '#FAFAFA' }
+                        : { background: 'transparent', color: '#71717A' }
+                    }
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* code */}
+            <div
+              className="flex-1 overflow-y-auto p-4 mono text-[11.5px] leading-[1.65]"
+              style={{ color: '#E8EAED' }}
+            >
+              <pre className="whitespace-pre-wrap break-all m-0">
+                {generateSnippet(activeEndpoint, snippetLang)}
+              </pre>
+            </div>
+
+            {/* footer */}
+            <div
+              className="flex items-center justify-between gap-2 px-4 py-2.5"
+              style={{ borderTop: '1px solid #23272E' }}
+            >
+              <span
+                className="inline-flex items-center gap-1.5 text-[10.5px] font-medium"
+                style={{ color: credentials.accessToken ? '#4ADE80' : '#71717A' }}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{
+                    background: credentials.accessToken ? '#4ADE80' : '#71717A',
+                    boxShadow: credentials.accessToken
+                      ? '0 0 6px rgba(74,222,128,0.6)'
+                      : 'none',
+                  }}
+                />
+                {credentials.accessToken ? 'Auth attached' : 'Auth placeholder'}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopy(generateSnippet(activeEndpoint, snippetLang))}
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded text-[11.5px] font-medium transition-colors"
+                style={{
+                  background: copied ? '#4ADE80' : '#FAFAFA',
+                  color: '#0A0B0D',
+                }}
+                onMouseEnter={(e) => {
+                  if (!copied) e.currentTarget.style.background = '#E4E4E7';
+                }}
+                onMouseLeave={(e) => {
+                  if (!copied) e.currentTarget.style.background = '#FAFAFA';
+                }}
+              >
+                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );

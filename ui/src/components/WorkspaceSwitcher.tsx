@@ -1,5 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Layers, ChevronDown, Check, Plus, Upload, Box, ShieldCheck, Settings, Lock, Unlock as UnlockIcon } from 'lucide-react';
+import {
+  ChevronDown,
+  Check,
+  Plus,
+  ShieldCheck,
+  Settings,
+  Lock,
+  Unlock,
+  Folder,
+  FileCode,
+  Search,
+} from 'lucide-react';
 
 export interface APIService {
   id: string;
@@ -17,7 +28,6 @@ export interface Workspace {
   icon?: string;
   visibility?: 'public' | 'internal' | 'locked';
   is_locked?: boolean;
-  /** Server-computed: whether the current session may access this workspace (passcode/invite unlock). */
   is_unlocked?: boolean;
   passcode?: string;
   services: APIService[];
@@ -50,9 +60,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -68,81 +76,115 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
         (s) =>
           s.title.toLowerCase().includes(search.toLowerCase()) ||
           s.id.toLowerCase().includes(search.toLowerCase()) ||
-          w.name.toLowerCase().includes(search.toLowerCase())
+          w.name.toLowerCase().includes(search.toLowerCase()),
       ),
     }))
     .filter((w) => w.services.length > 0 || w.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="relative w-full text-left" ref={dropdownRef}>
-      {/* Trigger Button */}
+      {/* Trigger */}
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/90 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-all text-xs font-semibold shadow-2xs group cursor-pointer"
-        title="Switch Workspace or API Service"
+        className="w-full flex items-center justify-between gap-2 h-8 px-2.5 rounded-[var(--r-sm)] transition-all duration-150"
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          color: 'var(--text-secondary)',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = 'var(--border-default)';
+          e.currentTarget.style.background = 'var(--bg-raised)';
+          e.currentTarget.style.color = 'var(--text-primary)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = 'var(--border-subtle)';
+          e.currentTarget.style.background = 'var(--bg-surface)';
+          e.currentTarget.style.color = 'var(--text-secondary)';
+        }}
+        title="Switch workspace or API"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="text-sm shrink-0">{activeWs?.icon || '📁'}</span>
-          <div className="flex flex-col text-left leading-tight min-w-0 flex-1">
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold truncate uppercase tracking-wider">
+          <Folder className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
+          <div className="flex items-center gap-1 min-w-0 flex-1 truncate text-[12px]">
+            <span className="truncate" style={{ color: 'var(--text-tertiary)' }}>
               {activeWs?.name || 'Workspace'}
             </span>
-            <span className="text-xs font-extrabold text-slate-900 dark:text-white truncate flex items-center gap-1">
-              {activeSvc?.title || 'Main API'}
+            <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+            <span className="truncate font-medium" style={{ color: 'var(--text-primary)' }}>
+              {activeSvc?.title || 'API'}
             </span>
           </div>
         </div>
-        <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-transform duration-200 shrink-0" />
+        <ChevronDown
+          className="w-3 h-3 shrink-0 transition-transform duration-150"
+          style={{
+            color: 'var(--text-tertiary)',
+            transform: open ? 'rotate(180deg)' : 'none',
+          }}
+        />
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown */}
       {open && (
-        <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/90 dark:border-slate-700/90 shadow-2xl z-[100] overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
-          {/* Header & Search */}
-          <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Workspaces & APIs
-              </span>
-              {onOpenImporter && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenImporter();
-                  }}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>New Workspace</span>
-                </button>
-              )}
+        <div
+          className="absolute left-0 top-[calc(100%+6px)] w-72 rounded-[var(--r-lg)] z-[100] overflow-hidden"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            boxShadow: 'var(--shadow-xl)',
+          }}
+        >
+          {/* Search */}
+          <div className="p-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            <div className="relative">
+              <Search
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3"
+                style={{ color: 'var(--text-tertiary)' }}
+              />
+              <input
+                type="text"
+                placeholder="Search workspaces & APIs…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full h-7 pl-7 pr-2 rounded-[var(--r-sm)] text-[12px]"
+                style={{
+                  background: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--border-focus)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Search workspaces & services..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-            />
           </div>
 
-          {/* Workspaces & Services List */}
-          <div className="max-h-64 overflow-y-auto p-2 space-y-3">
+          {/* List */}
+          <div className="max-h-64 overflow-y-auto p-1">
             {filteredWorkspaces.map((ws) => (
-              <div key={ws.id} className="space-y-1">
-                <div className="px-2 py-1 flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span>{ws.icon || '📁'}</span>
-                    <span className="truncate">{ws.name}</span>
-                  </div>
+              <div key={ws.id} className="mb-1.5 last:mb-0">
+                <div
+                  className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase"
+                  style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+                >
+                  <span className="truncate flex-1">{ws.name}</span>
                   {ws.is_locked && (
-                    <span className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
-                      ws.is_unlocked === false
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                    }`}>
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium normal-case"
+                      style={ws.is_unlocked === false
+                        ? {
+                            background: 'color-mix(in srgb, var(--warning-500) 10%, transparent)',
+                            color: 'var(--warning-500)',
+                            border: '1px solid color-mix(in srgb, var(--warning-500) 24%, transparent)',
+                          }
+                        : {
+                            background: 'var(--bg-overlay)',
+                            color: 'var(--text-tertiary)',
+                            border: '1px solid var(--border-subtle)',
+                          }}
+                    >
                       {ws.is_unlocked === false ? (
                         <>
                           <Lock className="w-2.5 h-2.5" />
@@ -150,98 +192,130 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                         </>
                       ) : (
                         <>
-                          <UnlockIcon className="w-2.5 h-2.5" />
-                          Unlocked
+                          <Unlock className="w-2.5 h-2.5" />
+                          Open
                         </>
                       )}
                     </span>
                   )}
                 </div>
-                <div className="space-y-0.5">
-                  {ws.services.map((svc) => {
-                    const isSelected = ws.id === activeWorkspaceId && svc.id === activeServiceId;
-                    return (
-                      <button
-                        key={svc.id}
-                        type="button"
-                        onClick={() => {
-                          onSelectService(ws.id, svc.id);
-                          setOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-50/90 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-300 font-bold border border-emerald-200/80 dark:border-emerald-800/80 shadow-2xs'
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white font-medium'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate min-w-0 flex-1">
-                          <span className="text-xs shrink-0">{svc.icon || '⚡'}</span>
-                          <div className="truncate min-w-0 flex-1">
-                            <div className="truncate text-slate-900 dark:text-slate-100 font-semibold">{svc.title}</div>
-                            {svc.version && (
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
-                                v{svc.version}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {isSelected && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 ml-2" />}
-                      </button>
-                    );
-                  })}
-                </div>
+                {ws.services.map((svc) => {
+                  const isSelected = ws.id === activeWorkspaceId && svc.id === activeServiceId;
+                  return (
+                    <button
+                      key={svc.id}
+                      type="button"
+                      onClick={() => {
+                        onSelectService(ws.id, svc.id);
+                        setOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 h-8 px-2 rounded-[var(--r-sm)] text-left text-[12.5px] transition-all"
+                      style={{
+                        background: isSelected ? 'var(--accent-muted)' : 'transparent',
+                        color: isSelected ? 'var(--accent-500)' : 'var(--text-secondary)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = 'var(--bg-hover)';
+                          e.currentTarget.style.color = 'var(--text-primary)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = 'var(--text-secondary)';
+                        }
+                      }}
+                    >
+                      <FileCode className="w-3 h-3 shrink-0" />
+                      <span className="truncate flex-1">{svc.title}</span>
+                      {svc.version && (
+                        <span className="mono text-[10.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                          v{svc.version}
+                        </span>
+                      )}
+                      {isSelected && <Check className="w-3 h-3 shrink-0" style={{ color: 'var(--accent-500)' }} />}
+                    </button>
+                  );
+                })}
               </div>
             ))}
-
             {filteredWorkspaces.length === 0 && (
-              <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">No matching services found</div>
+              <div className="p-3 text-center text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+                No results
+              </div>
             )}
           </div>
 
-          {/* Action Footer */}
-          <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 flex items-center gap-2">
-            {onOpenImporter && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onOpenImporter();
-                }}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Workspace</span>
-              </button>
-            )}
-            {onOpenManager && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onOpenManager();
-                }}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors cursor-pointer"
-                title="Manage Workspaces (Edit / Delete)"
-              >
-                <Settings className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
-                <span>Manage</span>
-              </button>
-            )}
-            {onOpenSecurityAudit && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onOpenSecurityAudit();
-                }}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors cursor-pointer"
-                title="Run Security Audit"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>Audit</span>
-              </button>
-            )}
-          </div>
+          {/* Footer */}
+          {(onOpenImporter || onOpenManager || onOpenSecurityAudit) && (
+            <div className="p-1.5 flex items-center gap-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              {onOpenImporter && writesEnabled && (
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); onOpenImporter(); }}
+                  className="flex-1 flex items-center justify-center gap-1 h-7 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-all"
+                  style={{
+                    background: 'var(--accent-500)',
+                    color: '#04161C',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-300)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent-500)'; }}
+                >
+                  <Plus className="w-3 h-3" />
+                  New
+                </button>
+              )}
+              {onOpenManager && (
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); onOpenManager(); }}
+                  className="flex items-center justify-center gap-1 h-7 px-2 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-all"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-hover)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-canvas)';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                  title="Manage workspaces"
+                >
+                  <Settings className="w-3 h-3" />
+                  Manage
+                </button>
+              )}
+              {onOpenSecurityAudit && (
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); onOpenSecurityAudit(); }}
+                  className="flex items-center justify-center h-7 w-7 rounded-[var(--r-sm)] transition-all"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-hover)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-canvas)';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                  title="Security audit"
+                >
+                  <ShieldCheck className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,0 +1,20 @@
+/* Scalar — token-driven theming. Scalar 1.x exposes CSS variables. */
+.scalar-app,
+.scalar-api-reference {
+  --scalar-font: var(--font-sans);
+  --scalar-font-code: var(--font-mono);
+  --scalar-background-1: var(--bg-surface);
+  --scalar-background-2: var(--bg-canvas);
+  --scalar-background-3: var(--bg-overlay);
+  --scalar-color-1: var(--text-primary);
+  --scalar-color-2: var(--text-secondary);
+  --scalar-color-3: var(--text-tertiary);
+  --scalar-color-accent: var(--accent-500);
+  --scalar-border-color: var(--border-subtle);
+  --scalar-radius: var(--r-sm);
+}
+
+html.dark .scalar-app a,
+html.dark .scalar-api-reference a {
+  color: var(--accent-400);
+}

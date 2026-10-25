@@ -6,10 +6,10 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
-import { safeStorage } from "../lib/storage";
-import { apiGet } from "../lib/api";
-import type { Workspace } from "../components/WorkspaceSwitcher";
+} from 'react';
+import { safeStorage } from '../lib/storage';
+import { apiGet } from '../lib/api';
+import type { Workspace } from '../components/WorkspaceSwitcher';
 
 export interface Capabilities {
   workspaces_enabled: boolean;
@@ -29,6 +29,13 @@ const DEFAULT_CAPABILITIES: Capabilities = {
   max_spec_bytes: 5 * 1024 * 1024,
 };
 
+/** A workspace the user attempted to select but couldn't (locked / not unlocked). */
+export interface LockedSelection {
+  workspaceId: string;
+  workspaceName: string;
+  at: number;
+}
+
 interface WorkspaceContextValue {
   capabilities: Capabilities;
   workspaces: Workspace[];
@@ -37,48 +44,77 @@ interface WorkspaceContextValue {
   activeModule: string;
   specUrl: string;
   setActiveModule: (mod: string) => void;
-  selectService: (wsId: string, svcId: string) => void;
+  /**
+   * Switch to a workspace + service. If the target workspace is server-locked
+   * and not yet unlocked, this returns `false` and sets `lastLockedSelection`
+   * so callers (App) can open the unlock modal.
+   */
+  selectService: (wsId: string, svcId: string) => boolean;
   refreshWorkspaces: () => Promise<void>;
   /** True while the initial workspaces/capabilities load is in flight */
   loading: boolean;
+  /** Set when a locked workspace was selected; consumers can react + clear it */
+  lastLockedSelection: LockedSelection | null;
+  clearLockedSelection: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
+const WORKSPACES_TIMEOUT_MS = 8_000;
+
 export const buildSpecUrl = (ws: string, svc: string, mod: string): string => {
   let url = `/docs/swagger.json?ws=${encodeURIComponent(ws)}&svc=${encodeURIComponent(svc)}`;
-  if (mod && mod !== "all" && mod !== "imported") {
+  if (mod && mod !== 'all' && mod !== 'imported') {
     url += `&module=${encodeURIComponent(mod)}`;
   }
   return url;
 };
 
+const withTimeout = async <T,>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> => {
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+};
+
+const readInitialIds = () => {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    ws: p.get('ws') || safeStorage.get('apidocs_active_ws') || 'default',
+    svc: p.get('svc') || safeStorage.get('apidocs_active_svc') || 'default',
+    mod: p.get('module') || p.get('tag') || 'all',
+  };
+};
+
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const initial = readInitialIds();
+
   const [capabilities, setCapabilities] =
     useState<Capabilities>(DEFAULT_CAPABILITIES);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => {
-    const p = new URLSearchParams(window.location.search);
-    return p.get("ws") || safeStorage.get("apidocs_active_ws") || "default";
-  });
-  const [activeServiceId, setActiveServiceId] = useState<string>(() => {
-    const p = new URLSearchParams(window.location.search);
-    return p.get("svc") || safeStorage.get("apidocs_active_svc") || "default";
-  });
-  const [activeModule, setActiveModuleState] = useState<string>(() => {
-    const p = new URLSearchParams(window.location.search);
-    return p.get("module") || p.get("tag") || "all";
-  });
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(initial.ws);
+  const [activeServiceId, setActiveServiceId] = useState<string>(initial.svc);
+  const [activeModule, setActiveModuleState] = useState<string>(initial.mod);
+  const [lastLockedSelection, setLastLockedSelection] =
+    useState<LockedSelection | null>(null);
 
-  // Always-current ids for use inside stable callbacks (avoids stale closures
-  // and prevents refreshWorkspaces from re-firing on every selection change).
-  const activeIdsRef = useRef({
-    ws: activeWorkspaceId,
-    svc: activeServiceId,
-  });
+  // Always-current ids for use inside stable callbacks
+  const activeIdsRef = useRef({ ws: initial.ws, svc: initial.svc });
   useEffect(() => {
     activeIdsRef.current = { ws: activeWorkspaceId, svc: activeServiceId };
   }, [activeWorkspaceId, activeServiceId]);
@@ -88,36 +124,49 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     [activeWorkspaceId, activeServiceId, activeModule],
   );
 
-  // Load capabilities
+  // Load capabilities once. Non-fatal on failure — defaults are conservative.
   useEffect(() => {
-    apiGet<Capabilities>("/docs/capabilities")
-      .then(setCapabilities)
+    let cancelled = false;
+    withTimeout(apiGet<Capabilities>('/docs/capabilities'), 5_000, 'capabilities')
+      .then((caps) => {
+        if (!cancelled && caps) setCapabilities({ ...DEFAULT_CAPABILITIES, ...caps });
+      })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const refreshWorkspaces = useCallback(async () => {
     try {
-      const data = await apiGet<Workspace[]>("/docs/workspaces");
+      const data = await withTimeout(
+        apiGet<Workspace[]>('/docs/workspaces'),
+        WORKSPACES_TIMEOUT_MS,
+        'workspaces',
+      );
       if (Array.isArray(data) && data.length > 0) {
         setWorkspaces(data);
         const { ws, svc } = activeIdsRef.current;
-        // Auto-select the first workspace if the active one vanished
+        // Auto-select first workspace if the active one vanished
         if (!data.some((w) => w.id === ws)) {
           const first = data[0];
           setActiveWorkspaceId(first.id);
           activeIdsRef.current.ws = first.id;
-          const firstSvc = first.services?.[0]?.id || "default";
+          const firstSvc = first.services?.[0]?.id || 'default';
           setActiveServiceId(firstSvc);
           activeIdsRef.current.svc = firstSvc;
-        } else if (!data.find((w) => w.id === ws)?.services?.some((s) => s.id === svc)) {
-          // Workspace still exists but the service was removed
-          const fallbackSvc = data.find((w) => w.id === ws)?.services?.[0]?.id || "default";
-          setActiveServiceId(fallbackSvc);
-          activeIdsRef.current.svc = fallbackSvc;
+        } else {
+          // Workspace still exists — validate the selected service
+          const targetWs = data.find((w) => w.id === ws);
+          if (!targetWs?.services?.some((s) => s.id === svc)) {
+            const fallbackSvc = targetWs?.services?.[0]?.id || 'default';
+            setActiveServiceId(fallbackSvc);
+            activeIdsRef.current.svc = fallbackSvc;
+          }
         }
       }
     } catch {
-      /* offline / not provisioned — fall back to default workspace */
+      /* Offline / not provisioned — fall back to default workspace. */
     } finally {
       setLoading(false);
     }
@@ -128,22 +177,27 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [refreshWorkspaces]);
 
   const selectService = useCallback(
-    (wsId: string, svcId: string) => {
+    (wsId: string, svcId: string): boolean => {
       const target = workspaces.find((w) => w.id === wsId);
-      // Server-authoritative lock check — see backend notes. The caller (App)
-      // handles opening the unlock modal when needed; we surface via callback.
+      // Server-authoritative lock: refuse silently, surface to caller
       if (target?.is_locked && target.is_unlocked === false) {
-        // Handled by App via onLockedSelect hook — skip silent switch.
-        return;
+        setLastLockedSelection({
+          workspaceId: wsId,
+          workspaceName: target.name,
+          at: Date.now(),
+        });
+        return false;
       }
       setActiveWorkspaceId(wsId);
       setActiveServiceId(svcId);
-      safeStorage.set("apidocs_active_ws", wsId);
-      safeStorage.set("apidocs_active_svc", svcId);
+      safeStorage.set('apidocs_active_ws', wsId);
+      safeStorage.set('apidocs_active_svc', svcId);
       const url = new URL(window.location.href);
-      url.searchParams.set("ws", wsId);
-      url.searchParams.set("svc", svcId);
-      window.history.pushState(null, "", url.toString());
+      url.searchParams.set('ws', wsId);
+      url.searchParams.set('svc', svcId);
+      window.history.pushState(null, '', url.toString());
+      setLastLockedSelection(null);
+      return true;
     },
     [workspaces],
   );
@@ -152,30 +206,36 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveModuleState(mod);
   }, []);
 
+  const clearLockedSelection = useCallback(() => {
+    setLastLockedSelection(null);
+  }, []);
+
   // Sync module param into URL
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (activeModule && activeModule !== "all")
-      url.searchParams.set("module", activeModule);
-    else url.searchParams.delete("module");
-    window.history.replaceState(null, "", url.toString());
+    if (activeModule && activeModule !== 'all')
+      url.searchParams.set('module', activeModule);
+    else url.searchParams.delete('module');
+    window.history.replaceState(null, '', url.toString());
   }, [activeModule]);
 
+  const value: WorkspaceContextValue = {
+    capabilities,
+    workspaces,
+    activeWorkspaceId,
+    activeServiceId,
+    activeModule,
+    specUrl,
+    setActiveModule,
+    selectService,
+    refreshWorkspaces,
+    loading,
+    lastLockedSelection,
+    clearLockedSelection,
+  };
+
   return (
-    <WorkspaceContext.Provider
-      value={{
-        capabilities,
-        workspaces,
-        activeWorkspaceId,
-        activeServiceId,
-        activeModule,
-        specUrl,
-        setActiveModule,
-        selectService,
-        refreshWorkspaces,
-        loading,
-      }}
-    >
+    <WorkspaceContext.Provider value={value}>
       {children}
     </WorkspaceContext.Provider>
   );
@@ -184,6 +244,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
 export const useWorkspace = (): WorkspaceContextValue => {
   const ctx = useContext(WorkspaceContext);
   if (!ctx)
-    throw new Error("useWorkspace must be used inside <WorkspaceProvider>");
+    throw new Error('useWorkspace must be used inside <WorkspaceProvider>');
   return ctx;
 };

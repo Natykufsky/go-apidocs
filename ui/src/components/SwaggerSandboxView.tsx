@@ -1,18 +1,34 @@
-import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback } from 'react';
+import {
+  Filter,
+  FlaskConical,
+  FileSpreadsheet,
+  KeyRound,
+  CheckCircle2,
+  X,
+  ShieldAlert,
+  Sparkles,
+  GitCompare,
+  CircleDot,
+  ChevronRight,
+} from 'lucide-react';
 import { QABar, QAStats } from './QABar';
 import { QARecord } from './QAReportModal';
 import { StoredCredentials } from './CredentialManagerModal';
-import { Filter, FlaskConical, FileSpreadsheet, KeyRound, CheckCircle2, X, ShieldAlert, Sparkles } from 'lucide-react';
 import { ErrorBoundary, LoadingFallback } from './ErrorBoundary';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useQA } from '../context/QAContext';
 import { useEndpointDiff } from '../lib/useEndpointDiff';
-import { GitCompare } from 'lucide-react';
+import { RendererSwitcher } from './RendererSwitcher';
+import {
+  getRendererPreference,
+  setRendererPreference,
+  type RendererChoice,
+} from '../lib/rendererPreference';
 
-// swagger-ui-react weighs ~1MB+ minified; lazy-load it (plus its stylesheet,
-// which must ship in the same chunk or the UI renders unstyled/broken) so the
-// initial bundle only pays for the docs shell.
-const SwaggerUI = lazy(() => import('./SwaggerUILazy'));
+const LazySwagger = lazy(() => import('./adapters/SwaggerAdapter'));
+const LazyScalar = lazy(() => import('./adapters/ScalarAdapter'));
+const LazyStoplight = lazy(() => import('./adapters/StoplightAdapter'));
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
@@ -32,50 +48,121 @@ interface SwaggerSandboxViewProps {
   maskPII?: boolean;
 }
 
-export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
-  specUrl,
-  activeModule,
-  onModuleChange,
-  availableModules,
-  qaMode,
-  onToggleQAMode,
-  onOpenQAReport,
-  onInspectEndpoint,
-  qaStats,
-  qaData,
-  onUpdateQAData,
-  credentials,
-  onUpdateCredentials,
-  onOpenCredentials,
-  maskPII = false,
-}) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+/* ---------- toolbar chip (unchanged from current) ---------- */
+const Chip: React.FC<{
+  active?: boolean;
+  onClick?: () => void;
+  title?: string;
+  Icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  iconColor?: string;
+  label: string;
+  value?: string;
+  valueTone?: 'default' | 'success' | 'warning' | 'danger';
+}> = ({ active = false, onClick, title, Icon, iconColor, label, value, valueTone }) => {
+  const tone: Record<string, string> = {
+    default: 'var(--text-secondary)',
+    success: 'var(--success-500)',
+    warning: 'var(--warning-500)',
+    danger: 'var(--danger-500)',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[var(--r-sm)] text-[12px] transition-colors"
+      style={{
+        background: active ? 'var(--accent-muted)' : 'var(--bg-surface)',
+        border: `1px solid ${active ? 'color-mix(in srgb, var(--accent-500) 40%, transparent)' : 'var(--border-subtle)'}`,
+        color: active ? 'var(--accent-500)' : 'var(--text-secondary)',
+      }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = 'var(--bg-hover)';
+          e.currentTarget.style.borderColor = 'var(--border-default)';
+          e.currentTarget.style.color = 'var(--text-primary)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = 'var(--bg-surface)';
+          e.currentTarget.style.borderColor = 'var(--border-subtle)';
+          e.currentTarget.style.color = 'var(--text-secondary)';
+        }
+      }}
+    >
+      {Icon && <Icon className="w-3.5 h-3.5" style={iconColor ? { color: iconColor } : undefined} />}
+      <span className="font-medium">{label}</span>
+      {value && (
+        <span
+          className="mono font-medium"
+          style={{ color: valueTone ? tone[valueTone] : 'var(--text-tertiary)' }}
+        >
+          {value}
+        </span>
+      )}
+    </button>
+  );
+};
+
+export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = (props) => {
+  const {
+    specUrl,
+    activeModule,
+    onModuleChange,
+    availableModules,
+    qaMode,
+    onToggleQAMode,
+    onOpenQAReport,
+    onInspectEndpoint,
+    qaStats,
+    qaData,
+    credentials,
+    onUpdateCredentials,
+    onOpenCredentials,
+    maskPII = false,
+  } = props;
+
   const { activeWorkspaceId, activeServiceId } = useWorkspace();
   const { endpoints: allEndpoints } = useQA();
   const { diff, commitSnapshot } = useEndpointDiff(activeWorkspaceId, activeServiceId, allEndpoints);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'warning'>('success');
+  const [renderer, setRendererState] = useState<RendererChoice>(getRendererPreference());
+
   const [mockMode, setMockMode] = useState<boolean>(() => {
     try {
       return localStorage.getItem('apidocs_mock_mode') === 'true';
-    } catch (e) {
+    } catch {
       return false;
     }
   });
   const [mockScenario, setMockScenario] = useState<string>(() => {
     try {
       return localStorage.getItem('apidocs_mock_scenario') || '200';
-    } catch (e) {
+    } catch {
       return '200';
     }
   });
+
+  const showToast = useCallback((msg: string, type: 'success' | 'warning' = 'success') => {
+    setToastMessage(msg);
+    setToastType(type);
+    setTimeout(() => setToastMessage(null), 4000);
+  }, []);
+
+  const handleRendererChange = (r: RendererChoice) => {
+    setRendererState(r);
+    setRendererPreference(r);
+  };
 
   const handleScenarioChange = (scenario: string) => {
     setMockScenario(scenario);
     try {
       localStorage.setItem('apidocs_mock_scenario', scenario);
-    } catch (e) {}
-    showToast(`🧪 Mock Scenario set to: ${scenario}`, 'success');
+    } catch { }
+    showToast(`Mock scenario: ${scenario}`, 'success');
   };
 
   const toggleMockMode = () => {
@@ -83,268 +170,13 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
     setMockMode(next);
     try {
       localStorage.setItem('apidocs_mock_mode', String(next));
-    } catch (e) {}
+    } catch { }
     showToast(
       next
-        ? '✨ Live Mock Engine Activated: Requests will simulate OpenAPI dynamic payloads at /docs/mock'
-        : '⚡ Live API Mode: Requests will execute directly against live endpoints',
-      'success'
+        ? 'Mock engine active — requests simulate at /docs/mock'
+        : 'Live API mode — requests hit real endpoints',
+      'success',
     );
-  };
-
-  const showToast = (msg: string, type: 'success' | 'warning' = 'success') => {
-    setToastMessage(msg);
-    setToastType(type);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
-  // In-endpoint QA Button & Note Snippet Injection
-  useEffect(() => {
-    let isInjecting = false;
-    const injectQAPills = () => {
-      if (isInjecting) return;
-      const swaggerRoot = containerRef.current;
-      if (!swaggerRoot) return;
-
-      isInjecting = true;
-      try {
-        const opblocks = swaggerRoot.querySelectorAll('.opblock');
-        opblocks.forEach((block) => {
-          const methodEl = block.querySelector('.opblock-summary-method');
-          const pathEl = block.querySelector('.opblock-summary-path');
-          const summaryEl = block.querySelector('.opblock-summary');
-          if (!methodEl || !pathEl || !summaryEl) return;
-
-          const method = methodEl.textContent?.trim().toUpperCase() || '';
-          const path = pathEl.getAttribute('data-path') || pathEl.textContent?.trim() || '';
-          const endpointKey = `${method} ${path}`;
-
-          const itemData = qaData[endpointKey] || {
-            status: 'untested',
-            comment: '',
-            tested_at: '',
-          };
-
-          const existingPills = summaryEl.querySelectorAll('.qa-pill-trigger');
-          if (existingPills.length > 1) {
-            for (let i = 1; i < existingPills.length; i++) {
-              existingPills[i].remove();
-            }
-          }
-
-          let pill = (existingPills[0] as HTMLDivElement) || null;
-
-          const getStatusBadgeHtml = (status: string, comment: string) => {
-            let badgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-200';
-            let label = '⚪ QA';
-            if (status === 'passed') {
-              badgeClass = 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100';
-              label = '🟢 Passed';
-            } else if (status === 'retest') {
-              badgeClass = 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-100';
-              label = '🟡 Retest';
-            } else if (status === 'failed') {
-              badgeClass = 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100';
-              label = '🔴 Bug / Failed';
-            }
-
-            const hasComment = !!comment;
-            const commentSnippet = hasComment
-              ? `<span class="qa-note-snippet" title="${comment.replace(/"/g, '&quot;')}" style="font-size: 11px; max-width: 140px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: #64748b; font-weight: 500; margin-left: 6px; display: inline-block;">💬 ${comment}</span>`
-              : '';
-
-            return `
-              <div class="qa-pill-inner" style="display: flex; align-items: center; margin-right: 12px; cursor: pointer;">
-                <button type="button" class="qa-pill-btn ${badgeClass}" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; border-width: 1px; border-style: solid; cursor: pointer; transition: all 0.15s ease;">
-                  <span>${label}</span>
-                </button>
-                ${commentSnippet}
-              </div>
-            `;
-          };
-
-          const handlePillClick = (e: MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (onInspectEndpoint) {
-              onInspectEndpoint(endpointKey);
-            }
-          };
-
-          if (!pill) {
-            pill = document.createElement('div');
-            pill.className = 'qa-pill-trigger cursor-pointer';
-            pill.style.display = qaMode ? 'flex' : 'none';
-            pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
-            pill.onclick = handlePillClick;
-
-            const arrowBtn = summaryEl.querySelector('.opblock-summary-control');
-            if (arrowBtn) {
-              summaryEl.insertBefore(pill, arrowBtn);
-            } else {
-              summaryEl.appendChild(pill);
-            }
-          } else {
-            pill.style.display = qaMode ? 'flex' : 'none';
-            pill.innerHTML = getStatusBadgeHtml(itemData.status, itemData.comment);
-            pill.onclick = handlePillClick;
-          }
-        });
-      } finally {
-        setTimeout(() => {
-          isInjecting = false;
-        }, 100);
-      }
-    };
-
-    let debounceTimer: any = null;
-    const debouncedInject = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(injectQAPills, 150);
-    };
-
-    const timeout = setTimeout(injectQAPills, 300);
-    const observer = new MutationObserver((mutations) => {
-      // Ignore mutations generated by our own QA pill triggers
-      const isInternal = mutations.every(
-        (m) =>
-          (m.target as HTMLElement)?.classList?.contains('qa-pill-trigger') ||
-          (m.target as HTMLElement)?.classList?.contains('qa-pill-btn') ||
-          (m.target as HTMLElement)?.closest?.('.qa-pill-trigger')
-      );
-      if (!isInternal) {
-        debouncedInject();
-      }
-    });
-
-    if (containerRef.current) {
-      observer.observe(containerRef.current, { childList: true, subtree: true });
-    }
-
-    return () => {
-      clearTimeout(timeout);
-      clearTimeout(debounceTimer);
-      observer.disconnect();
-    };
-  }, [qaMode, qaData, specUrl, onInspectEndpoint]);
-
-  // Request Interceptor
-  const handleRequestInterceptor = (req: any) => {
-    if (!req.headers) {
-      req.headers = {};
-    }
-
-    // Live Mock Server rerouting & scenario injection
-    if (mockMode && req.url) {
-      try {
-        const parsed = new URL(req.url, window.location.origin);
-        if (!parsed.pathname.startsWith('/docs/mock')) {
-          parsed.pathname = `/docs/mock${parsed.pathname.startsWith('/') ? parsed.pathname : '/' + parsed.pathname}`;
-          req.url = parsed.toString();
-        }
-      } catch (e) {
-        if (!req.url.startsWith('/docs/mock')) {
-          req.url = `/docs/mock${req.url.startsWith('/') ? req.url : '/' + req.url}`;
-        }
-      }
-
-      if (mockScenario && mockScenario !== '200') {
-        req.headers['X-Mock-Scenario'] = mockScenario;
-      }
-    }
-
-    const { accessToken, refreshToken, tenantId, entityId, customHeaders } = credentials;
-
-    if (accessToken && !req.headers['Authorization'] && !req.headers['authorization']) {
-      req.headers['Authorization'] = `Bearer ${accessToken}`;
-    }
-    if (tenantId && !req.headers['X-Tenant-ID'] && !req.headers['x-tenant-id']) {
-      req.headers['X-Tenant-ID'] = tenantId;
-    }
-    if (entityId && !req.headers['X-Entity-ID'] && !req.headers['x-entity-id']) {
-      req.headers['X-Entity-ID'] = entityId;
-    }
-    if (refreshToken && !req.headers['X-Refresh-Token'] && !req.headers['x-refresh-token']) {
-      req.headers['X-Refresh-Token'] = refreshToken;
-    }
-    if (customHeaders) {
-      Object.entries(customHeaders).forEach(([k, v]) => {
-        if (k && v && !req.headers[k]) {
-          req.headers[k] = v;
-        }
-      });
-    }
-
-    return req;
-  };
-
-  // Response Interceptor: Auto-capture tokens & detect PII / sensitive data leaks
-  const handleResponseInterceptor = (res: any) => {
-    if (res && res.data) {
-      try {
-        const rawStr = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-
-        // Security / PII Leak checks
-        if (/AKIA[0-9A-Z]{16}/.test(rawStr)) {
-          showToast('⚠️ Security Alert: Potential AWS Access Key leaked in response payload!', 'warning');
-        } else if (/-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----/.test(rawStr)) {
-          showToast('🚨 Critical Security Alert: Private Key detected in response payload!', 'warning');
-        } else if (/(sql:\s*no\s*rows|pq:\s*relation|syntax\s*error\s*at\s*or\s*near)/i.test(rawStr)) {
-          showToast('⚠️ Debug Info Leak: Database query error/stack trace exposed in response.', 'warning');
-        }
-
-        // Auto token and credential capture
-        if (res.status === 200 || res.status === 201) {
-          const body = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-          if (body && typeof body === 'object') {
-            const candidate = body.data || body.payload || body.result || body;
-
-            const detectedAccessToken =
-              candidate.access_token ||
-              candidate.accessToken ||
-              candidate.token ||
-              candidate.jwt ||
-              candidate.bearer_token;
-
-            const detectedRefreshToken =
-              candidate.refresh_token ||
-              candidate.refreshToken;
-
-            const detectedTenantId =
-              candidate.tenant_id ||
-              candidate.tenantId ||
-              candidate.tenant;
-
-            const detectedEntityId =
-              candidate.entity_id ||
-              candidate.entityId ||
-              candidate.entity;
-
-            if (detectedAccessToken || detectedRefreshToken || detectedTenantId || detectedEntityId) {
-              const updated: StoredCredentials = {
-                ...credentials,
-                accessToken: detectedAccessToken || credentials.accessToken,
-                refreshToken: detectedRefreshToken || credentials.refreshToken,
-                tenantId: detectedTenantId ? String(detectedTenantId) : credentials.tenantId,
-                entityId: detectedEntityId ? String(detectedEntityId) : credentials.entityId,
-                updatedAt: new Date().toLocaleTimeString(),
-              };
-
-              onUpdateCredentials(updated);
-
-              const capturedList: string[] = [];
-              if (detectedAccessToken) capturedList.push('Access Token');
-              if (detectedRefreshToken) capturedList.push('Refresh Token');
-              if (detectedTenantId) capturedList.push(`Tenant (${detectedTenantId})`);
-              if (detectedEntityId) capturedList.push(`Entity (${detectedEntityId})`);
-
-              showToast(`🔐 Auto-Captured & Synced: ${capturedList.join(', ')}`, 'success');
-            }
-          }
-        }
-      } catch (e) {}
-    }
-    return res;
   };
 
   const hasActiveCreds = !!(
@@ -354,44 +186,74 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
     (credentials.customHeaders && Object.keys(credentials.customHeaders).length > 0)
   );
 
+  const sharedProps = {
+    specUrl,
+    credentials,
+    onUpdateCredentials,
+    mockMode,
+    mockScenario,
+    qaData,
+    qaMode,
+    onInspectEndpoint,
+    onShowToast: showToast,
+    maskPII,
+  };
+
   return (
-    <div className="flex-1 flex flex-col" ref={containerRef}>
-      {/* Toast notification */}
+    <div className="flex-1 flex flex-col">
       {toastMessage && (
         <div
-          className={`fixed bottom-6 right-6 z-50 text-xs font-semibold px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-2.5 backdrop-blur-md animate-in slide-in-from-bottom-5 ${
-            toastType === 'warning'
-              ? 'bg-amber-950/95 text-amber-100 border-amber-500/50'
-              : 'bg-slate-900/95 text-white border-emerald-500/30'
-          }`}
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-[var(--r-md)] text-[12.5px]"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            boxShadow: 'var(--e2)',
+            color: 'var(--text-primary)',
+            minWidth: 260,
+          }}
         >
           {toastType === 'warning' ? (
-            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+            <ShieldAlert className="w-4 h-4 shrink-0" style={{ color: 'var(--warning-500)' }} />
           ) : (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: 'var(--success-500)' }} />
           )}
-          <span>{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-white">
+          <span className="flex-1">{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="p-1 rounded transition-colors"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Sub-header Toolbar */}
-      <div className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-14 z-20 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
-          {/* Left: Scope Module Selector */}
+      {/* Toolbar */}
+      <div
+        className="border-b"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             {availableModules.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-slate-100/90 border border-slate-200/90 rounded-xl px-2.5 py-1.5 text-xs">
-                <Filter className="w-3.5 h-3.5 text-slate-500" />
-                <span className="font-semibold text-slate-600 hidden sm:inline">Scope:</span>
+              <div
+                className="flex items-center gap-1.5 h-8 px-2 rounded-[var(--r-sm)] text-[12px]"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <Filter className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
+                <span className="font-medium hidden sm:inline" style={{ color: 'var(--text-tertiary)' }}>
+                  Scope
+                </span>
                 <select
                   value={activeModule}
                   onChange={(e) => onModuleChange(e.target.value)}
-                  className="bg-transparent font-bold text-slate-900 outline-none cursor-pointer text-xs"
+                  className="bg-transparent outline-none cursor-pointer text-[12px] font-medium"
+                  style={{ color: 'var(--text-primary)' }}
                 >
-                  <option value="all">🌟 All Endpoints</option>
+                  <option value="all">All endpoints</option>
                   {availableModules.map((m) => (
                     <option key={m} value={m}>
                       {m}
@@ -402,109 +264,93 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
             )}
           </div>
 
-          {/* Right: Actions */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Credentials & Tokens Manager */}
-            <button
+          <div className="flex flex-wrap items-center gap-1.5">
+            <RendererSwitcher value={renderer} onChange={handleRendererChange} />
+
+            <Chip
+              Icon={hasActiveCreds ? CircleDot : KeyRound}
+              iconColor={hasActiveCreds ? 'var(--success-500)' : undefined}
+              label="Auth"
+              value={hasActiveCreds ? 'set' : 'none'}
+              valueTone={hasActiveCreds ? 'success' : 'default'}
               onClick={onOpenCredentials}
-              title="Inspect or map captured tokens and custom headers"
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                hasActiveCreds
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-xs'
-                  : 'bg-slate-100/80 border-slate-200 text-slate-600 hover:bg-slate-200/80'
-              }`}
-            >
-              <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Tokens:</span>
-              <span className={hasActiveCreds ? 'text-emerald-800 font-black' : 'text-slate-500'}>
-                {hasActiveCreds ? 'Active 🔐' : 'None'}
-              </span>
-              {credentials.tenantId && (
-                <span className="hidden md:inline-block px-1.5 py-0.2 rounded bg-emerald-200/60 text-[10px] text-emerald-900">
-                  {credentials.tenantId}
-                </span>
-              )}
-            </button>
+              title="Inspect tokens and custom headers"
+            />
 
-            {/* Live Mock Server Toggle */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={toggleMockMode}
-                title={mockMode ? "Live Mock Server active: Rerouting Try-It-Out requests to /docs/mock" : "Click to activate Live Mock Server"}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                  mockMode
-                    ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100 shadow-xs'
-                    : 'bg-slate-100/80 border-slate-200 text-slate-600 hover:bg-slate-200/80'
-                }`}
+            <Chip
+              Icon={Sparkles}
+              iconColor={mockMode ? 'var(--accent-500)' : undefined}
+              label="Mock"
+              value={mockMode ? 'on' : 'off'}
+              valueTone={mockMode ? 'success' : 'default'}
+              active={mockMode}
+              onClick={toggleMockMode}
+              title={mockMode ? 'Mock engine active' : 'Activate mock engine'}
+            />
+
+            {mockMode && renderer === 'swagger' && (
+              <select
+                value={mockScenario}
+                onChange={(e) => handleScenarioChange(e.target.value)}
+                className="h-8 px-2 rounded-[var(--r-sm)] text-[12px] outline-none cursor-pointer"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-primary)',
+                }}
               >
-                <Sparkles className={`w-3.5 h-3.5 ${mockMode ? 'text-violet-600 animate-pulse' : 'text-slate-400'}`} />
-                <span>Mock Engine:</span>
-                <span className={mockMode ? 'text-violet-800 font-black' : 'text-slate-500'}>
-                  {mockMode ? 'Live ✨' : 'Off'}
-                </span>
-              </button>
+                <option value="200">200 OK</option>
+                <option value="401">401 Unauthorized</option>
+                <option value="403">403 Forbidden</option>
+                <option value="429">429 Rate limit</option>
+                <option value="500">500 Server error</option>
+                <option value="503">503 Unavailable</option>
+                <option value="slow">Slow (2s)</option>
+              </select>
+            )}
 
-              {/* Scenario Preset Selector */}
-              {mockMode && (
-                <select
-                  value={mockScenario}
-                  onChange={(e) => handleScenarioChange(e.target.value)}
-                  className="bg-violet-50/80 border border-violet-300 text-violet-900 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none cursor-pointer hover:bg-violet-100 transition-colors shadow-2xs"
-                  title="Simulate specific edge case responses & status codes"
-                >
-                  <option value="200">✅ 200 OK (Success)</option>
-                  <option value="401">🔒 401 Unauthorized</option>
-                  <option value="403">🚫 403 Forbidden</option>
-                  <option value="429">⏳ 429 Rate Limit</option>
-                  <option value="500">💥 500 Server Error</option>
-                  <option value="503">🔌 503 Unavailable</option>
-                  <option value="slow">🐢 Slow Network (2s)</option>
-                </select>
-              )}
-            </div>
-
-            {/* QA Suite Mode Toggle */}
-            <button
+            <Chip
+              Icon={FlaskConical}
+              label="QA"
+              value={qaMode ? 'on' : 'off'}
+              valueTone={qaMode ? 'success' : 'default'}
+              active={qaMode}
               onClick={onToggleQAMode}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                qaMode
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 shadow-xs'
-                  : 'bg-slate-100/80 border-slate-200 text-slate-600 hover:bg-slate-200/80'
-              }`}
-            >
-              <FlaskConical className="w-3.5 h-3.5" />
-              <span>QA Mode:</span>
-              <span className={qaMode ? 'text-emerald-700 font-black' : 'text-slate-500'}>
-                {qaMode ? 'Active' : 'Off'}
-              </span>
-            </button>
+              title="Toggle QA mode"
+            />
 
-            {/* QA Report */}
-            <button
+            <Chip
+              Icon={FileSpreadsheet}
+              label="Report"
               onClick={onOpenQAReport}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
-              <span>QA Report</span>
-            </button>
+              title="Open QA report"
+            />
           </div>
         </div>
       </div>
 
-      {/* QA Stats Bar */}
       {qaMode && <QABar stats={qaStats} />}
 
-      {/* Endpoint Diff Banner (new/removed endpoints since last QA baseline) */}
       {qaMode && (diff.added.length > 0 || diff.removed.length > 0) && (
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-3">
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200">
-            <GitCompare className="w-4 h-4 shrink-0" />
-            <span className="font-semibold">Spec changed since last QA run:</span>
-            <span className="font-mono">+{diff.added.length} added</span>
-            <span className="font-mono">−{diff.removed.length} removed</span>
+          <div
+            className="flex flex-wrap items-center gap-3 rounded-[var(--r-sm)] px-3 py-2 text-[12px]"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <GitCompare className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--warning-500)' }} />
+            <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+              Spec changed since last QA run
+            </span>
+            <span className="mono">+{diff.added.length}</span>
+            <span className="mono">−{diff.removed.length}</span>
             <button
               onClick={commitSnapshot}
-              className="ml-auto px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition-colors cursor-pointer"
+              className="ml-auto h-7 px-2.5 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-colors"
+              style={{ background: 'var(--accent-500)', color: 'var(--text-inverse)' }}
             >
               Mark reviewed
             </button>
@@ -512,19 +358,100 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = ({
         </div>
       )}
 
-      {/* Main Swagger Explorer (lazy-loaded chunk with crash isolation) */}
+      {/* Renderer mount */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-8 shadow-xs">
+        {/* QA badge — shown above Scalar because it can't show inline pills */}
+        {renderer === 'scalar' && qaMode && (
+          <div
+            className="flex items-center gap-3 px-3.5 py-2.5 rounded-[var(--r-md)] mb-3"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <FlaskConical
+                className="w-3.5 h-3.5"
+                style={{ color: 'var(--accent-500)' }}
+              />
+              <span
+                className="text-[11.5px] font-medium"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                QA
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 mono text-[11.5px]">
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {qaStats.passed + qaStats.retest + qaStats.failed} / {qaStats.total} tested
+              </span>
+              {qaStats.passed > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: 'var(--success-500)' }}
+                  />
+                  <span style={{ color: 'var(--success-500)' }}>{qaStats.passed} passed</span>
+                </span>
+              )}
+              {qaStats.failed > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: 'var(--danger-500)' }}
+                  />
+                  <span style={{ color: 'var(--danger-500)' }}>{qaStats.failed} failed</span>
+                </span>
+              )}
+              {qaStats.retest > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: 'var(--warning-500)' }}
+                  />
+                  <span style={{ color: 'var(--warning-500)' }}>{qaStats.retest} retest</span>
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenQAReport}
+              className="ml-auto inline-flex items-center gap-1 h-7 px-2.5 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-colors"
+              style={{
+                background: 'var(--bg-canvas)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-secondary)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-hover)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+                e.currentTarget.style.borderColor = 'var(--border-default)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--bg-canvas)';
+                e.currentTarget.style.color = 'var(--text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--border-subtle)';
+              }}
+            >
+              Open report
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        <div
+          className="rounded-[var(--r-md)] p-4 sm:p-6"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
           <ErrorBoundary>
             <Suspense fallback={<LoadingFallback />}>
-              <SwaggerUI
-                url={specUrl}
-                docExpansion="list"
-                persistAuthorization={true}
-                displayRequestDuration={true}
-                requestInterceptor={handleRequestInterceptor}
-                responseInterceptor={handleResponseInterceptor}
-              />
+              {renderer === 'swagger' && <LazySwagger {...sharedProps} />}
+              {renderer === 'scalar' && <LazyScalar {...sharedProps} />}
             </Suspense>
           </ErrorBoundary>
         </div>

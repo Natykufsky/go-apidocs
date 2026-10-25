@@ -1,17 +1,17 @@
 import React, { useState, useRef } from 'react';
 import { load as loadYaml } from 'js-yaml';
 import {
-  X,
   Upload,
   Link as LinkIcon,
   FileCode,
   CheckCircle2,
   AlertTriangle,
   Zap,
-  Layers,
-  ArrowRight,
   ShieldAlert,
+  Folder,
+  X,
 } from 'lucide-react';
+import { Modal } from './Modal';
 import { Workspace } from './WorkspaceSwitcher';
 
 interface SchemaImporterModalProps {
@@ -35,6 +35,45 @@ interface PreflightSummary {
   rawText: string;
 }
 
+const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
+
+const methodTone = (m: string): { fg: string; bg: string; bd: string } => {
+  const map: Record<string, { fg: string; bg: string; bd: string }> = {
+    GET: {
+      fg: 'var(--info-500)',
+      bg: 'color-mix(in srgb, var(--info-500) 12%, transparent)',
+      bd: 'color-mix(in srgb, var(--info-500) 24%, transparent)',
+    },
+    POST: {
+      fg: 'var(--success-500)',
+      bg: 'color-mix(in srgb, var(--success-500) 12%, transparent)',
+      bd: 'color-mix(in srgb, var(--success-500) 24%, transparent)',
+    },
+    PUT: {
+      fg: 'var(--warning-500)',
+      bg: 'color-mix(in srgb, var(--warning-500) 12%, transparent)',
+      bd: 'color-mix(in srgb, var(--warning-500) 24%, transparent)',
+    },
+    PATCH: {
+      fg: 'var(--warning-500)',
+      bg: 'color-mix(in srgb, var(--warning-500) 12%, transparent)',
+      bd: 'color-mix(in srgb, var(--warning-500) 24%, transparent)',
+    },
+    DELETE: {
+      fg: 'var(--danger-500)',
+      bg: 'color-mix(in srgb, var(--danger-500) 12%, transparent)',
+      bd: 'color-mix(in srgb, var(--danger-500) 24%, transparent)',
+    },
+  };
+  return (
+    map[m] || {
+      fg: 'var(--text-secondary)',
+      bg: 'var(--bg-overlay)',
+      bd: 'var(--border-subtle)',
+    }
+  );
+};
+
 export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
   workspaces,
   activeWorkspaceId,
@@ -44,7 +83,9 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
   onImportSuccess,
 }) => {
   const [sourceType, setSourceType] = useState<'upload' | 'url' | 'paste'>('upload');
-  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>(activeWorkspaceId || workspaces[0]?.id || 'default');
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>(
+    activeWorkspaceId || workspaces[0]?.id || 'default',
+  );
   const [urlInput, setUrlInput] = useState<string>('');
   const [pasteInput, setPasteInput] = useState<string>('');
   const [serviceId, setServiceId] = useState<string>('');
@@ -54,7 +95,6 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Client-side pre-flight parser for JSON
   const parseRawSpec = (rawText: string, filename?: string) => {
     setError(null);
     try {
@@ -67,9 +107,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
       if (trimmed.startsWith('{')) {
         const obj = JSON.parse(trimmed);
         const openapiVer = obj.openapi || obj.swagger;
-        if (!openapiVer) {
-          throw new Error("Missing 'openapi' or 'swagger' version in specification");
-        }
+        if (!openapiVer) throw new Error("Missing 'openapi' or 'swagger' version in specification");
         if (!obj.paths || typeof obj.paths !== 'object') {
           throw new Error("Specification must contain a valid 'paths' object");
         }
@@ -83,13 +121,11 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
           if (item && typeof item === 'object') {
             for (const m in item) {
               const upperM = m.toUpperCase();
-              if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'].includes(upperM)) {
+              if (METHOD_ORDER.includes(upperM)) {
                 totalOps++;
                 methods[upperM] = (methods[upperM] || 0) + 1;
                 const op = item[m];
-                if (op && Array.isArray(op.tags)) {
-                  op.tags.forEach((t: string) => tagSet.add(t));
-                }
+                if (op && Array.isArray(op.tags)) op.tags.forEach((t: string) => tagSet.add(t));
               }
             }
           }
@@ -116,20 +152,16 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
             title
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, '-')
-              .replace(/^-|-$/g, '') || `api-${Date.now()}`
+              .replace(/^-|-$/g, '') || `api-${Date.now()}`,
           );
         }
       } else {
-        // YAML: parse with js-yaml then run the same validation/extraction
-        // logic as JSON, giving full-fidelity preflight for YAML specs.
         const obj = loadYaml(trimmed) as any;
         if (!obj || typeof obj !== 'object') {
           throw new Error('YAML document did not parse into a specification object');
         }
         const openapiVer = obj.openapi || obj.swagger;
-        if (!openapiVer) {
-          throw new Error("Missing 'openapi' or 'swagger' version in YAML specification");
-        }
+        if (!openapiVer) throw new Error("Missing 'openapi' or 'swagger' version in YAML specification");
         if (!obj.paths || typeof obj.paths !== 'object') {
           throw new Error("YAML specification must contain a valid 'paths' object");
         }
@@ -143,13 +175,11 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
           if (item && typeof item === 'object') {
             for (const m in item) {
               const upperM = m.toUpperCase();
-              if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'].includes(upperM)) {
+              if (METHOD_ORDER.includes(upperM)) {
                 totalOps++;
                 methods[upperM] = (methods[upperM] || 0) + 1;
                 const op = item[m];
-                if (op && Array.isArray(op.tags)) {
-                  op.tags.forEach((t: string) => tagSet.add(t));
-                }
+                if (op && Array.isArray(op.tags)) op.tags.forEach((t: string) => tagSet.add(t));
               }
             }
           }
@@ -175,7 +205,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
             title
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, '-')
-              .replace(/^-|-$/g, '') || `api-${Date.now()}`
+              .replace(/^-|-$/g, '') || `api-${Date.now()}`,
           );
         }
       }
@@ -190,7 +220,9 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
     if (!file) return;
 
     if (file.size > maxSpecBytes) {
-      setError(`File size (${(file.size / 1024 / 1024).toFixed(1)}MB) exceeds maximum limit of ${(maxSpecBytes / 1024 / 1024).toFixed(1)}MB`);
+      setError(
+        `File size (${(file.size / 1024 / 1024).toFixed(1)}MB) exceeds the ${(maxSpecBytes / 1024 / 1024).toFixed(1)}MB limit`,
+      );
       return;
     }
 
@@ -203,7 +235,7 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
     reader.readAsText(file);
   };
 
-  const handleSaveAndLaunch = async (launchSwagger: boolean) => {
+  const handleSaveAndLaunch = async () => {
     if (!preflight) {
       setError('Please select or paste a valid API specification first');
       return;
@@ -216,14 +248,14 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
       const targetWs = targetWorkspaceId || 'default';
       const targetSvc = serviceId || 'api-' + Date.now();
 
-      const response = await fetch(`/docs/workspaces/import?ws=${encodeURIComponent(targetWs)}&svc=${encodeURIComponent(targetSvc)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Apidocs-CSRF': '1',
+      const response = await fetch(
+        `/docs/workspaces/import?ws=${encodeURIComponent(targetWs)}&svc=${encodeURIComponent(targetSvc)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Apidocs-CSRF': '1' },
+          body: preflight.rawText,
         },
-        body: preflight.rawText,
-      });
+      );
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({ error: 'Upload failed' }));
@@ -237,258 +269,417 @@ export const SchemaImporterModal: React.FC<SchemaImporterModalProps> = ({
     }
   };
 
+  const sourceTab = (id: typeof sourceType, label: string, Icon: React.ComponentType<{ className?: string }>) => {
+    const active = sourceType === id;
+    return (
+      <button
+        type="button"
+        onClick={() => setSourceType(id)}
+        className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-all"
+        style={
+          active
+            ? {
+                background: 'var(--bg-surface)',
+                color: 'var(--text-primary)',
+                boxShadow: 'var(--shadow-xs)',
+              }
+            : {
+                background: 'transparent',
+                color: 'var(--text-tertiary)',
+              }
+        }
+      >
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </button>
+    );
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white text-base shadow-md shadow-emerald-600/20">
-              📥
-            </div>
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900 leading-tight">Import API Specification</h3>
-              <p className="text-xs text-slate-600">Register new OpenAPI/Swagger definitions into your workspace</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-slate-200/70 text-slate-600 hover:text-slate-700 transition-colors cursor-pointer"
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Import API specification"
+      subtitle="Register an OpenAPI 3.x or Swagger 2.0 definition into your workspace"
+      widthClass="max-w-2xl"
+    >
+      <div className="p-5 space-y-5">
+        {/* Source tabs */}
+        <div>
+          <div
+            className="text-[10.5px] font-semibold uppercase mb-2"
+            style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
           >
-            <X className="w-5 h-5" />
-          </button>
+            1 · Specification source
+          </div>
+          <div
+            className="grid grid-cols-3 gap-1 p-1 rounded-[var(--r-sm)]"
+            style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)' }}
+          >
+            {sourceTab('upload', 'Upload', Upload)}
+            {sourceTab('paste', 'Paste', FileCode)}
+            {sourceTab('url', 'URL', LinkIcon)}
+          </div>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5">
-          {/* Source Selector Tabs */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              1. Specification Source
-            </label>
-            <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-2xl">
-              <button
-                type="button"
-                onClick={() => setSourceType('upload')}
-                className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  sourceType === 'upload' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload File</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType('paste')}
-                className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  sourceType === 'paste' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <FileCode className="w-3.5 h-3.5" />
-                <span>Paste JSON/YAML</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType('url')}
-                className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  sourceType === 'url' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <LinkIcon className="w-3.5 h-3.5" />
-                <span>Remote URL</span>
-              </button>
+        {/* Upload zone */}
+        {sourceType === 'upload' && (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-[var(--r-md)] p-8 text-center cursor-pointer transition-all"
+            style={{
+              border: '1.5px dashed var(--border-strong)',
+              background: 'transparent',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent-500)';
+              e.currentTarget.style.background = 'var(--accent-muted)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-strong)';
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,.yaml,.yml"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Upload
+              className="w-6 h-6 mx-auto mb-2.5"
+              style={{ color: 'var(--text-tertiary)' }}
+            />
+            <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
+              Choose a file or drag it here
+            </div>
+            <div className="text-[11.5px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
+              OpenAPI 3.x · Swagger 2.0 · .json · .yaml · max {Math.round(maxSpecBytes / 1024 / 1024)}MB
             </div>
           </div>
+        )}
 
-          {/* Source Input Panels */}
-          {sourceType === 'upload' && (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-emerald-50/20 transition-all group"
-            >
+        {/* Paste */}
+        {sourceType === 'paste' && (
+          <textarea
+            rows={6}
+            placeholder="Paste your OpenAPI JSON or YAML specification…"
+            value={pasteInput}
+            onChange={(e) => {
+              setPasteInput(e.target.value);
+              parseRawSpec(e.target.value);
+            }}
+            className="w-full p-3 rounded-[var(--r-md)] mono text-[12px] outline-none transition-all resize-none"
+            style={{
+              background: 'var(--bg-canvas)',
+              border: '1px solid var(--border-default)',
+              color: 'var(--text-primary)',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-focus)';
+              e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-default)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          />
+        )}
+
+        {/* URL */}
+        {sourceType === 'url' && (
+          <div className="space-y-2.5">
+            <div className="flex gap-2">
               <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json,.yaml,.yml"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Upload className="w-8 h-8 text-slate-600 group-hover:text-emerald-600 mx-auto mb-2 transition-transform group-hover:scale-110" />
-              <div className="text-xs font-bold text-slate-800">
-                Click to browse or drop an OpenAPI file here
-              </div>
-              <div className="text-[11px] text-slate-600 mt-1">Supports OpenAPI 3.x / Swagger 2.0 (.json or .yaml)</div>
-            </div>
-          )}
-
-          {sourceType === 'paste' && (
-            <div>
-              <textarea
-                rows={5}
-                placeholder="Paste your raw OpenAPI specification JSON or YAML here..."
-                value={pasteInput}
-                onChange={(e) => {
-                  setPasteInput(e.target.value);
-                  parseRawSpec(e.target.value);
+                type="url"
+                placeholder="https://example.com/api/swagger.json"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                className="flex-1 h-9 px-3 rounded-[var(--r-sm)] mono text-[12px] outline-none transition-all"
+                style={{
+                  background: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--text-primary)',
                 }}
-                className="w-full p-3 rounded-2xl border border-slate-200 font-mono text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-focus)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-default)';
+                }}
               />
+              <button
+                type="button"
+                disabled={!urlInput || loading}
+                onClick={async () => {
+                  setError(null);
+                  setLoading(true);
+                  try {
+                    const res = await fetch(urlInput);
+                    if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
+                    const text = await res.text();
+                    parseRawSpec(text);
+                  } catch (err: any) {
+                    setError(err.message || 'Failed to fetch remote URL');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="h-9 px-3.5 rounded-[var(--r-sm)] text-[12px] font-medium transition-all disabled:opacity-50"
+                style={{
+                  background: 'var(--accent-500)',
+                  color: 'var(--text-inverse)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4)',
+                }}
+              >
+                {loading ? 'Fetching…' : 'Fetch'}
+              </button>
             </div>
-          )}
-
-          {sourceType === 'url' && (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  placeholder="https://example.com/api/swagger.json"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  disabled={!urlInput}
-                  onClick={async () => {
-                    setError(null);
-                    setLoading(true);
-                    try {
-                      const res = await fetch(urlInput);
-                      if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
-                      const text = await res.text();
-                      parseRawSpec(text);
-                    } catch (err: any) {
-                      setError(err.message || 'Failed to fetch remote URL');
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Fetch
-                </button>
-              </div>
-              {!remoteFetchEnabled && (
-                <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200/80">
-                  <ShieldAlert className="w-4 h-4 shrink-0" />
-                  <span>Server-side remote fetch is disabled by policy. Browser will fetch directly.</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Error Banner */}
-          {error && (
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <div>{error}</div>
-            </div>
-          )}
-
-          {/* Pre-Flight Inspection Summary */}
-          {preflight && (
-            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span className="text-xs font-bold text-emerald-950">Valid OpenAPI Specification Detected</span>
-                </div>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-emerald-200/70 text-emerald-900 rounded-md">
-                  {preflight.openapiVersion}
+            {!remoteFetchEnabled && (
+              <div
+                className="flex items-start gap-2 p-2.5 rounded-[var(--r-sm)] text-[11.5px]"
+                style={{
+                  background: 'color-mix(in srgb, var(--warning-500) 8%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--warning-500) 24%, transparent)',
+                  color: 'var(--warning-500)',
+                }}
+              >
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Server-side remote fetch is disabled by policy — the browser will fetch directly.
                 </span>
               </div>
+            )}
+          </div>
+        )}
 
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-2 bg-white rounded-xl border border-emerald-100/80">
-                  <div className="text-base font-extrabold text-emerald-950">{preflight.pathCount}</div>
-                  <div className="text-[10px] font-semibold text-slate-600 uppercase">Endpoints</div>
-                </div>
-                <div className="p-2 bg-white rounded-xl border border-emerald-100/80">
-                  <div className="text-base font-extrabold text-emerald-950">{preflight.totalOps}</div>
-                  <div className="text-[10px] font-semibold text-slate-600 uppercase">Operations</div>
-                </div>
-                <div className="p-2 bg-white rounded-xl border border-emerald-100/80">
-                  <div className="text-base font-extrabold text-emerald-950">{preflight.tags.length}</div>
-                  <div className="text-[10px] font-semibold text-slate-600 uppercase">Tags</div>
-                </div>
+        {/* Error */}
+        {error && (
+          <div
+            className="flex items-start gap-2 p-3 rounded-[var(--r-sm)] text-[12px]"
+            style={{
+              background: 'color-mix(in srgb, var(--danger-500) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--danger-500) 24%, transparent)',
+              color: 'var(--danger-500)',
+            }}
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>{error}</div>
+          </div>
+        )}
+
+        {/* Preflight summary */}
+        {preflight && (
+          <div
+            className="rounded-[var(--r-md)] p-4 space-y-3"
+            style={{
+              background: 'color-mix(in srgb, var(--success-500) 5%, var(--bg-surface))',
+              border: '1px solid color-mix(in srgb, var(--success-500) 22%, transparent)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2
+                  className="w-4 h-4 shrink-0"
+                  style={{ color: 'var(--success-500)' }}
+                />
+                <span
+                  className="text-[12.5px] font-medium truncate"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  Valid specification detected
+                </span>
               </div>
-
-              {/* Methods Breakdown */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {Object.entries(preflight.methods).map(([method, count]) => (
-                  <span
-                    key={method}
-                    className="px-2 py-0.5 text-[10px] font-extrabold rounded-md bg-white border border-slate-200 text-slate-800"
-                  >
-                    {method}: {count}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Workspace Destination Configuration */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Target Workspace
-              </label>
-              <select
-                value={targetWorkspaceId}
-                onChange={(e) => setTargetWorkspaceId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              <span
+                className="shrink-0 mono text-[10.5px] font-semibold px-1.5 py-0.5 rounded"
+                style={{
+                  background: 'color-mix(in srgb, var(--success-500) 14%, transparent)',
+                  color: 'var(--success-500)',
+                  border: '1px solid color-mix(in srgb, var(--success-500) 28%, transparent)',
+                }}
               >
-                {workspaces.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.icon || '📁'} {w.name}
-                  </option>
-                ))}
-              </select>
+                {preflight.openapiVersion}
+              </span>
             </div>
 
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Paths', value: preflight.pathCount },
+                { label: 'Operations', value: preflight.totalOps },
+                { label: 'Tags', value: preflight.tags.length },
+              ].map((s) => (
+                <div
+                  key={s.label}
+                  className="p-2.5 rounded-[var(--r-sm)] text-center"
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div
+                    className="mono text-[15px] font-semibold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {s.value}
+                  </div>
+                  <div
+                    className="text-[10.5px] uppercase font-medium mt-0.5"
+                    style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+                  >
+                    {s.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {Object.keys(preflight.methods).length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {METHOD_ORDER.filter((m) => preflight.methods[m]).map((m) => {
+                  const t = methodTone(m);
+                  return (
+                    <span
+                      key={m}
+                      className="mono text-[10.5px] font-medium px-1.5 py-0.5 rounded"
+                      style={{ background: t.bg, color: t.fg, border: `1px solid ${t.bd}` }}
+                    >
+                      {m} · {preflight.methods[m]}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Destination */}
+        <div>
+          <div
+            className="text-[10.5px] font-semibold uppercase mb-2"
+            style={{ color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}
+          >
+            2 · Destination
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Service Title
+              <label
+                className="block text-[11.5px] font-medium mb-1.5"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Workspace
+              </label>
+              <div className="relative">
+                <Folder
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+                  style={{ color: 'var(--text-tertiary)' }}
+                />
+                <select
+                  value={targetWorkspaceId}
+                  onChange={(e) => setTargetWorkspaceId(e.target.value)}
+                  className="w-full h-9 pl-8 pr-2 rounded-[var(--r-sm)] text-[12.5px] outline-none cursor-pointer appearance-none"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-default)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {workspaces.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label
+                className="block text-[11.5px] font-medium mb-1.5"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Service title
               </label>
               <input
                 type="text"
                 value={serviceTitle}
                 onChange={(e) => setServiceTitle(e.target.value)}
                 placeholder="e.g. Invoicing API"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full h-9 px-3 rounded-[var(--r-sm)] text-[12.5px] outline-none transition-all"
+                style={{
+                  background: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--text-primary)',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-focus)';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-default)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
           </div>
         </div>
-
-        {/* Action Buttons */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-end gap-2.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!preflight || loading}
-            onClick={() => handleSaveAndLaunch(false)}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
-          >
-            {loading ? 'Saving...' : 'Save to Workspace'}
-          </button>
-          <button
-            type="button"
-            disabled={!preflight || loading}
-            onClick={() => handleSaveAndLaunch(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Save & Launch Sandbox</span>
-          </button>
-        </div>
       </div>
-    </div>
+
+      {/* Footer */}
+      <div
+        className="flex items-center justify-between px-5 py-3.5"
+        style={{
+          borderTop: '1px solid var(--border-subtle)',
+          background: 'var(--bg-canvas)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-8 px-3 rounded-[var(--r-sm)] text-[12px] font-medium transition-colors"
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-secondary)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--bg-hover)';
+            e.currentTarget.style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text-secondary)';
+          }}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          disabled={!preflight || loading}
+          onClick={handleSaveAndLaunch}
+          className="h-8 px-3.5 rounded-[var(--r-sm)] text-[12px] font-semibold inline-flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            background: 'var(--accent-500)',
+            color: 'var(--text-inverse)',
+            boxShadow:
+              'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4)',
+          }}
+          onMouseEnter={(e) => {
+            if (preflight && !loading) e.currentTarget.style.background = 'var(--accent-400)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'var(--accent-500)';
+          }}
+        >
+          {loading ? (
+            <>Saving…</>
+          ) : (
+            <>
+              <Zap className="w-3.5 h-3.5" />
+              Save &amp; open sandbox
+            </>
+          )}
+        </button>
+      </div>
+    </Modal>
   );
 };
