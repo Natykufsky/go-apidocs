@@ -48,45 +48,45 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
   const [savedNotice, setSavedNotice] = useState(false);
 
   useEffect(() => {
+    if (!endpointKey) return;
     const current = qaData[endpointKey] || { status: 'untested', comment: '', tested_at: '' };
     setStatus(current.status || 'untested');
     setComment(current.comment || '');
     setSavedNotice(false);
   }, [endpointKey, qaData]);
 
-  if (!isOpen || !endpointKey) return null;
-
-  const currentIndex = endpointsList.indexOf(endpointKey);
+  const currentIndex = endpointKey ? endpointsList.indexOf(endpointKey) : -1;
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex >= 0 && currentIndex < endpointsList.length - 1;
 
   const handleSave = () => {
+    if (!endpointKey) return;
     onSaveRecord(endpointKey, status, comment);
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 2000);
   };
 
   const handlePrev = () => {
-    if (hasPrev) {
+    if (hasPrev && endpointKey) {
       handleSave();
       onSelectEndpoint(endpointsList[currentIndex - 1]);
     }
   };
 
   const handleNext = () => {
-    if (hasNext) {
+    if (hasNext && endpointKey) {
       handleSave();
       onSelectEndpoint(endpointsList[currentIndex + 1]);
     }
   };
 
-  const parts = endpointKey.split(' ');
+  const parts = (endpointKey || '').split(' ');
   const method = parts[0] || 'GET';
   const path = parts.slice(1).join(' ') || endpointKey;
 
   // Keyboard triage: J/K navigate, 1=passed 2=retest 3=failed (skipped while typing)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !endpointKey) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const isInput = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
@@ -113,6 +113,8 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, endpointKey, status, comment, hasPrev, hasNext, currentIndex]);
+
+  if (!isOpen || !endpointKey) return null;
 
   const getMethodBadgeClass = (m: string) => {
     switch (m.toUpperCase()) {
