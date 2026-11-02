@@ -41,6 +41,8 @@ import {
 
 } from 'lucide-react';
 import { Modal } from './Modal';
+import { useAuth } from '../context/AuthContext';
+import { inspectAndCaptureResponsePayload } from '../lib/sandboxInterceptors';
 
 /* ============================================================
    TYPES
@@ -554,6 +556,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
   onLoadIntoSandbox,
   endpointsList = [],
 }) => {
+  const { credentials, updateCredentials, getAuthHeaders } = useAuth();
   const [suite, setSuite] = useState<AITestSuite | null>(initialSuite || null);
   const [selectedProvider, setSelectedProvider] = useState<string>('nvidia');
   const [selectedModel, setSelectedModel] = useState<string>('deepseek-ai/deepseek-v4.1-flash');
@@ -845,6 +848,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        ...getAuthHeaders(),
         ...(tc.headers || {}),
       };
 
@@ -861,6 +865,15 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
       let responseBody = '';
       try {
         responseBody = await response.clone().text();
+        if (responseBody) {
+          inspectAndCaptureResponsePayload({
+            status: response.status,
+            rawText: responseBody,
+            credentials,
+            onUpdateCredentials: updateCredentials,
+            onShowToast: () => {},
+          });
+        }
       } catch { }
 
       const statusMatches = response.status === tc.expected_status;
@@ -903,7 +916,10 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
     const res = await fetch('/docs/qa/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ suites }),
+      body: JSON.stringify({
+        suites,
+        extra_headers: getAuthHeaders(),
+      }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'execution failed');
@@ -1186,7 +1202,11 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
               }
               const opts: RequestInit = {
                 method: tc.method || 'GET',
-                headers: { 'Content-Type': 'application/json', ...(tc.headers || {}) },
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...getAuthHeaders(),
+                  ...(tc.headers || {}),
+                },
               };
               if (['POST', 'PUT', 'PATCH'].includes((tc.method || 'GET').toUpperCase()) && tc.request_body) {
                 opts.body = typeof tc.request_body === 'string' ? tc.request_body : JSON.stringify(tc.request_body);
@@ -1194,6 +1214,18 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
               const resp = await fetch(url, opts);
               actual = resp.status;
               status = resp.status === tc.expected_status ? 'passed' : 'failed';
+              try {
+                const rawText = await resp.clone().text();
+                if (rawText) {
+                  inspectAndCaptureResponsePayload({
+                    status: resp.status,
+                    rawText,
+                    credentials,
+                    onUpdateCredentials: updateCredentials,
+                    onShowToast: () => {},
+                  });
+                }
+              } catch { }
             } catch {
               status = 'failed';
             }
@@ -1287,6 +1319,7 @@ export const AITestGeneratorModal: React.FC<AITestGeneratorModalProps> = ({
           }
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
+            ...getAuthHeaders(),
             ...(tc.headers || {}),
           };
           const options: RequestInit = { method: tc.method || 'GET', headers };

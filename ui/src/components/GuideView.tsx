@@ -14,8 +14,10 @@ import {
   X,
   FileJson,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { StoredCredentials } from './CredentialManagerModal';
+import { useAuth } from '../context/AuthContext';
 
 interface GuideViewProps {
   specUrl: string;
@@ -110,6 +112,7 @@ const statusPill = (code: string): React.CSSProperties => {
 };
 
 export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credentials = {} }) => {
+  const { isExpiringSoon, isExpired, refreshAccessToken, isRefreshing } = useAuth();
   const [spec, setSpec] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
@@ -232,10 +235,17 @@ export const GuideView: React.FC<GuideViewProps> = ({ specUrl, title, credential
       ? `Bearer ${credentials.accessToken}`
       : 'Bearer <YOUR_TOKEN>';
     const tenant = credentials.tenantId ? credentials.tenantId : '<TENANT_ID>';
+    const refreshHdr = credentials.refreshToken;
+    const customHdrs = credentials.customHeaders || {};
 
     switch (lang) {
       case 'curl': {
-        let cmd = `curl -X ${ep.method} "${fullUrl}" \\\n  -H "Authorization: ${token}" \\\n  -H "X-Tenant-ID: ${tenant}" \\\n  -H "Content-Type: application/json"`;
+        let cmd = `curl -X ${ep.method} "${fullUrl}" \\\n  -H "Authorization: ${token}" \\\n  -H "X-Tenant-ID: ${tenant}"`;
+        if (refreshHdr) cmd += ` \\\n  -H "X-Refresh-Token: ${refreshHdr}"`;
+        Object.entries(customHdrs).forEach(([k, v]) => {
+          if (k && v) cmd += ` \\\n  -H "${k}: ${v}"`;
+        });
+        cmd += ` \\\n  -H "Content-Type: application/json"`;
         if (ep.method === 'POST' || ep.method === 'PUT' || ep.method === 'PATCH') {
           cmd += ` \\\n  -d '{\n    "example": "value"\n  }'`;
         }
@@ -858,21 +868,56 @@ func main() {
               className="flex items-center justify-between gap-2 px-4 py-2.5"
               style={{ borderTop: '1px solid #23272E' }}
             >
-              <span
-                className="inline-flex items-center gap-1.5 text-[10.5px] font-medium"
-                style={{ color: credentials.accessToken ? '#4ADE80' : '#71717A' }}
-              >
+              <div className="flex items-center gap-2">
                 <span
-                  className="w-1.5 h-1.5 rounded-full"
+                  className="inline-flex items-center gap-1.5 text-[10.5px] font-medium"
                   style={{
-                    background: credentials.accessToken ? '#4ADE80' : '#71717A',
-                    boxShadow: credentials.accessToken
-                      ? '0 0 6px rgba(74,222,128,0.6)'
-                      : 'none',
+                    color: credentials.accessToken
+                      ? isExpired
+                        ? '#F87171'
+                        : isExpiringSoon
+                          ? '#FBBF24'
+                          : '#4ADE80'
+                      : '#71717A',
                   }}
-                />
-                {credentials.accessToken ? 'Auth attached' : 'Auth placeholder'}
-              </span>
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{
+                      background: credentials.accessToken
+                        ? isExpired
+                          ? '#F87171'
+                          : isExpiringSoon
+                            ? '#FBBF24'
+                            : '#4ADE80'
+                        : '#71717A',
+                      boxShadow: credentials.accessToken
+                        ? '0 0 6px rgba(74,222,128,0.6)'
+                        : 'none',
+                    }}
+                  />
+                  {credentials.accessToken
+                    ? isExpired
+                      ? 'Token expired'
+                      : credentials.refreshToken && credentials.autoRefresh !== false
+                        ? 'Auto-refresh active'
+                        : 'Auth attached'
+                    : 'Auth placeholder'}
+                </span>
+                {credentials.refreshToken && (
+                  <button
+                    type="button"
+                    disabled={isRefreshing}
+                    onClick={() => refreshAccessToken()}
+                    title="Refresh access token now"
+                    className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors disabled:opacity-50"
+                    style={{ background: '#1F1F24', color: '#22D3EE' }}
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => handleCopy(generateSnippet(activeEndpoint, snippetLang))}
