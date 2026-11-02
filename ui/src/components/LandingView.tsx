@@ -39,6 +39,7 @@ import DOMPurify from 'dompurify';
 import { NavConfig } from './Navbar';
 import { Workspace } from './WorkspaceSwitcher';
 import { SkeletonStats } from './Skeletons';
+import { MarkdownPreview } from './MarkdownPreview';
 
 interface LandingViewProps {
   config: NavConfig;
@@ -1302,7 +1303,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                   Loading documentation…
                 </div>
               ) : (
-                <div className="markdown-body max-w-none" dangerouslySetInnerHTML={{ __html: processedReadmeHtml }} />
+                <MarkdownPreview content={readmeContent} maskConfidential={maskConfidential} />
               )}
             </div>
           </div>

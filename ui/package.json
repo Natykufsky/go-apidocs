@@ -1,6 +1,6 @@
 {
   "name": "@natykufsky/go-apidocs-ui",
-  "version": "2.9.6",
+  "version": "2.9.7",
   "description": "Modern React + TypeScript UI for go-apidocs OpenAPI Explorer and QA Test Suite",
   "private": true,
   "type": "module",
@@ -15,10 +15,12 @@
   },
   "dependencies": {
     "@scalar/api-reference-react": "0.3.166",
+    "@types/prismjs": "^1.26.6",
     "dompurify": "^3.4.17",
     "js-yaml": "^5.5.0",
     "lucide-react": "^0.344.0",
     "marked": "^18.0.13",
+    "prismjs": "^1.30.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "swagger-ui-react": "^5.11.0"
