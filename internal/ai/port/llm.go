@@ -1,9 +1,9 @@
-package port
+﻿package port
 
 import (
 	"context"
 
-	"github.com/Natykufsky/go-apidocs/internal/ai/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
 )
 
 // GenerateOptions contains input parameters for LLM test synthesis.

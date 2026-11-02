@@ -1,4 +1,4 @@
-package adapter_test
+﻿package adapter_test
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
-	tenantAdapter "github.com/Natykufsky/go-apidocs/internal/tenant/adapter"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	tenantAdapter "github.com/Natykufsky/go-apidocs/v2/internal/tenant/adapter"
 )
 
 func TestStripeBillingAdapter_SignatureAndWebhook(t *testing.T) {

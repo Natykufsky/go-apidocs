@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/Natykufsky/go-apidocs/internal/ai/adapter"
-	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
-	"github.com/Natykufsky/go-apidocs/internal/ai/usecase"
-	coreDomain "github.com/Natykufsky/go-apidocs/internal/core/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/adapter"
+	aiPort "github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/usecase"
+	coreDomain "github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 	output := flag.String("out", "", "Optional output path to save JSON test suite")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "⚡ apidocs-cli — Enterprise CI/CD & AI Test Generation Tool\n\n")
+		fmt.Fprintf(os.Stderr, "âš¡ apidocs-cli â€” Enterprise CI/CD & AI Test Generation Tool\n\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n")
 		fmt.Fprintf(os.Stderr, "  apidocs-cli [options]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -33,7 +33,7 @@ func main() {
 	flag.Parse()
 
 	if *endpoint == "" {
-		fmt.Fprintln(os.Stderr, "❌ Error: --endpoint is required (e.g. --endpoint='POST /api/v1/users')")
+		fmt.Fprintln(os.Stderr, "âŒ Error: --endpoint is required (e.g. --endpoint='POST /api/v1/users')")
 		os.Exit(1)
 	}
 
@@ -41,7 +41,7 @@ func main() {
 	if *specPath != "" {
 		data, err := os.ReadFile(*specPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Error reading spec file: %v\n", err)
+			fmt.Fprintf(os.Stderr, "âŒ Error reading spec file: %v\n", err)
 			os.Exit(1)
 		}
 		specJSON = string(data)
@@ -49,13 +49,13 @@ func main() {
 
 	llmAdapter := adapter.NewNVIDIAAdapter(*apiKey, "", *model, 90*time.Second)
 	if !llmAdapter.IsAvailable() {
-		fmt.Fprintln(os.Stderr, "❌ Error: NVIDIA API Key is missing. Set NVIDIA_API_KEY environment variable or pass --nvidia-key.")
+		fmt.Fprintln(os.Stderr, "âŒ Error: NVIDIA API Key is missing. Set NVIDIA_API_KEY environment variable or pass --nvidia-key.")
 		os.Exit(1)
 	}
 
 	generateUC := usecase.NewGenerateAITestsUseCase(llmAdapter, nil)
 
-	fmt.Printf("🤖 Synthesizing AI test suite for '%s' using %s...\n", *endpoint, *model)
+	fmt.Printf("ðŸ¤– Synthesizing AI test suite for '%s' using %s...\n", *endpoint, *model)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -66,7 +66,7 @@ func main() {
 	})
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ AI Generation Failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "âŒ AI Generation Failed: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -74,10 +74,10 @@ func main() {
 
 	if *output != "" {
 		if err := os.WriteFile(*output, outBytes, 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to save output file: %v\n", err)
+			fmt.Fprintf(os.Stderr, "âŒ Failed to save output file: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("✅ Generated %d test cases successfully saved to %s\n", len(suite.TestCases), *output)
+		fmt.Printf("âœ… Generated %d test cases successfully saved to %s\n", len(suite.TestCases), *output)
 	} else {
 		fmt.Println(string(outBytes))
 	}

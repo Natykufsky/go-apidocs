@@ -1,4 +1,4 @@
-// Package postgres provides a production-grade PostgreSQL implementation of
+﻿// Package postgres provides a production-grade PostgreSQL implementation of
 // the tenant repository port using pgx v5.
 package postgres
 
@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
-	tenantDomain "github.com/Natykufsky/go-apidocs/internal/tenant/domain"
-	tenantPort "github.com/Natykufsky/go-apidocs/internal/tenant/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	tenantDomain "github.com/Natykufsky/go-apidocs/v2/internal/tenant/domain"
+	tenantPort "github.com/Natykufsky/go-apidocs/v2/internal/tenant/port"
 )
 
 // Compile-time port conformance.

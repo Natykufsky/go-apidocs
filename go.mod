@@ -1,4 +1,4 @@
-module github.com/Natykufsky/go-apidocs
+module github.com/Natykufsky/go-apidocs/v2
 
 go 1.26.5
 

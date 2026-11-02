@@ -1,13 +1,13 @@
-package adapter_test
+﻿package adapter_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	aiAdapter "github.com/Natykufsky/go-apidocs/internal/ai/adapter"
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
+	aiAdapter "github.com/Natykufsky/go-apidocs/v2/internal/ai/adapter"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	aiPort "github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
 )
 
 type mockLLMAdapter struct {

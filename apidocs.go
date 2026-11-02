@@ -1,4 +1,4 @@
-package apidocs
+﻿package apidocs
 
 import (
 	"bytes"
@@ -24,16 +24,16 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 
-	"github.com/Natykufsky/go-apidocs/assets"
-	aiAdapter "github.com/Natykufsky/go-apidocs/internal/ai/adapter"
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
-	"github.com/Natykufsky/go-apidocs/internal/auth"
-	"github.com/Natykufsky/go-apidocs/internal/env"
-	"github.com/Natykufsky/go-apidocs/internal/qa"
-	"github.com/Natykufsky/go-apidocs/internal/schema"
-	"github.com/Natykufsky/go-apidocs/internal/security"
-	"github.com/Natykufsky/go-apidocs/internal/workspace"
+	"github.com/Natykufsky/go-apidocs/v2/assets"
+	aiAdapter "github.com/Natykufsky/go-apidocs/v2/internal/ai/adapter"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	aiPort "github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/auth"
+	"github.com/Natykufsky/go-apidocs/v2/internal/env"
+	"github.com/Natykufsky/go-apidocs/v2/internal/qa"
+	"github.com/Natykufsky/go-apidocs/v2/internal/schema"
+	"github.com/Natykufsky/go-apidocs/v2/internal/security"
+	"github.com/Natykufsky/go-apidocs/v2/internal/workspace"
 )
 
 // DocsSessionCookieName is the cookie name used for session authentication tokens.
@@ -172,7 +172,7 @@ type Config struct {
 	// Subtitle is an optional subtitle for the header/brand
 	Subtitle string
 
-	// BrandIcon is the emoji or SVG for the topbar (default: "⚡")
+	// BrandIcon is the emoji or SVG for the topbar (default: "âš¡")
 	BrandIcon string
 
 	// NavItems allows configuring custom topbar navigation items via Go or JSON
@@ -339,7 +339,7 @@ func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 		cfg.Title = "API Documentation & QA Portal"
 	}
 	if cfg.BrandIcon == "" {
-		cfg.BrandIcon = "⚡"
+		cfg.BrandIcon = "âš¡"
 	}
 	if cfg.StorageRoot == "" {
 		cfg.StorageRoot = "./apidocs-data"
@@ -354,11 +354,11 @@ func NormalizeConfig(cfg Config) (Config, *WorkspaceManager, bool, error) {
 
 	if len(cfg.NavItems) == 0 {
 		cfg.NavItems = []NavItem{
-			{Label: "Home", URL: "/", Icon: "🏠"},
-			{Label: "Guide", URL: "/guide", Icon: "📖"},
-			{Label: "API Sandbox", URL: "/docs", Icon: "⚡"},
-			{Label: "Health", URL: "/dashboard", Icon: "📊"},
-			{Label: "OpenAPI Spec", URL: "/docs/swagger.json", Icon: "📄", IsButton: true},
+			{Label: "Home", URL: "/", Icon: "ðŸ "},
+			{Label: "Guide", URL: "/guide", Icon: "ðŸ“–"},
+			{Label: "API Sandbox", URL: "/docs", Icon: "âš¡"},
+			{Label: "Health", URL: "/dashboard", Icon: "ðŸ“Š"},
+			{Label: "OpenAPI Spec", URL: "/docs/swagger.json", Icon: "ðŸ“„", IsButton: true},
 		}
 	}
 	if cfg.AuthUser == "" {
@@ -902,7 +902,7 @@ func MountFiber(app *fiber.App, cfg Config) {
 				Title:       parsed.Title,
 				Version:     parsed.Version,
 				Description: parsed.Description,
-				Icon:        "⚡",
+				Icon:        "âš¡",
 				Environments: map[string]string{
 					"Local": "http://localhost:8080",
 				},
@@ -1638,7 +1638,7 @@ func WorkspaceImportHandler(cfg Config, wm *WorkspaceManager) http.HandlerFunc {
 			Title:       parsed.Title,
 			Version:     parsed.Version,
 			Description: parsed.Description,
-			Icon:        "⚡",
+			Icon:        "âš¡",
 			Environments: map[string]string{
 				"Local": "http://localhost:8080",
 			},

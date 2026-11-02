@@ -1,4 +1,4 @@
-package qa
+﻿package qa
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
 )
 
 // ---- Execute suites server-side ----

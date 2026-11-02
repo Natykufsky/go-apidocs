@@ -1,8 +1,8 @@
-package chi
+﻿package chi
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/Natykufsky/go-apidocs"
+	"github.com/Natykufsky/go-apidocs/v2"
 )
 
 // Mount attaches all documentation, login, QA tracker, and Swagger UI routes to a Chi router.

@@ -13,10 +13,11 @@
      git push origin main --tags
      ```
   4. Ensure that no commit is pushed to remote without its corresponding release tag.
-  5. Ensure package.json and package-lock.json are updated with the new version.
+  5. Ensure package.json and package-lock.json are updated with the new version.. ensure version and branch are aligned with the semantic version increment.
+  6. Ensure Module is update on major version bump.
 
 
-  
+
 ## NPM Release & NPM Publish Rules
 - **Automated NPM Release & Publish on Push**: Whenever committing and pushing changes to this repository, you MUST always:
   1. Determine the appropriate semantic version increment (`vX.Y.Z` - patch for fixes/refactors, minor for new features/adapters, major for breaking changes).

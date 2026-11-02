@@ -1,4 +1,4 @@
-package qa
+﻿package qa
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	aiPort "github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
 )
 
 // SequenceStep is one ordered operation in a recommended test workflow.
@@ -37,7 +37,7 @@ type SequenceAnalysis struct {
 //
 //  1. Health/metadata endpoints first (cheap smoke validation)
 //  2. Read-only GETs before mutations (establish baseline state)
-//  3. POST (create) before PUT/PATCH (modify) before DELETE (cleanup) —
+//  3. POST (create) before PUT/PATCH (modify) before DELETE (cleanup) â€”
 //     so destructive tests never run before the resources they need exist
 //  4. Parameterized paths (/items/{id}) depend on the collection endpoint
 //     that creates the resource
@@ -78,28 +78,28 @@ func AnalyzeSequences(specJSON []byte) (*SequenceAnalysis, error) {
 			switch {
 			case isHealthOrMeta(path, m):
 				ep.weight = 0
-				ep.reason = "Health/metadata smoke check — validates the service is up before deeper tests"
+				ep.reason = "Health/metadata smoke check â€” validates the service is up before deeper tests"
 			case m == "GET" && !strings.Contains(path, "{"):
 				ep.weight = 10
-				ep.reason = "Collection read — establishes baseline data with zero side effects"
+				ep.reason = "Collection read â€” establishes baseline data with zero side effects"
 			case m == "GET":
 				ep.weight = 35
-				ep.reason = "Item read — depends on resources created by the collection POST; run after create"
+				ep.reason = "Item read â€” depends on resources created by the collection POST; run after create"
 				ep.dependsOn = append(ep.dependsOn, collectionCreateKey(path))
 			case m == "POST" && !strings.Contains(path, "{"):
 				ep.weight = 30
-				ep.reason = "Create — produces the resources later read/modify/delete tests depend on"
+				ep.reason = "Create â€” produces the resources later read/modify/delete tests depend on"
 			case m == "POST":
 				ep.weight = 40
-				ep.reason = "Action/sub-resource POST — modifies state of an existing resource"
+				ep.reason = "Action/sub-resource POST â€” modifies state of an existing resource"
 				ep.dependsOn = append(ep.dependsOn, collectionCreateKey(path))
 			case m == "PUT" || m == "PATCH":
 				ep.weight = 50
-				ep.reason = "Update — requires an existing resource; run after create/read checks"
+				ep.reason = "Update â€” requires an existing resource; run after create/read checks"
 				ep.dependsOn = append(ep.dependsOn, collectionCreateKey(path))
 			case m == "DELETE":
 				ep.weight = 60
-				ep.reason = "Delete (destructive) — run last within the resource lifecycle"
+				ep.reason = "Delete (destructive) â€” run last within the resource lifecycle"
 				ep.dependsOn = append(ep.dependsOn, collectionCreateKey(path))
 			}
 
@@ -118,18 +118,18 @@ func AnalyzeSequences(specJSON []byte) (*SequenceAnalysis, error) {
 	sort.SliceStable(eps, func(i, j int) bool { return eps[i].weight < eps[j].weight })
 
 	analysis := &SequenceAnalysis{
-		Summary: fmt.Sprintf("Recommended sequence for %d operations based on REST testing standards: smoke → baseline reads → create → modify → delete, with destructive/auth surfaces last.", len(eps)),
+		Summary: fmt.Sprintf("Recommended sequence for %d operations based on REST testing standards: smoke â†’ baseline reads â†’ create â†’ modify â†’ delete, with destructive/auth surfaces last.", len(eps)),
 		Phases: []string{
-			"Phase 0 — Smoke & Health",
-			"Phase 1 — Baseline Reads (GET collections)",
-			"Phase 2 — Create (POST)",
-			"Phase 3 — Reads of created resources",
-			"Phase 4 — Updates (PUT/PATCH)",
-			"Phase 5 — Deletes & cleanup",
-			"Phase 6 — Auth/Admin & global-state surfaces",
+			"Phase 0 â€” Smoke & Health",
+			"Phase 1 â€” Baseline Reads (GET collections)",
+			"Phase 2 â€” Create (POST)",
+			"Phase 3 â€” Reads of created resources",
+			"Phase 4 â€” Updates (PUT/PATCH)",
+			"Phase 5 â€” Deletes & cleanup",
+			"Phase 6 â€” Auth/Admin & global-state surfaces",
 		},
 		Notes: []string{
-			"Dependencies assume standard REST resource modeling (POST /collection → /collection/{id}).",
+			"Dependencies assume standard REST resource modeling (POST /collection â†’ /collection/{id}).",
 			"Parameterized endpoints should reuse IDs returned from the create step (chain execution).",
 			"Run security/abuse suites per endpoint after the functional sequence passes.",
 		},
@@ -163,7 +163,7 @@ func isHealthOrMeta(path, method string) bool {
 }
 
 // collectionCreateKey returns the endpoint key of the collection POST that
-// creates resources for a parameterized path (e.g. "/pets/{id}" → "POST /pets").
+// creates resources for a parameterized path (e.g. "/pets/{id}" â†’ "POST /pets").
 func collectionCreateKey(paramPath string) string {
 	segments := strings.Split(paramPath, "/")
 	var concrete []string
@@ -210,7 +210,7 @@ func aiSequencePrompt(endpoints []string, heuristic *SequenceAnalysis, custom st
 		"verify -> login -> operate -> logout), not just HTTP verb conventions. " +
 		"Respond with STRICT JSON only, no markdown, matching this schema: " +
 		`{"summary": string, "phases": [string], "steps": [{"endpoint_key": string, "reason": string, "depends_on": [string]}], "notes": [string]}. ` +
-		"Every endpoint_key MUST be copied verbatim from the provided list — never invent, merge, or rename endpoints. " +
+		"Every endpoint_key MUST be copied verbatim from the provided list â€” never invent, merge, or rename endpoints. " +
 		"Include every provided endpoint exactly once."
 
 	var b strings.Builder
@@ -218,10 +218,10 @@ func aiSequencePrompt(endpoints []string, heuristic *SequenceAnalysis, custom st
 	for _, ep := range endpoints {
 		b.WriteString("  - " + ep + "\n")
 	}
-	b.WriteString("\nA structural (REST-convention) draft ordering for reference — improve on it " +
+	b.WriteString("\nA structural (REST-convention) draft ordering for reference â€” improve on it " +
 		"using business logic, data dependencies, and workflow realism:\n")
 	for _, s := range heuristic.Steps {
-		b.WriteString(fmt.Sprintf("  %d. %s — %s\n", s.Order, s.EndpointKey, s.Reason))
+		b.WriteString(fmt.Sprintf("  %d. %s â€” %s\n", s.Order, s.EndpointKey, s.Reason))
 	}
 	if custom != "" {
 		b.WriteString("\nAdditional operator instructions (highest priority):\n" + custom + "\n")
@@ -381,7 +381,7 @@ func (q *QATracker) HandleAISequenceHTTP(w http.ResponseWriter, r *http.Request)
 	}
 	if q.llmClient == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "AI service not configured — configure a provider key to use AI sequencing"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "AI service not configured â€” configure a provider key to use AI sequencing"})
 		return
 	}
 

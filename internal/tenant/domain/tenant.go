@@ -1,9 +1,9 @@
-package domain
+﻿package domain
 
 import (
 	"time"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
 )
 
 // Tenant represents an isolated organization or team in the SaaS platform.

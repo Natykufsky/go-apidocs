@@ -1,4 +1,4 @@
-package qa
+﻿package qa
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
 )
 
 func TestExecuteTestCase_StatusAndBodyAssertions(t *testing.T) {

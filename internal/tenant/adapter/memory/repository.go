@@ -1,4 +1,4 @@
-package memory
+﻿package memory
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
-	tenantDomain "github.com/Natykufsky/go-apidocs/internal/tenant/domain"
-	tenantPort "github.com/Natykufsky/go-apidocs/internal/tenant/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	tenantDomain "github.com/Natykufsky/go-apidocs/v2/internal/tenant/domain"
+	tenantPort "github.com/Natykufsky/go-apidocs/v2/internal/tenant/port"
 )
 
 // MemoryTenantRepository provides an in-memory thread-safe implementation of TenantRepository.

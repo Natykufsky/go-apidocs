@@ -1,9 +1,9 @@
-package port
+﻿package port
 
 import (
 	"context"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
 )
 
 // WebhookEvent represents a normalized billing event across providers.

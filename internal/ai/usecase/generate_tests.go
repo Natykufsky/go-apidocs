@@ -1,13 +1,13 @@
-package usecase
+﻿package usecase
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	"github.com/Natykufsky/go-apidocs/internal/ai/port"
-	coreDomain "github.com/Natykufsky/go-apidocs/internal/core/domain"
-	tenantPort "github.com/Natykufsky/go-apidocs/internal/tenant/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
+	coreDomain "github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	tenantPort "github.com/Natykufsky/go-apidocs/v2/internal/tenant/port"
 )
 
 // GenerateAITestsUseCase coordinates tenant quota verification, LLM execution and usage tracking.

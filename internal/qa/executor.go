@@ -1,4 +1,4 @@
-// Package qa provides the AI test executor: it runs synthesized test cases
+﻿// Package qa provides the AI test executor: it runs synthesized test cases
 // against the live target API and evaluates assertions server-side.
 package qa
 
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
 )
 
 // maxResponseBytes bounds response body capture to keep memory bounded.

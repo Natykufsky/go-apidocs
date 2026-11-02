@@ -1,4 +1,4 @@
-package adapter
+﻿package adapter
 
 import (
 	"bytes"
@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	"github.com/Natykufsky/go-apidocs/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
 )
 
 const (

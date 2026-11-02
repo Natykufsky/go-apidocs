@@ -1,4 +1,4 @@
-package qa
+﻿package qa
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	aiPort "github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
 )
 
 // fakeCompleterLLM implements both LLMClientPort and port.Completer.

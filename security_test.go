@@ -1,11 +1,11 @@
-package apidocs
+﻿package apidocs
 
 import (
 	"encoding/json"
 	"net/netip"
 	"testing"
 
-	"github.com/Natykufsky/go-apidocs/internal/security"
+	"github.com/Natykufsky/go-apidocs/v2/internal/security"
 )
 
 func TestSSRF_BlockedIPs(t *testing.T) {

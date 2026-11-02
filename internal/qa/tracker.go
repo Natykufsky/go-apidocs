@@ -1,4 +1,4 @@
-package qa
+﻿package qa
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	aiPort "github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
 )
 
 // AIExecutionSummary holds the aggregated results of a live AI test execution run.
@@ -182,14 +182,14 @@ func (q *QATracker) BuildReport() (string, int, int, int, int, map[string]Endpoi
 	md.WriteString("| :--- | :--- | :--- | :--- | :--- |\n")
 
 	for ep, item := range data {
-		statusBadge := "⚪ UNTESTED"
+		statusBadge := "âšª UNTESTED"
 		switch item.Status {
 		case "passed":
-			statusBadge = "🟢 PASSED"
+			statusBadge = "ðŸŸ¢ PASSED"
 		case "failed":
-			statusBadge = "🔴 FAILED / BUG"
+			statusBadge = "ðŸ”´ FAILED / BUG"
 		case "retest":
-			statusBadge = "🟡 RETEST"
+			statusBadge = "ðŸŸ¡ RETEST"
 		}
 
 		tester := item.Tester
@@ -202,10 +202,10 @@ func (q *QATracker) BuildReport() (string, int, int, int, int, map[string]Endpoi
 		}
 
 		if item.ExecutionSummary != nil {
-			comment += fmt.Sprintf("<br>⚡ **AI Run**: %d/%d passed (%.0f%%) @ %dms avg", item.ExecutionSummary.Passed, item.ExecutionSummary.TotalTests, item.ExecutionSummary.PassRate, item.ExecutionSummary.AverageLatencyMs)
+			comment += fmt.Sprintf("<br>âš¡ **AI Run**: %d/%d passed (%.0f%%) @ %dms avg", item.ExecutionSummary.Passed, item.ExecutionSummary.TotalTests, item.ExecutionSummary.PassRate, item.ExecutionSummary.AverageLatencyMs)
 		}
 		if item.StressMetrics != nil {
-			comment += fmt.Sprintf("<br>🔥 **Stress**: %dx conc | %.1f req/s | P95: %dms | 429: %d", item.StressMetrics.ConcurrencyLevel, item.StressMetrics.RPS, item.StressMetrics.P95LatencyMs, item.StressMetrics.RateLimited)
+			comment += fmt.Sprintf("<br>ðŸ”¥ **Stress**: %dx conc | %.1f req/s | P95: %dms | 429: %d", item.StressMetrics.ConcurrencyLevel, item.StressMetrics.RPS, item.StressMetrics.P95LatencyMs, item.StressMetrics.RateLimited)
 		}
 
 		md.WriteString(fmt.Sprintf("| `%s` | %s | %s | %s | %s |\n", ep, statusBadge, tester, item.TestedAt, comment))

@@ -1,4 +1,4 @@
-package adapter
+﻿package adapter
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Natykufsky/go-apidocs/internal/ai/domain"
-	"github.com/Natykufsky/go-apidocs/internal/ai/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
 )
 
 // MultiProviderDispatcher routes AI test synthesis to available LLM adapters based on request options or fallback priority.

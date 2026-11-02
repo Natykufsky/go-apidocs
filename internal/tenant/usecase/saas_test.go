@@ -1,4 +1,4 @@
-package saas
+﻿package saas
 
 import (
 	"context"
@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	domain "github.com/Natykufsky/go-apidocs/internal/core/domain"
-	tenantMemory "github.com/Natykufsky/go-apidocs/internal/tenant/adapter/memory"
-	tenantDomain "github.com/Natykufsky/go-apidocs/internal/tenant/domain"
-	tenantPort "github.com/Natykufsky/go-apidocs/internal/tenant/port"
+	domain "github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	tenantMemory "github.com/Natykufsky/go-apidocs/v2/internal/tenant/adapter/memory"
+	tenantDomain "github.com/Natykufsky/go-apidocs/v2/internal/tenant/domain"
+	tenantPort "github.com/Natykufsky/go-apidocs/v2/internal/tenant/port"
 )
 
 func TestInMemoryEventDedup_SeenAndMark(t *testing.T) {

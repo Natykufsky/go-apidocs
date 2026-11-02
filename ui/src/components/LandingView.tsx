@@ -204,7 +204,7 @@ const CODE_SNIPPET = `package main
 
 import (
     "net/http"
-    "github.com/Natykufsky/go-apidocs"
+    "github.com/Natykufsky/go-apidocs/v2"
 )
 
 func main() {
@@ -572,10 +572,10 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 }}
               >
                 <span style={{ color: 'var(--accent-500)', fontWeight: 500 }}>$</span>
-                <span style={{ color: 'var(--text-primary)' }}>go get github.com/Natykufsky/go-apidocs</span>
+                <span style={{ color: 'var(--text-primary)' }}>go get github.com/Natykufsky/go-apidocs/v2</span>
                 <button
                   type="button"
-                  onClick={() => handleCopy('go get github.com/Natykufsky/go-apidocs', 'goget')}
+                  onClick={() => handleCopy('go get github.com/Natykufsky/go-apidocs/v2', 'goget')}
                   className="ml-1 p-1 rounded transition-colors"
                   style={{ color: 'var(--text-tertiary)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}

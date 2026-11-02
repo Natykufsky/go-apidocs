@@ -1,4 +1,4 @@
-package qa
+﻿package qa
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	aiDomain "github.com/Natykufsky/go-apidocs/internal/ai/domain"
+	aiDomain "github.com/Natykufsky/go-apidocs/v2/internal/ai/domain"
 )
 
 // Report is a persisted, named AI test execution run.

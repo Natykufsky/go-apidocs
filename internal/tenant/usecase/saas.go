@@ -1,4 +1,4 @@
-package saas
+﻿package saas
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
-	tenantDomain "github.com/Natykufsky/go-apidocs/internal/tenant/domain"
-	tenantPort "github.com/Natykufsky/go-apidocs/internal/tenant/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	tenantDomain "github.com/Natykufsky/go-apidocs/v2/internal/tenant/domain"
+	tenantPort "github.com/Natykufsky/go-apidocs/v2/internal/tenant/port"
 )
 
 type contextKey string

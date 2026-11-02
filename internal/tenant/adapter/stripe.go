@@ -1,4 +1,4 @@
-package adapter
+﻿package adapter
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
-	"github.com/Natykufsky/go-apidocs/internal/tenant/port"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/tenant/port"
 )
 
 // StripeBillingAdapter implements port.BillingWebhookHandler for Stripe webhooks.

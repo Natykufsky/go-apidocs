@@ -1,4 +1,4 @@
-package workspace
+﻿package workspace
 
 import (
 	"crypto/rand"
@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/Natykufsky/go-apidocs/internal/security"
+	"github.com/Natykufsky/go-apidocs/v2/internal/security"
 )
 
 var (
@@ -495,7 +495,7 @@ func (wm *WorkspaceManager) AddWorkspace(ws Workspace) error {
 		ws.Name = ws.ID
 	}
 	if ws.Icon == "" {
-		ws.Icon = "📁"
+		ws.Icon = "ðŸ“"
 	}
 	if ws.Services == nil {
 		ws.Services = []APIService{}
@@ -657,7 +657,7 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 	svc.StoredFilename = filename
 	svc.SpecFilePath = targetPath
 	if svc.Icon == "" {
-		svc.Icon = "⚡"
+		svc.Icon = "âš¡"
 	}
 
 	wm.mu.Lock()
@@ -668,7 +668,7 @@ func (wm *WorkspaceManager) SaveImportedSpec(wsID string, svc APIService, specDa
 		ws = &Workspace{
 			ID:       wsID,
 			Name:     strings.Title(strings.ReplaceAll(wsID, "-", " ")),
-			Icon:     "📁",
+			Icon:     "ðŸ“",
 			Services: []APIService{},
 		}
 		wm.workspaces[wsID] = ws

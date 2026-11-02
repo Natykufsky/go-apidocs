@@ -1,4 +1,4 @@
-package apidocs
+﻿package apidocs
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	aiAdapter "github.com/Natykufsky/go-apidocs/internal/ai/adapter"
-	aiPort "github.com/Natykufsky/go-apidocs/internal/ai/port"
+	aiAdapter "github.com/Natykufsky/go-apidocs/v2/internal/ai/adapter"
+	aiPort "github.com/Natykufsky/go-apidocs/v2/internal/ai/port"
 )
 
 func TestNVIDIAAdapter_Config(t *testing.T) {

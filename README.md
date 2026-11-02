@@ -4,7 +4,7 @@
 
 ### The All-In-One Swagger UI, Multi-API Workspace Hub, OWASP Cybersecurity Suite & QA Portal for Go
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/Natykufsky/go-apidocs.svg)](https://pkg.go.dev/github.com/Natykufsky/go-apidocs)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Natykufsky/go-apidocs/v2.svg)](https://pkg.go.dev/github.com/Natykufsky/go-apidocs/v2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Natykufsky/go-apidocs)](https://goreportcard.com/report/github.com/Natykufsky/go-apidocs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Natykufsky/go-apidocs/pulls)
@@ -46,7 +46,7 @@ Standard Swagger UI solutions only display a single static API contract. **`go-a
 
 ### 1. Install the package
 ```bash
-go get github.com/Natykufsky/go-apidocs
+go get github.com/Natykufsky/go-apidocs/v2
 ```
 
 ### 2. Mount it on your favorite router
@@ -57,7 +57,7 @@ package main
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/Natykufsky/go-apidocs"
+	"github.com/Natykufsky/go-apidocs/v2"
 )
 
 func main() {
@@ -82,8 +82,8 @@ package main
 import (
 	"net/http"
 	"github.com/go-chi/chi/v5"
-	"github.com/Natykufsky/go-apidocs"
-	chiadapter "github.com/Natykufsky/go-apidocs/chi"
+	"github.com/Natykufsky/go-apidocs/v2"
+	chiadapter "github.com/Natykufsky/go-apidocs/v2/chi"
 )
 
 func main() {
@@ -104,8 +104,8 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/Natykufsky/go-apidocs"
-	ginadapter "github.com/Natykufsky/go-apidocs/gin"
+	"github.com/Natykufsky/go-apidocs/v2"
+	ginadapter "github.com/Natykufsky/go-apidocs/v2/gin"
 )
 
 func main() {

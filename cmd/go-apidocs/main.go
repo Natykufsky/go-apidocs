@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"flag"
@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Natykufsky/go-apidocs"
-	"github.com/Natykufsky/go-apidocs/internal/env"
-	"github.com/Natykufsky/go-apidocs/internal/schema"
+	"github.com/Natykufsky/go-apidocs/v2"
+	"github.com/Natykufsky/go-apidocs/v2/internal/env"
+	"github.com/Natykufsky/go-apidocs/v2/internal/schema"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 	nvidiaModel := flag.String("nvidia-model", "deepseek-ai/deepseek-v4.1-flash", "NVIDIA NIM model identifier")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "🚀 go-apidocs — Zero-Dependency Standalone API Documentation & QA Portal Server\n\n")
+		fmt.Fprintf(os.Stderr, "ðŸš€ go-apidocs â€” Zero-Dependency Standalone API Documentation & QA Portal Server\n\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n")
 		fmt.Fprintf(os.Stderr, "  go-apidocs [options]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -73,26 +73,26 @@ func main() {
 
 	addr := ":" + *port
 	fmt.Println("==================================================================")
-	fmt.Printf("🚀 go-apidocs server running at: http://localhost:%s\n", *port)
-	fmt.Printf("   📖 Developer Reference:        http://localhost:%s/guide\n", *port)
-	fmt.Printf("   ⚡ Swagger UI & QA Sandbox:    http://localhost:%s/docs\n", *port)
-	fmt.Printf("   🏠 Developer Hub:              http://localhost:%s/\n", *port)
+	fmt.Printf("ðŸš€ go-apidocs server running at: http://localhost:%s\n", *port)
+	fmt.Printf("   ðŸ“– Developer Reference:        http://localhost:%s/guide\n", *port)
+	fmt.Printf("   âš¡ Swagger UI & QA Sandbox:    http://localhost:%s/docs\n", *port)
+	fmt.Printf("   ðŸ  Developer Hub:              http://localhost:%s/\n", *port)
 	if resolved, found := schema.ResolveSpecPath(*specPath); found {
-		fmt.Printf("   📄 OpenAPI Spec:               %s\n", resolved)
+		fmt.Printf("   ðŸ“„ OpenAPI Spec:               %s\n", resolved)
 	} else {
-		fmt.Printf("   ⚠️  OpenAPI Spec:               NOT FOUND (serving built-in placeholder)\n")
+		fmt.Printf("   âš ï¸  OpenAPI Spec:               NOT FOUND (serving built-in placeholder)\n")
 		fmt.Printf("                                  Expected at: %s\n", *specPath)
 		fmt.Printf("                                  The sandbox will be nearly empty until a spec is supplied.\n")
 	}
 	if *authUser != "" {
-		fmt.Printf("   🔒 Security Gate:              Enabled (User: %s)\n", *authUser)
+		fmt.Printf("   ðŸ”’ Security Gate:              Enabled (User: %s)\n", *authUser)
 	} else {
-		fmt.Printf("   🔓 Security Gate:              Public Access (No Auth)\n")
+		fmt.Printf("   ðŸ”“ Security Gate:              Public Access (No Auth)\n")
 	}
 	if *nvidiaKey != "" || os.Getenv("NVIDIA_API_KEY") != "" {
-		fmt.Printf("   🤖 AI Test Generation:         Enabled (%s)\n", *nvidiaModel)
+		fmt.Printf("   ðŸ¤– AI Test Generation:         Enabled (%s)\n", *nvidiaModel)
 	} else {
-		fmt.Printf("   🤖 AI Test Generation:         Disabled (Set --nvidia-key or NVIDIA_API_KEY)\n")
+		fmt.Printf("   ðŸ¤– AI Test Generation:         Disabled (Set --nvidia-key or NVIDIA_API_KEY)\n")
 	}
 	fmt.Println("==================================================================")
 

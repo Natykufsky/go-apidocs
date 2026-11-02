@@ -1,10 +1,10 @@
-package port
+﻿package port
 
 import (
 	"context"
 
-	"github.com/Natykufsky/go-apidocs/internal/core/domain"
-	tenantDomain "github.com/Natykufsky/go-apidocs/internal/tenant/domain"
+	"github.com/Natykufsky/go-apidocs/v2/internal/core/domain"
+	tenantDomain "github.com/Natykufsky/go-apidocs/v2/internal/tenant/domain"
 )
 
 // TenantRepository defines the persistence port for SaaS tenants.

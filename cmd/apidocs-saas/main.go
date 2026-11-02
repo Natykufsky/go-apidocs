@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -14,14 +14,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Natykufsky/go-apidocs"
-	"github.com/Natykufsky/go-apidocs/internal/auth"
-	"github.com/Natykufsky/go-apidocs/internal/env"
-	"github.com/Natykufsky/go-apidocs/internal/middleware"
-	"github.com/Natykufsky/go-apidocs/internal/schema"
-	tenantAdapter "github.com/Natykufsky/go-apidocs/internal/tenant/adapter"
-	tenantMemory "github.com/Natykufsky/go-apidocs/internal/tenant/adapter/memory"
-	tenantUsecase "github.com/Natykufsky/go-apidocs/internal/tenant/usecase"
+	"github.com/Natykufsky/go-apidocs/v2"
+	"github.com/Natykufsky/go-apidocs/v2/internal/auth"
+	"github.com/Natykufsky/go-apidocs/v2/internal/env"
+	"github.com/Natykufsky/go-apidocs/v2/internal/middleware"
+	"github.com/Natykufsky/go-apidocs/v2/internal/schema"
+	tenantAdapter "github.com/Natykufsky/go-apidocs/v2/internal/tenant/adapter"
+	tenantMemory "github.com/Natykufsky/go-apidocs/v2/internal/tenant/adapter/memory"
+	tenantUsecase "github.com/Natykufsky/go-apidocs/v2/internal/tenant/usecase"
 )
 
 func main() {
@@ -58,11 +58,11 @@ func main() {
 			Timeout: 60 * time.Second,
 		},
 		NavItems: []apidocs.NavItem{
-			{Label: "Overview", URL: "/", Icon: "🏠"},
-			{Label: "API Sandbox", URL: "/docs", Icon: "⚡"},
-			{Label: "Guide", URL: "/guide", Icon: "📖"},
-			{Label: "Health & Ops", URL: "/dashboard", Icon: "📊"},
-			{Label: "OpenAPI Spec", URL: "/docs/swagger.json", Icon: "📄", IsButton: true},
+			{Label: "Overview", URL: "/", Icon: "ðŸ "},
+			{Label: "API Sandbox", URL: "/docs", Icon: "âš¡"},
+			{Label: "Guide", URL: "/guide", Icon: "ðŸ“–"},
+			{Label: "Health & Ops", URL: "/dashboard", Icon: "ðŸ“Š"},
+			{Label: "OpenAPI Spec", URL: "/docs/swagger.json", Icon: "ðŸ“„", IsButton: true},
 		},
 	}
 
@@ -226,11 +226,11 @@ func main() {
 	})
 
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("⚡ [SaaS Platform] Server active on http://localhost:%d", *port)
+	log.Printf("âš¡ [SaaS Platform] Server active on http://localhost:%d", *port)
 	if resolved, found := schema.ResolveSpecPath(cfg.SpecFilePath); !found {
-		log.Printf("⚠️  [SaaS Platform] No OpenAPI spec found at %q; the portal will serve a built-in placeholder spec until one is supplied", cfg.SpecFilePath)
+		log.Printf("âš ï¸  [SaaS Platform] No OpenAPI spec found at %q; the portal will serve a built-in placeholder spec until one is supplied", cfg.SpecFilePath)
 	} else {
-		log.Printf("📄 [SaaS Platform] Serving OpenAPI spec from %s", resolved)
+		log.Printf("ðŸ“„ [SaaS Platform] Serving OpenAPI spec from %s", resolved)
 	}
 
 	server := &http.Server{
@@ -262,13 +262,13 @@ func main() {
 			log.Fatalf("SaaS server error: %v", err)
 		}
 	case <-ctx.Done():
-		log.Println("⚡ [SaaS Platform] Shutdown signal received; draining connections...")
+		log.Println("âš¡ [SaaS Platform] Shutdown signal received; draining connections...")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			log.Printf("SaaS graceful shutdown incomplete: %v", err)
 		}
-		log.Println("⚡ [SaaS Platform] Server stopped cleanly")
+		log.Println("âš¡ [SaaS Platform] Server stopped cleanly")
 	}
 }
 

@@ -1,8 +1,8 @@
-package gin
+﻿package gin
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/Natykufsky/go-apidocs"
+	"github.com/Natykufsky/go-apidocs/v2"
 )
 
 // Mount attaches all documentation, login, QA tracker, and Swagger UI routes to a Gin engine or router group.

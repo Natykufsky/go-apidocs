@@ -1,6 +1,6 @@
 {
   "name": "@natykufsky/go-apidocs-ui",
-  "version": "2.9.2",
+  "version": "2.9.4",
   "description": "Modern React + TypeScript UI for go-apidocs OpenAPI Explorer and QA Test Suite",
   "private": true,
   "type": "module",

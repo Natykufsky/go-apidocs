@@ -1,4 +1,4 @@
-package apidocs_test
+﻿package apidocs_test
 
 import (
 	"bytes"
@@ -13,9 +13,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Natykufsky/go-apidocs"
-	chiadapter "github.com/Natykufsky/go-apidocs/chi"
-	ginadapter "github.com/Natykufsky/go-apidocs/gin"
+	"github.com/Natykufsky/go-apidocs/v2"
+	chiadapter "github.com/Natykufsky/go-apidocs/v2/chi"
+	ginadapter "github.com/Natykufsky/go-apidocs/v2/gin"
 )
 
 func createTestSpecFile(t *testing.T) string {
