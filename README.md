@@ -197,6 +197,46 @@ go run ./cmd/go-apidocs --spec=./docs/swagger.json --port=8080 --workspaces=true
 
 ---
 
+## 💾 Persisting QA Data & Reports Across Deployments
+
+By default, QA test records and generated reports are stored on the local container filesystem at `./docs/qa_tracker.json` and `./docs/qa_reports/`. In containerized environments (Docker, Kubernetes, Fly.io, Railway, Render), container filesystems are **ephemeral** and get wiped on every redeploy.
+
+To ensure your QA test records, comments, and reports persist across releases:
+
+### 1. Docker Compose
+Mount a persistent named volume and point `DOCS_QA_STORAGE` to the volume path:
+
+```yaml
+services:
+  go-apidocs:
+    image: go-apidocs:latest
+    environment:
+      # Store QA records in the persisted volume:
+      - DOCS_QA_STORAGE=/app/apidocs-data/qa_tracker.json
+      - STORAGE_ROOT=/app/apidocs-data
+    volumes:
+      - apidocs-data:/app/apidocs-data
+
+volumes:
+  apidocs-data:
+    driver: local
+```
+
+### 2. Standalone Container / Kubernetes / Cloud Hosts
+- **Environment Variable**: Set `DOCS_QA_STORAGE` (or flag `--qa-storage`) to a path on a mounted PersistentVolume or persistent block store:
+  ```bash
+  export DOCS_QA_STORAGE="/mnt/persistent-data/qa_tracker.json"
+  ```
+- **Go Library Config**: If embedding in your own Go application, configure `QAStoragePath` explicitly:
+  ```go
+  apidocs.Mount(app, apidocs.Config{
+      SpecFilePath:  "./docs/swagger.json",
+      QAStoragePath: "/mnt/persistent-data/qa_tracker.json",
+  })
+  ```
+
+---
+
 ## 🛡️ Production-Hardened Security Model
 
 `go-apidocs` is designed with a **zero-trust, deny-by-default architecture**:

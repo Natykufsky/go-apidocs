@@ -9,6 +9,7 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      - DOCS_QA_STORAGE=/app/apidocs-data/qa_tracker.json
       - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
       - NVIDIA_MODEL=deepseek-ai/deepseek-v4.1-flash
       - NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
