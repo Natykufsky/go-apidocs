@@ -2,15 +2,16 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import { API } from '@stoplight/elements';
 import '@stoplight/elements/styles.min.css';
 import './stoplight-overrides.css';
-import { useQAPillInjection } from '../../lib/useQAPillInjection';
 import { scrollToLastResponse } from '../../lib/scrollToResponse';
+import { inspectAndCaptureResponsePayload } from '../../lib/sandboxInterceptors';
 import type { QARecord } from '../QAReportModal';
-import type { StoredCredentials } from '../CredentialManagerModal';
+import type { StoredCredentials } from '../../context/AuthContext';
 
 interface Props {
   specUrl: string;
   credentials: StoredCredentials;
   onUpdateCredentials: (c: StoredCredentials) => void;
+  onRefreshToken?: () => Promise<StoredCredentials | null>;
   mockMode: boolean;
   mockScenario: string;
   qaData: Record<string, QARecord>;
@@ -21,45 +22,82 @@ interface Props {
 }
 
 const StoplightAdapter: React.FC<Props> = (props) => {
-  const { specUrl, qaData, qaMode, onInspectEndpoint, credentials } = props;
+  const {
+    specUrl,
+    credentials,
+    onUpdateCredentials,
+    onRefreshToken,
+    onShowToast,
+  } = props;
   const containerRef = useRef<HTMLDivElement>(null);
 
-//   useQAPillInjection({
-//     containerRef,
-//     renderer: 'stoplight',
-//     qaData,
-//     qaMode,
-//     onInspectEndpoint,
-//     specUrl,
-//   });
-
-  // Stoplight has no built-in interceptor API. Wrap fetch to inject auth
-  // headers on Try It requests. Response-side handling is limited — we
-  // can't reliably capture response bodies without deep hooks, so we
-  // disable auto-capture and PII detection for this renderer.
   const customFetch = useMemo<typeof fetch>(() => {
     return async (input, init) => {
-      const url = typeof input === 'string' ? input : (input as Request).url;
-      const headers = new Headers(init?.headers || {});
-      if (credentials.accessToken && !headers.has('Authorization')) {
-        headers.set('Authorization', `Bearer ${credentials.accessToken}`);
-      }
-      if (credentials.tenantId && !headers.has('X-Tenant-ID')) {
-        headers.set('X-Tenant-ID', credentials.tenantId);
-      }
-      if (credentials.entityId && !headers.has('X-Entity-ID')) {
-        headers.set('X-Entity-ID', credentials.entityId);
-      }
-      if (credentials.customHeaders) {
-        for (const [k, v] of Object.entries(credentials.customHeaders)) {
-          if (k && v && !headers.has(k)) headers.set(k, v);
+      const buildHeaders = (creds: StoredCredentials) => {
+        const headers = new Headers(init?.headers || {});
+        if (creds.accessToken && !headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${creds.accessToken}`);
+        }
+        if (creds.tenantId && !headers.has('X-Tenant-ID')) {
+          headers.set('X-Tenant-ID', creds.tenantId);
+        }
+        if (creds.entityId && !headers.has('X-Entity-ID')) {
+          headers.set('X-Entity-ID', creds.entityId);
+        }
+        if (creds.refreshToken && !headers.has('X-Refresh-Token')) {
+          headers.set('X-Refresh-Token', creds.refreshToken);
+        }
+        if (creds.customHeaders) {
+          for (const [k, v] of Object.entries(creds.customHeaders)) {
+            if (k && v && !headers.has(k)) headers.set(k, v);
+          }
+        }
+        return headers;
+      };
+
+      let response = await fetch(input, {
+        ...init,
+        headers: buildHeaders(credentials),
+      });
+
+      if (
+        response.status === 401 &&
+        credentials.autoRefresh !== false &&
+        credentials.refreshToken &&
+        onRefreshToken
+      ) {
+        const refreshed = await onRefreshToken();
+        if (refreshed && refreshed.accessToken) {
+          onShowToast('401 intercepted — token refreshed & request retried', 'success');
+          const retryHeaders = buildHeaders(refreshed);
+          retryHeaders.set('Authorization', `Bearer ${refreshed.accessToken}`);
+          response = await fetch(input, { ...init, headers: retryHeaders });
         }
       }
-      const response = await fetch(input, { ...init, headers });
+
+      try {
+        const cloned = response.clone();
+        cloned
+          .text()
+          .then((rawText) => {
+            if (!rawText) return;
+            inspectAndCaptureResponsePayload({
+              status: response.status,
+              rawText,
+              credentials,
+              onUpdateCredentials,
+              onShowToast,
+            });
+          })
+          .catch(() => {});
+      } catch {
+        // ignore
+      }
+
       scrollToLastResponse(containerRef.current);
       return response;
     };
-  }, [credentials]);
+  }, [credentials, onUpdateCredentials, onRefreshToken, onShowToast]);
 
   // Stoplight's sidebar layout sometimes needs a nudge on mobile
   useEffect(() => {

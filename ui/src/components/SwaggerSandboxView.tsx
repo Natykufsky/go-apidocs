@@ -28,7 +28,6 @@ import {
 
 const LazySwagger = lazy(() => import('./adapters/SwaggerAdapter'));
 const LazyScalar = lazy(() => import('./adapters/ScalarAdapter'));
-const LazyStoplight = lazy(() => import('./adapters/StoplightAdapter'));
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
@@ -44,6 +43,7 @@ interface SwaggerSandboxViewProps {
   onUpdateQAData: (data: Record<string, QARecord>) => void;
   credentials: StoredCredentials;
   onUpdateCredentials: (creds: StoredCredentials) => void;
+  onRefreshToken?: (overrideEndpoint?: string) => Promise<StoredCredentials | null>;
   onOpenCredentials: () => void;
   maskPII?: boolean;
 }
@@ -119,6 +119,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = (props) => 
     qaData,
     credentials,
     onUpdateCredentials,
+    onRefreshToken,
     onOpenCredentials,
     maskPII = false,
   } = props;
@@ -181,6 +182,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = (props) => 
 
   const hasActiveCreds = !!(
     credentials.accessToken ||
+    credentials.refreshToken ||
     credentials.tenantId ||
     credentials.entityId ||
     (credentials.customHeaders && Object.keys(credentials.customHeaders).length > 0)
@@ -190,6 +192,7 @@ export const SwaggerSandboxView: React.FC<SwaggerSandboxViewProps> = (props) => 
     specUrl,
     credentials,
     onUpdateCredentials,
+    onRefreshToken,
     mockMode,
     mockScenario,
     qaData,

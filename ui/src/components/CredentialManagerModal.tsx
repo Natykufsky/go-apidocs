@@ -12,23 +12,20 @@ import {
   ArrowRight,
   Sliders,
   Sparkles,
+  Clock,
+  Zap,
   X,
 } from 'lucide-react';
 import { Modal } from './Modal';
+import type { StoredCredentials } from '../context/AuthContext';
+import { detectRefreshEndpoint } from '../lib/tokenUtils';
+
+export type { StoredCredentials };
 
 export interface CustomHeaderMapping {
   headerName: string;
   responseKey: string;
   value?: string;
-}
-
-export interface StoredCredentials {
-  accessToken?: string;
-  refreshToken?: string;
-  tenantId?: string;
-  entityId?: string;
-  customHeaders?: Record<string, string>;
-  updatedAt?: string;
 }
 
 interface CredentialManagerModalProps {
@@ -37,6 +34,9 @@ interface CredentialManagerModalProps {
   credentials: StoredCredentials;
   onSave: (creds: StoredCredentials) => void;
   onClear: () => void;
+  onRefreshNow?: (overrideEndpoint?: string) => Promise<StoredCredentials | null>;
+  isRefreshing?: boolean;
+  allEndpoints?: string[];
 }
 
 /* ---------- small field input ---------- */
@@ -92,26 +92,55 @@ const TextInput: React.FC<{
   />
 );
 
+const formatExpiryBadge = (expiresAt?: string): { label: string; tone: 'success' | 'warning' | 'danger' } | null => {
+  if (!expiresAt) return null;
+  const t = Date.parse(expiresAt);
+  if (Number.isNaN(t)) return null;
+  const diffSec = Math.round((t - Date.now()) / 1000);
+  if (diffSec <= 0) {
+    return { label: 'Expired', tone: 'danger' };
+  }
+  if (diffSec < 60) {
+    return { label: `Expires in ${diffSec}s`, tone: 'warning' };
+  }
+  const mins = Math.round(diffSec / 60);
+  if (mins < 60) {
+    return { label: `Valid (${mins}m left)`, tone: 'success' };
+  }
+  const hrs = (diffSec / 3600).toFixed(1);
+  return { label: `Valid (${hrs}h left)`, tone: 'success' };
+};
+
 export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
   isOpen,
   onClose,
   credentials,
   onSave,
   onClear,
+  onRefreshNow,
+  isRefreshing = false,
+  allEndpoints = [],
 }) => {
   const [activeTab, setActiveTab] = useState<'standard' | 'custom'>('standard');
   const [accessToken, setAccessToken] = useState('');
   const [refreshToken, setRefreshToken] = useState('');
+  const [refreshEndpoint, setRefreshEndpoint] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [tenantId, setTenantId] = useState('');
   const [entityId, setEntityId] = useState('');
   const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+  const [refreshFeedback, setRefreshFeedback] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const detectedEndpoint = detectRefreshEndpoint(allEndpoints);
 
   useEffect(() => {
     if (isOpen) {
       setAccessToken(credentials.accessToken || '');
       setRefreshToken(credentials.refreshToken || '');
+      setRefreshEndpoint(credentials.refreshEndpoint || detectedEndpoint || '');
+      setAutoRefresh(credentials.autoRefresh !== false);
       setTenantId(credentials.tenantId || '');
       setEntityId(credentials.entityId || '');
 
@@ -123,8 +152,9 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
       }
       setCustomHeaders(customArr);
       setJustSaved(false);
+      setRefreshFeedback(null);
     }
-  }, [isOpen, credentials]);
+  }, [isOpen, credentials, detectedEndpoint]);
 
   const handleCopy = (text: string, keyName: string) => {
     if (!text) return;
@@ -149,6 +179,22 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
     });
   };
 
+  const handleManualRefresh = async () => {
+    if (!onRefreshNow) return;
+    setRefreshFeedback(null);
+    const updated = await onRefreshNow(refreshEndpoint.trim() || undefined);
+    if (updated && updated.accessToken) {
+      setAccessToken(updated.accessToken);
+      if (updated.refreshToken) setRefreshToken(updated.refreshToken);
+      setRefreshFeedback({ text: 'Token refreshed & saved!', ok: true });
+    } else {
+      setRefreshFeedback({
+        text: 'Refresh failed — verify endpoint & refresh token.',
+        ok: false,
+      });
+    }
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -160,10 +206,13 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
     });
 
     onSave({
-      accessToken: accessToken.trim(),
-      refreshToken: refreshToken.trim(),
-      tenantId: tenantId.trim(),
-      entityId: entityId.trim(),
+      ...credentials,
+      accessToken: accessToken.trim() || undefined,
+      refreshToken: refreshToken.trim() || undefined,
+      refreshEndpoint: refreshEndpoint.trim() || undefined,
+      autoRefresh,
+      tenantId: tenantId.trim() || undefined,
+      entityId: entityId.trim() || undefined,
       customHeaders: customHeadersMap,
       updatedAt: new Date().toLocaleTimeString(),
     });
@@ -183,6 +232,8 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
     customHeaders.some((h) => h.key && h.value)
   );
 
+  const expiryBadge = formatExpiryBadge(credentials.expiresAt);
+
   const CopyBtn: React.FC<{ value: string; keyName: string }> = ({ value, keyName }) => {
     if (!value) return null;
     const isCopied = copiedKey === keyName;
@@ -192,10 +243,18 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
         onClick={() => handleCopy(value, keyName)}
         className="inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
         style={{ color: 'var(--text-tertiary)' }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = 'var(--text-primary)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'var(--text-tertiary)';
+        }}
       >
-        {isCopied ? <CheckCircle2 className="w-3 h-3" style={{ color: 'var(--success-500)' }} /> : <Copy className="w-3 h-3" />}
+        {isCopied ? (
+          <CheckCircle2 className="w-3 h-3" style={{ color: 'var(--success-500)' }} />
+        ) : (
+          <Copy className="w-3 h-3" />
+        )}
         {isCopied ? 'Copied' : 'Copy'}
       </button>
     );
@@ -205,8 +264,8 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Credentials & headers"
-      subtitle="Auto-captured tokens, tenant parameters, and custom request headers"
+      title="Credentials & auto-refresh"
+      subtitle="Auto-captured tokens, silent token renewal, and custom request headers"
       widthClass="max-w-xl"
     >
       {/* Tabs */}
@@ -220,12 +279,13 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
           className="pb-2.5 px-2 text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors"
           style={{
             color: activeTab === 'standard' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-            borderBottom: activeTab === 'standard' ? '2px solid var(--accent-500)' : '2px solid transparent',
+            borderBottom:
+              activeTab === 'standard' ? '2px solid var(--accent-500)' : '2px solid transparent',
             marginBottom: -1,
           }}
         >
           <Shield className="w-3.5 h-3.5" />
-          Core tokens
+          Core tokens & refresh
         </button>
         <button
           type="button"
@@ -233,7 +293,8 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
           className="pb-2.5 px-2 text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors"
           style={{
             color: activeTab === 'custom' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-            borderBottom: activeTab === 'custom' ? '2px solid var(--accent-500)' : '2px solid transparent',
+            borderBottom:
+              activeTab === 'custom' ? '2px solid var(--accent-500)' : '2px solid transparent',
             marginBottom: -1,
           }}
         >
@@ -256,7 +317,7 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
       <form onSubmit={handleFormSubmit} className="p-5 space-y-4">
         {activeTab === 'standard' ? (
           <>
-            {/* Auto-capture hint */}
+            {/* Auto-capture & auto-refresh hint */}
             <div
               className="flex items-start gap-2.5 p-3 rounded-[var(--r-sm)] text-[12px] leading-relaxed"
               style={{
@@ -265,23 +326,55 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                 color: 'var(--text-secondary)',
               }}
             >
-              <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--accent-500)' }} />
+              <Sparkles
+                className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                style={{ color: 'var(--accent-500)' }}
+              />
               <div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Auto-capture is active.</span>{' '}
-                Testing a login or token endpoint automatically saves the returned tokens and tenant IDs here,
-                then injects them into every subsequent sandbox call.
+                <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                  Zero-touch token management is active.
+                </span>{' '}
+                Calling any login/token endpoint in Swagger or Scalar automatically captures
+                access &amp; refresh tokens, pre-authorizes all endpoints, and silently renews
+                tokens before expiry or on <code className="mono">401</code>.
               </div>
             </div>
 
             <Field
               label="Access token (Authorization: Bearer)"
               Icon={KeyRound}
-              right={<CopyBtn value={accessToken} keyName="access" />}
+              right={
+                <div className="flex items-center gap-2.5">
+                  {expiryBadge && (
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded mono text-[10.5px] font-medium"
+                      style={{
+                        background:
+                          expiryBadge.tone === 'danger'
+                            ? 'color-mix(in srgb, var(--danger-500) 12%, transparent)'
+                            : expiryBadge.tone === 'warning'
+                              ? 'color-mix(in srgb, var(--warning-500) 12%, transparent)'
+                              : 'color-mix(in srgb, var(--success-500) 12%, transparent)',
+                        color:
+                          expiryBadge.tone === 'danger'
+                            ? 'var(--danger-500)'
+                            : expiryBadge.tone === 'warning'
+                              ? 'var(--warning-500)'
+                              : 'var(--success-500)',
+                      }}
+                    >
+                      <Clock className="w-2.5 h-2.5" />
+                      {expiryBadge.label}
+                    </span>
+                  )}
+                  <CopyBtn value={accessToken} keyName="access" />
+                </div>
+              }
             >
               <textarea
                 value={accessToken}
                 onChange={(e) => setAccessToken(e.target.value)}
-                placeholder="eyJh… (auto-injected into Authorization: Bearer <token>)"
+                placeholder="eyJh… (auto-captured on login & injected into Authorization: Bearer <token>)"
                 rows={2}
                 className="w-full p-3 rounded-[var(--r-sm)] mono text-[12px] resize-none outline-none transition-all"
                 style={{
@@ -303,14 +396,97 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
             <Field
               label="Refresh token (X-Refresh-Token)"
               Icon={RefreshCw}
-              right={<CopyBtn value={refreshToken} keyName="refresh" />}
+              right={
+                <div className="flex items-center gap-2.5">
+                  {onRefreshNow && refreshToken && (
+                    <button
+                      type="button"
+                      disabled={isRefreshing}
+                      onClick={handleManualRefresh}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
+                      style={{ color: 'var(--accent-500)' }}
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? 'Refreshing…' : 'Refresh now'}
+                    </button>
+                  )}
+                  <CopyBtn value={refreshToken} keyName="refresh" />
+                </div>
+              }
             >
               <TextInput
                 value={refreshToken}
                 onChange={setRefreshToken}
-                placeholder="e.g. refresh_token_xyz…"
+                placeholder="e.g. refresh_token_xyz… (auto-captured from login response)"
               />
             </Field>
+
+            {refreshFeedback && (
+              <div
+                className="text-[11.5px] font-medium px-2.5 py-1.5 rounded-[var(--r-sm)]"
+                style={{
+                  background: refreshFeedback.ok
+                    ? 'color-mix(in srgb, var(--success-500) 10%, transparent)'
+                    : 'color-mix(in srgb, var(--danger-500) 10%, transparent)',
+                  color: refreshFeedback.ok ? 'var(--success-500)' : 'var(--danger-500)',
+                }}
+              >
+                {refreshFeedback.text}
+              </div>
+            )}
+
+            {/* Auto-Refresh Configuration Box */}
+            <div
+              className="p-3 rounded-[var(--r-sm)] space-y-2.5"
+              style={{
+                background: 'var(--bg-canvas)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor="autoRefreshToggle"
+                  className="inline-flex items-center gap-1.5 text-[12px] font-medium cursor-pointer select-none"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <Zap className="w-3.5 h-3.5" style={{ color: 'var(--accent-500)' }} />
+                  Auto-refresh access token when expired or on 401
+                </label>
+                <input
+                  id="autoRefreshToggle"
+                  type="checkbox"
+                  checked={autoRefresh}
+                  onChange={(e) => setAutoRefresh(e.target.checked)}
+                  className="h-4 w-4 rounded cursor-pointer accent-[var(--accent-500)]"
+                />
+              </div>
+
+              {autoRefresh && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                      Refresh endpoint (POST)
+                    </span>
+                    {detectedEndpoint && refreshEndpoint === detectedEndpoint && (
+                      <span
+                        className="mono text-[10px]"
+                        style={{ color: 'var(--success-500)' }}
+                      >
+                        Auto-detected from OpenAPI spec
+                      </span>
+                    )}
+                  </div>
+                  <TextInput
+                    value={refreshEndpoint}
+                    onChange={setRefreshEndpoint}
+                    placeholder={
+                      detectedEndpoint ||
+                      '/api/v1/auth/refresh (auto-tries common paths if blank)'
+                    }
+                  />
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Tenant ID (X-Tenant-ID)" Icon={Building2}>
@@ -337,7 +513,8 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                   Custom request headers
                 </h3>
                 <p className="text-[11.5px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  Inject arbitrary headers like X-Account-Key or X-App-Client into every sandbox request.
+                  Inject arbitrary headers like X-Account-Key or X-App-Client into every sandbox
+                  request.
                 </p>
               </div>
               <button
@@ -437,7 +614,8 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
                       className="grid place-items-center w-8 h-8 rounded-[var(--r-sm)] transition-colors shrink-0"
                       style={{ color: 'var(--text-tertiary)' }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'color-mix(in srgb, var(--danger-500) 8%, transparent)';
+                        e.currentTarget.style.background =
+                          'color-mix(in srgb, var(--danger-500) 8%, transparent)';
                         e.currentTarget.style.color = 'var(--danger-500)';
                       }}
                       onMouseLeave={(e) => {
@@ -487,7 +665,8 @@ export const CredentialManagerModal: React.FC<CredentialManagerModalProps> = ({
             }}
             onMouseEnter={(e) => {
               if (hasAnyCreds) {
-                e.currentTarget.style.background = 'color-mix(in srgb, var(--danger-500) 8%, transparent)';
+                e.currentTarget.style.background =
+                  'color-mix(in srgb, var(--danger-500) 8%, transparent)';
               }
             }}
             onMouseLeave={(e) => {

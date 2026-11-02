@@ -28,6 +28,7 @@ import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext';
 import { QAProvider, useQA } from './context/QAContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ToastProvider, useToast } from './components/Toast';
+import { detectRefreshEndpoint } from './lib/tokenUtils';
 
 export interface Capabilities {
   workspaces_enabled: boolean;
@@ -53,7 +54,18 @@ export const App: React.FC = () => {
     ],
   });
 
-  const { credentials, hasCredentials, updateCredentials, clearCredentials, maskPII, toggleMaskPII, activeEnv, setActiveEnv } = useAuth();
+  const {
+    credentials,
+    hasCredentials,
+    isRefreshing,
+    updateCredentials,
+    clearCredentials,
+    refreshAccessToken,
+    maskPII,
+    toggleMaskPII,
+    activeEnv,
+    setActiveEnv,
+  } = useAuth();
   const {
     capabilities,
     workspaces,
@@ -69,6 +81,16 @@ export const App: React.FC = () => {
   } = useWorkspace();
   const { qaData, stats: qaStats, endpoints: allEndpointsList, modules: availableModules, saveRecord, resetQA, setQAData } = useQA();
   const toast = useToast();
+
+  // Auto-populate refreshEndpoint from the OpenAPI spec if not yet configured
+  useEffect(() => {
+    if (!credentials.refreshEndpoint && allEndpointsList.length > 0) {
+      const detected = detectRefreshEndpoint(allEndpointsList);
+      if (detected) {
+        updateCredentials({ ...credentials, refreshEndpoint: detected });
+      }
+    }
+  }, [allEndpointsList, credentials, updateCredentials]);
 
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
@@ -334,6 +356,7 @@ export const App: React.FC = () => {
               onUpdateQAData={setQAData}
               credentials={credentials}
               onUpdateCredentials={updateCredentials}
+              onRefreshToken={refreshAccessToken}
               onOpenCredentials={() => setIsCredsModalOpen(true)}
               maskPII={maskPII}
             />
@@ -378,6 +401,9 @@ export const App: React.FC = () => {
         credentials={credentials}
         onSave={updateCredentials}
         onClear={clearCredentials}
+        onRefreshNow={refreshAccessToken}
+        isRefreshing={isRefreshing}
+        allEndpoints={allEndpointsList}
       />
 
       {/* Code Snippet Generator Modal */}
