@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -8,15 +8,21 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Send,
   MessageSquare,
-  ShieldCheck,
-  Tag,
   Code2,
-  X,
   Sparkles,
+  Zap,
+  Activity,
+  FileText,
+  Eye,
+  Edit3,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { Modal } from './Modal';
 import { QARecord } from './QAReportModal';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface QAInspectModalProps {
   isOpen: boolean;
@@ -24,11 +30,25 @@ interface QAInspectModalProps {
   endpointKey: string;
   endpointsList: string[];
   qaData: Record<string, QARecord>;
-  onSaveRecord: (endpoint: string, status: 'passed' | 'retest' | 'failed' | 'untested', comment: string) => void;
+  onSaveRecord: (
+    endpoint: string,
+    status: 'passed' | 'retest' | 'failed' | 'untested',
+    comment: string,
+  ) => void;
   onSelectEndpoint: (endpoint: string) => void;
   onOpenSnippetGenerator?: (endpoint: string) => void;
   onOpenAIGenerator?: (endpoint: string) => void;
 }
+
+const COMMON_TAGS = [
+  '401 Unauthorized (missing token)',
+  '500 Server error on empty body',
+  '429 Rate limited under load',
+  'Schema validation mismatch',
+  'Slow response (>500ms)',
+  'Missing CORS headers',
+  'Payload sanitization verified',
+];
 
 export const QAInspectModal: React.FC<QAInspectModalProps> = ({
   isOpen,
@@ -43,48 +63,67 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
 }) => {
   const record = qaData[endpointKey] || { status: 'untested', comment: '', tested_at: '' };
 
-  const [status, setStatus] = useState<'passed' | 'retest' | 'failed' | 'untested'>(record.status || 'untested');
+  const [status, setStatus] = useState<'passed' | 'retest' | 'failed' | 'untested'>(
+    record.status || 'untested',
+  );
   const [comment, setComment] = useState(record.comment || '');
   const [savedNotice, setSavedNotice] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
 
   useEffect(() => {
-    if (!endpointKey) return;
     const current = qaData[endpointKey] || { status: 'untested', comment: '', tested_at: '' };
     setStatus(current.status || 'untested');
     setComment(current.comment || '');
     setSavedNotice(false);
+    setActiveTab('edit');
   }, [endpointKey, qaData]);
 
-  const currentIndex = endpointKey ? endpointsList.indexOf(endpointKey) : -1;
+  const currentIndex = endpointsList.indexOf(endpointKey);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex >= 0 && currentIndex < endpointsList.length - 1;
 
   const handleSave = () => {
-    if (!endpointKey) return;
     onSaveRecord(endpointKey, status, comment);
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 2000);
   };
 
   const handlePrev = () => {
-    if (hasPrev && endpointKey) {
+    if (hasPrev) {
       handleSave();
       onSelectEndpoint(endpointsList[currentIndex - 1]);
     }
   };
 
   const handleNext = () => {
-    if (hasNext && endpointKey) {
+    if (hasNext) {
       handleSave();
       onSelectEndpoint(endpointsList[currentIndex + 1]);
     }
   };
 
-  const parts = (endpointKey || '').split(' ');
+  const handleCopyEndpoint = () => {
+    if (!endpointKey) return;
+    navigator.clipboard.writeText(endpointKey).then(() => {
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 1500);
+    });
+  };
+
+  const handleInsertTag = (tag: string) => {
+    setComment((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return `• ${tag}`;
+      return `${trimmed}\n• ${tag}`;
+    });
+  };
+
+  const parts = endpointKey.split(' ');
   const method = parts[0] || 'GET';
   const path = parts.slice(1).join(' ') || endpointKey;
 
-  // Keyboard triage: J/K navigate, 1=passed 2=retest 3=failed (skipped while typing)
+  // Keyboard triage: J/K navigate, 1=passed, 2=retest, 3=failed, 4=untested, s/enter=save
   useEffect(() => {
     if (!isOpen || !endpointKey) return;
     const onKey = (e: KeyboardEvent) => {
@@ -104,6 +143,8 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
         setStatus('retest');
       } else if (k === '3') {
         setStatus('failed');
+      } else if (k === '4') {
+        setStatus('untested');
       } else if (k === 's' || k === 'enter') {
         e.preventDefault();
         handleSave();
@@ -114,263 +155,533 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, endpointKey, status, comment, hasPrev, hasNext, currentIndex]);
 
+  const renderedPreview = useMemo(() => {
+    if (!comment.trim()) {
+      return '<p class="text-[var(--text-tertiary)] italic">No comments or notes entered yet.</p>';
+    }
+    try {
+      return DOMPurify.sanitize(marked.parse(comment) as string);
+    } catch {
+      return comment;
+    }
+  }, [comment]);
+
   if (!isOpen || !endpointKey) return null;
 
-  const getMethodBadgeClass = (m: string) => {
-    switch (m.toUpperCase()) {
-      case 'GET':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'POST':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'PUT':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'DELETE':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
-      case 'PATCH':
-        return 'bg-purple-50 text-purple-700 border-purple-200';
-      default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
+  const methodTone: Record<string, { bg: string; text: string; border: string }> = {
+    GET: { bg: 'rgba(37, 99, 235, 0.12)', text: '#3b82f6', border: 'rgba(37, 99, 235, 0.3)' },
+    POST: { bg: 'rgba(16, 185, 129, 0.12)', text: '#10b981', border: 'rgba(16, 185, 129, 0.3)' },
+    PUT: { bg: 'rgba(245, 158, 11, 0.12)', text: '#f59e0b', border: 'rgba(245, 158, 11, 0.3)' },
+    PATCH: { bg: 'rgba(139, 92, 246, 0.12)', text: '#8b5cf6', border: 'rgba(139, 92, 246, 0.3)' },
+    DELETE: { bg: 'rgba(239, 68, 68, 0.12)', text: '#ef4444', border: 'rgba(239, 68, 68, 0.3)' },
+  };
+  const tone = methodTone[method.toUpperCase()] || {
+    bg: 'var(--bg-overlay)',
+    text: 'var(--text-secondary)',
+    border: 'var(--border-subtle)',
   };
 
+  const execution = record.execution_summary;
+  const stress = record.stress_metrics;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans">
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-emerald-600/20">
-              🧪
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      widthClass="max-w-3xl"
+      hideHeader={true}
+    >
+      <div className="flex flex-col max-h-[90vh]">
+        {/* Command bar header */}
+        <div
+          className="flex items-center justify-between px-5 py-3.5 border-b"
+          style={{
+            background: 'var(--bg-canvas)',
+            borderColor: 'var(--border-subtle)',
+          }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="w-8 h-8 rounded-[var(--r-sm)] grid place-items-center shrink-0"
+              style={{
+                background: 'var(--accent-muted)',
+                color: 'var(--accent-500)',
+                border: '1px solid color-mix(in srgb, var(--accent-500) 25%, transparent)',
+              }}
+            >
+              <Zap className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">Interactive QA Endpoint Inspector</h2>
-              <p className="text-[11px] text-slate-500 font-medium">
-                Review endpoint testing compliance & record bug details
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  QA Endpoint Inspector
+                </h2>
+                {currentIndex >= 0 && (
+                  <span
+                    className="mono text-[10.5px] px-1.5 py-0.5 rounded-[var(--r-sm)]"
+                    style={{
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
+                    {currentIndex + 1} of {endpointsList.length}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
+                Triage compliance, record bugs & synthesize automated suites
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {onOpenAIGenerator && (
               <button
+                type="button"
                 onClick={() => onOpenAIGenerator(endpointKey)}
-                title="Generate comprehensive test cases with DeepSeek v4.1 Flash"
-                className="px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-750 text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                title="Synthesize AI test suite"
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-colors"
+                style={{
+                  background: 'var(--ai-muted)',
+                  color: 'var(--ai-400)',
+                  border: '1px solid color-mix(in srgb, var(--ai-500) 30%, transparent)',
+                }}
               >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">AI Tests</span>
+                <Sparkles className="w-3 h-3" />
+                <span className="hidden sm:inline">AI Suite</span>
               </button>
             )}
 
             {onOpenSnippetGenerator && (
               <button
+                type="button"
                 onClick={() => onOpenSnippetGenerator(endpointKey)}
-                title="Generate pre-authenticated cURL / Go / Node / Python snippet"
-                className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                title="Generate pre-authenticated code snippet"
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--r-sm)] text-[11.5px] font-medium transition-colors"
+                style={{
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-subtle)',
+                }}
               >
-                <Code2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Snippets</span>
+                <Code2 className="w-3 h-3 text-[var(--accent-500)]" />
+                <span className="hidden sm:inline">Snippet</span>
               </button>
             )}
 
-            {currentIndex >= 0 && (
-              <span className="text-xs font-semibold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                {currentIndex + 1} of {endpointsList.length}
-              </span>
-            )}
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+              className="p-1.5 rounded-[var(--r-sm)] transition-colors"
+              style={{ color: 'var(--text-tertiary)' }}
+              title="Close (Esc)"
             >
-              <X className="w-4 h-4" />
+              ✕
             </button>
           </div>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-white">
+        <div className="p-5 overflow-y-auto space-y-4 flex-1" style={{ background: 'var(--bg-surface)' }}>
           {/* Endpoint Identity Banner */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <span className={`px-2.5 py-1 rounded-lg text-xs font-black font-mono border ${getMethodBadgeClass(method)}`}>
+          <div
+            className="p-3.5 rounded-[var(--r-md)] flex items-start justify-between gap-3"
+            style={{
+              background: 'var(--bg-canvas)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <div className="flex items-start gap-2.5 flex-1 min-w-0">
+              <span
+                className="mono text-[11px] font-bold px-2 py-0.5 rounded-[4px] shrink-0 uppercase"
+                style={{
+                  background: tone.bg,
+                  color: tone.text,
+                  border: `1px solid ${tone.border}`,
+                }}
+              >
                 {method}
               </span>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-slate-900 font-mono break-all">{path}</div>
+                <div
+                  className="mono text-[12.5px] font-semibold break-all leading-tight select-all"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {path}
+                </div>
                 {record.tested_at && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-1 font-medium">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  <div className="flex items-center gap-1.5 text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                    <Clock className="w-3 h-3" />
                     <span>Last synced: {record.tested_at}</span>
                   </div>
                 )}
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={handleCopyEndpoint}
+              title="Copy endpoint key"
+              className="p-1.5 rounded-[var(--r-sm)] transition-colors shrink-0"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                color: copiedKey ? 'var(--success-500)' : 'var(--text-secondary)',
+              }}
+            >
+              {copiedKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
           </div>
 
-          {/* AI Testing & Developer Tools Action Card */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/60 border border-indigo-200/80 shadow-xs">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-indigo-600/20">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    AI Test Synthesis & Automated Runner
-                    <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-mono font-bold border border-indigo-200">
-                      Multi-Vector
+          {/* Telemetry Metrics Card (if AI execution or stress testing was run) */}
+          {(execution || stress) && (
+            <div
+              className="p-3.5 rounded-[var(--r-md)] grid grid-cols-2 sm:grid-cols-4 gap-2.5"
+              style={{
+                background: 'var(--bg-canvas)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              {execution && (
+                <>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                      AI Pass Rate
                     </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Generate Happy Paths, Boundary Cases, Negative Errors & Security Probes for this endpoint.
-                  </p>
-                </div>
-              </div>
-            </div>
+                    <span
+                      className="mono text-[14px] font-bold mt-0.5"
+                      style={{
+                        color: execution.pass_rate >= 90 ? 'var(--success-500)' : 'var(--warning-500)',
+                      }}
+                    >
+                      {execution.pass_rate}% ({execution.passed}/{execution.total_tests})
+                    </span>
+                  </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 pt-1">
-              {onOpenAIGenerator && (
-                <button
-                  type="button"
-                  onClick={() => onOpenAIGenerator(endpointKey)}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Synthesize & Run AI Tests</span>
-                </button>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                      AI Latency
+                    </span>
+                    <span className="mono text-[14px] font-bold mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {execution.avg_latency_ms}ms
+                    </span>
+                  </div>
+                </>
               )}
 
-              {onOpenSnippetGenerator && (
-                <button
-                  type="button"
-                  onClick={() => onOpenSnippetGenerator(endpointKey)}
-                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 active:scale-95 border border-slate-300 text-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                >
-                  <Code2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Code Snippets</span>
-                </button>
+              {stress && (
+                <>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                      Peak Throughput
+                    </span>
+                    <span className="mono text-[14px] font-bold mt-0.5" style={{ color: 'var(--accent-500)' }}>
+                      {stress.rps.toFixed(1)} req/s
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                      P95 Latency
+                    </span>
+                    <span
+                      className="mono text-[14px] font-bold mt-0.5"
+                      style={{
+                        color: stress.p95_latency_ms > 200 ? 'var(--danger-500)' : 'var(--success-500)',
+                      }}
+                    >
+                      {stress.p95_latency_ms.toFixed(1)}ms
+                    </span>
+                  </div>
+                </>
               )}
             </div>
-          </div>
+          )}
 
           {/* Test Status Radio Buttons */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-              Testing Status Result
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="flex items-center justify-between mb-2">
+              <label
+                className="text-[11px] font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                Verification Status
+              </label>
+              <span className="mono text-[10.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                Hotkeys: 1=Pass, 2=Retest, 3=Fail, 4=Untested
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setStatus('passed')}
-                className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  status === 'passed'
-                    ? 'bg-emerald-50 border-emerald-400 text-emerald-800 ring-2 ring-emerald-500/20 shadow-xs'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                className="p-3 rounded-[var(--r-md)] text-left flex flex-col gap-1.5 transition-all cursor-pointer relative"
+                style={{
+                  background: status === 'passed' ? 'rgba(22, 163, 74, 0.12)' : 'var(--bg-canvas)',
+                  border: `1px solid ${status === 'passed' ? 'var(--success-500)' : 'var(--border-subtle)'}`,
+                  color: status === 'passed' ? 'var(--success-500)' : 'var(--text-secondary)',
+                }}
               >
-                <CheckCircle2 className={`w-5 h-5 ${status === 'passed' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span>Passed (Working)</span>
+                <div className="flex items-center justify-between w-full">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="kbd text-[9.5px]">1</span>
+                </div>
+                <span className="text-[12px] font-semibold leading-tight">Passed</span>
+                <span className="text-[10px] opacity-70">Working normally</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setStatus('retest')}
-                className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  status === 'retest'
-                    ? 'bg-amber-50 border-amber-400 text-amber-800 ring-2 ring-amber-500/20 shadow-xs'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                className="p-3 rounded-[var(--r-md)] text-left flex flex-col gap-1.5 transition-all cursor-pointer relative"
+                style={{
+                  background: status === 'retest' ? 'rgba(217, 119, 6, 0.12)' : 'var(--bg-canvas)',
+                  border: `1px solid ${status === 'retest' ? 'var(--warning-500)' : 'var(--border-subtle)'}`,
+                  color: status === 'retest' ? 'var(--warning-500)' : 'var(--text-secondary)',
+                }}
               >
-                <AlertTriangle className={`w-5 h-5 ${status === 'retest' ? 'text-amber-600' : 'text-slate-400'}`} />
-                <span>Needs Retest</span>
+                <div className="flex items-center justify-between w-full">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="kbd text-[9.5px]">2</span>
+                </div>
+                <span className="text-[12px] font-semibold leading-tight">Needs Retest</span>
+                <span className="text-[10px] opacity-70">Requires review</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setStatus('failed')}
-                className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  status === 'failed'
-                    ? 'bg-rose-50 border-rose-400 text-rose-800 ring-2 ring-rose-500/20 shadow-xs'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                className="p-3 rounded-[var(--r-md)] text-left flex flex-col gap-1.5 transition-all cursor-pointer relative"
+                style={{
+                  background: status === 'failed' ? 'rgba(220, 38, 38, 0.12)' : 'var(--bg-canvas)',
+                  border: `1px solid ${status === 'failed' ? 'var(--danger-500)' : 'var(--border-subtle)'}`,
+                  color: status === 'failed' ? 'var(--danger-500)' : 'var(--text-secondary)',
+                }}
               >
-                <XCircle className={`w-5 h-5 ${status === 'failed' ? 'text-rose-600' : 'text-slate-400'}`} />
-                <span>Failed / Bug</span>
+                <div className="flex items-center justify-between w-full">
+                  <XCircle className="w-4 h-4" />
+                  <span className="kbd text-[9.5px]">3</span>
+                </div>
+                <span className="text-[12px] font-semibold leading-tight">Failed / Bug</span>
+                <span className="text-[10px] opacity-70">Identified defect</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setStatus('untested')}
-                className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  status === 'untested'
-                    ? 'bg-slate-100 border-slate-400 text-slate-900 ring-2 ring-slate-400/20 shadow-xs'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                className="p-3 rounded-[var(--r-md)] text-left flex flex-col gap-1.5 transition-all cursor-pointer relative"
+                style={{
+                  background: status === 'untested' ? 'var(--bg-overlay)' : 'var(--bg-canvas)',
+                  border: `1px solid ${status === 'untested' ? 'var(--border-strong)' : 'var(--border-subtle)'}`,
+                  color: status === 'untested' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                }}
               >
-                <HelpCircle className={`w-5 h-5 ${status === 'untested' ? 'text-slate-700' : 'text-slate-400'}`} />
-                <span>Not Tested</span>
+                <div className="flex items-center justify-between w-full">
+                  <HelpCircle className="w-4 h-4" />
+                  <span className="kbd text-[9.5px]">4</span>
+                </div>
+                <span className="text-[12px] font-semibold leading-tight">Untested</span>
+                <span className="text-[10px] opacity-70">Not verified</span>
               </button>
             </div>
           </div>
 
-          {/* QA Comment & Notes Textarea */}
+          {/* Quick-Tag Presets */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                Quick Triage Findings
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {COMMON_TAGS.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => handleInsertTag(tag)}
+                  className="text-[11px] px-2 py-0.5 rounded-[var(--r-sm)] transition-colors cursor-pointer"
+                  style={{
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-strong)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  + {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* QA Comment & Notes with Tabs */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                QA Bug Notes & Verification Comments
+              <label
+                className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                <MessageSquare className="w-3.5 h-3.5" style={{ color: 'var(--accent-500)' }} />
+                Notes & Reproduction Steps
               </label>
-              <span className="text-[11px] text-slate-400">Supports Markdown notes</span>
+
+              <div
+                className="inline-flex items-center p-0.5 rounded-[var(--r-sm)]"
+                style={{
+                  background: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('edit')}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded font-medium transition-colors"
+                  style={
+                    activeTab === 'edit'
+                      ? {
+                          background: 'var(--bg-surface)',
+                          color: 'var(--text-primary)',
+                          boxShadow: 'var(--shadow-xs)',
+                        }
+                      : { color: 'var(--text-tertiary)' }
+                  }
+                >
+                  <Edit3 className="w-3 h-3" />
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('preview')}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded font-medium transition-colors"
+                  style={
+                    activeTab === 'preview'
+                      ? {
+                          background: 'var(--bg-surface)',
+                          color: 'var(--text-primary)',
+                          boxShadow: 'var(--shadow-xs)',
+                        }
+                      : { color: 'var(--text-tertiary)' }
+                  }
+                >
+                  <Eye className="w-3 h-3" />
+                  Preview
+                </button>
+              </div>
             </div>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="e.g. Expected 200 OK with payload { id, status }, received 500 error when sending empty phone array. Steps to reproduce..."
-              rows={4}
-              className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono leading-relaxed"
-            />
+
+            {activeTab === 'edit' ? (
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Markdown supported: e.g. Steps to reproduce, expected status vs observed payload, boundary findings..."
+                rows={4}
+                className="w-full rounded-[var(--r-md)] p-3 text-[12px] mono outline-none leading-relaxed transition-all resize-y"
+                style={{
+                  background: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-primary)',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-focus)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                }}
+              />
+            ) : (
+              <div
+                className="markdown-body p-3 rounded-[var(--r-md)] min-h-[96px] text-[12px] leading-relaxed overflow-y-auto"
+                style={{
+                  background: 'var(--bg-canvas)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-secondary)',
+                }}
+                dangerouslySetInnerHTML={{ __html: renderedPreview }}
+              />
+            )}
           </div>
         </div>
 
         {/* Modal Footer Controls */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="px-5 py-3 border-t flex flex-wrap items-center justify-between gap-3"
+          style={{
+            background: 'var(--bg-canvas)',
+            borderColor: 'var(--border-subtle)',
+          }}
+        >
           {/* Stepper Navigation */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
+              type="button"
               onClick={handlePrev}
               disabled={!hasPrev}
-              className="px-3 py-2 rounded-xl text-xs font-bold border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center gap-1 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-[var(--r-sm)] text-[12px] font-medium transition-colors disabled:opacity-40"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+              }}
+              title="Previous endpoint (K)"
             >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Previous</span>
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev</span>
             </button>
             <button
+              type="button"
               onClick={handleNext}
               disabled={!hasNext}
-              className="px-3 py-2 rounded-xl text-xs font-bold border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center gap-1 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-[var(--r-sm)] text-[12px] font-medium transition-colors disabled:opacity-40"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+              }}
+              title="Next endpoint (J)"
             >
               <span>Next</span>
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Save & Confirm */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {savedNotice && (
-              <span className="text-xs font-bold text-emerald-600 animate-in fade-in">
-                ✅ Saved & Synced!
+              <span className="mono text-[11px] font-medium" style={{ color: 'var(--success-500)' }}>
+                ✓ Synced to QA Server
               </span>
             )}
             <button
+              type="button"
               onClick={handleSave}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-2 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-[var(--r-sm)] text-[12px] font-semibold transition-all cursor-pointer"
+              style={{
+                background: 'var(--accent-500)',
+                color: 'var(--text-inverse)',
+                boxShadow: 'var(--shadow-xs)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--accent-400)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--accent-500)';
+              }}
+              title="Save & Sync (S / Enter)"
             >
-              <Save className="w-4 h-4" />
-              <span>Save & Sync Server</span>
+              <Save className="w-3.5 h-3.5" />
+              <span>Save & Sync</span>
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
