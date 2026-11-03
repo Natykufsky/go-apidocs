@@ -15,6 +15,7 @@ const SELECTORS: Record<
   RendererChoice,
   {
     opblock: string;
+    summary: string;
     method: string;
     path: string;
     insertBefore: string | null;
@@ -23,6 +24,7 @@ const SELECTORS: Record<
 > = {
   swagger: {
     opblock: '.opblock',
+    summary: '.opblock-summary',
     method: '.opblock-summary-method',
     path: '.opblock-summary-path',
     insertBefore: '.opblock-summary-control',
@@ -30,6 +32,7 @@ const SELECTORS: Record<
   },
   scalar: {
     opblock: '.endpoint',
+    summary: '.endpoint',
     method: '.endpoint-method',
     path: '.endpoint-path',
     insertBefore: null,
@@ -86,6 +89,9 @@ export const useQAPillInjection = ({
     const config = SELECTORS[renderer];
     let isInjecting = false;
 
+    let retryCount = 0;
+    const maxRetries = 20;
+
     const inject = () => {
       if (isInjecting) return;
       const root = containerRef.current;
@@ -94,6 +100,11 @@ export const useQAPillInjection = ({
       try {
         const ops = root.querySelectorAll(config.opblock);
         if (ops.length === 0) {
+          if (retryCount < maxRetries) {
+            retryCount++;
+            setTimeout(inject, 250);
+            return;
+          }
           const warnedKey = `__qaWarned_${renderer}`;
           if (!(window as any)[warnedKey]) {
             // eslint-disable-next-line no-console
@@ -106,6 +117,11 @@ export const useQAPillInjection = ({
           }
           return;
         }
+
+        // Successfully found operation blocks - reset retry counter and warning flag
+        retryCount = 0;
+        delete (window as any)[`__qaWarned_${renderer}`];
+
         ops.forEach((op) => {
           const methodEl = op.querySelector(config.method);
           const pathEl = op.querySelector(config.path);
@@ -116,25 +132,51 @@ export const useQAPillInjection = ({
           const key = `${method} ${path}`;
           const rec = qaData[key];
 
-          const existing = op.querySelector('.qa-pill-trigger');
-          if (existing) existing.remove();
+          const container = (config.summary ? op.querySelector(config.summary) : op) || op;
+          const existingPills = container.querySelectorAll('.qa-pill-trigger');
+          if (existingPills.length > 1) {
+            for (let i = 1; i < existingPills.length; i++) {
+              existingPills[i].remove();
+            }
+          }
 
-          const pill = document.createElement('div');
-          pill.className = 'qa-pill-trigger';
-          pill.style.display = qaMode ? 'flex' : 'none';
-          pill.innerHTML = renderPillHtml(rec?.status, rec?.comment);
-          pill.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onInspectEndpoint?.(key);
-          };
+          let pill = (existingPills[0] as HTMLDivElement) || null;
+          if (!pill) {
+            pill = document.createElement('div');
+            pill.className = 'qa-pill-trigger';
+            pill.style.display = qaMode ? 'flex' : 'none';
+            pill.innerHTML = renderPillHtml(rec?.status, rec?.comment);
+            pill.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onInspectEndpoint?.(key);
+            };
 
-          if (config.insertBefore) {
-            const t = op.querySelector(config.insertBefore);
-            if (t?.parentElement) t.parentElement.insertBefore(pill, t);
-          } else if (config.insertAfter) {
-            const t = op.querySelector(config.insertAfter);
-            if (t?.parentElement) t.parentElement.insertBefore(pill, t.nextSibling);
+            if (config.insertBefore) {
+              const t = container.querySelector(config.insertBefore);
+              if (t?.parentElement) {
+                t.parentElement.insertBefore(pill, t);
+              } else {
+                container.appendChild(pill);
+              }
+            } else if (config.insertAfter) {
+              const t = container.querySelector(config.insertAfter);
+              if (t?.parentElement) {
+                t.parentElement.insertBefore(pill, t.nextSibling);
+              } else {
+                container.appendChild(pill);
+              }
+            } else {
+              container.appendChild(pill);
+            }
+          } else {
+            pill.style.display = qaMode ? 'flex' : 'none';
+            pill.innerHTML = renderPillHtml(rec?.status, rec?.comment);
+            pill.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onInspectEndpoint?.(key);
+            };
           }
         });
       } finally {

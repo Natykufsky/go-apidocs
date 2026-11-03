@@ -28,7 +28,6 @@ import {
 
 const LazySwagger = lazy(() => import('./adapters/SwaggerAdapter'));
 const LazyScalar = lazy(() => import('./adapters/ScalarAdapter'));
-const LazyStoplight = lazy(() => import('./adapters/StoplightAdapter'));
 
 interface SwaggerSandboxViewProps {
   specUrl: string;
