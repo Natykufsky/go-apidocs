@@ -231,9 +231,7 @@ const ScalarAdapter: React.FC<Props> = ({
     <div ref={containerRef}>
       <ApiReferenceReact
         configuration={{
-          spec: {
-            url: specUrl,
-          },
+          spec: { url: specUrl },
           theme: isDark ? 'moon' : 'default',
           hideDarkModeToggle: true,
           hideModels: false,
