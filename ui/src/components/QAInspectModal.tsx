@@ -54,8 +54,6 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
     setSavedNotice(false);
   }, [endpointKey, qaData]);
 
-  if (!isOpen || !endpointKey) return null;
-
   const currentIndex = endpointsList.indexOf(endpointKey);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex >= 0 && currentIndex < endpointsList.length - 1;
@@ -86,7 +84,7 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
 
   // Keyboard triage: J/K navigate, 1=passed 2=retest 3=failed (skipped while typing)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !endpointKey) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const isInput = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
@@ -113,6 +111,8 @@ export const QAInspectModal: React.FC<QAInspectModalProps> = ({
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, endpointKey, status, comment, hasPrev, hasNext, currentIndex]);
+
+  if (!isOpen || !endpointKey) return null;
 
   const getMethodBadgeClass = (m: string) => {
     switch (m.toUpperCase()) {
