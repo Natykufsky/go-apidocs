@@ -44,6 +44,21 @@ export const applyAuthHeaders = (
   }
 };
 
+export const isInternalPortalEndpoint = (url?: string): boolean => {
+  if (!url) return false;
+  return (
+    url.includes('/docs/swagger.json') ||
+    url.includes('/swagger/swagger.json') ||
+    url.includes('/swagger.json') ||
+    url.includes('/docs/workspaces') ||
+    url.includes('/docs/qa/') ||
+    url.includes('/docs/capabilities') ||
+    url.includes('/docs/nav') ||
+    url.includes('/docs/readme') ||
+    url.includes('/docs/markdown-docs')
+  );
+};
+
 export const buildRequestInterceptor = ({
   credentials,
   onRefreshToken,
@@ -52,6 +67,17 @@ export const buildRequestInterceptor = ({
   onShowToast,
 }: Params) => async (req: any) => {
   if (!req.headers) req.headers = {};
+
+  // Defense-in-depth: Never inject API credentials or mock routing into internal portal endpoints
+  // (e.g. spec loading, workspaces list, nav, QA). Strip any persisted Authorization headers
+  // that Swagger UI might attempt to forward during spec fetch.
+  if (isInternalPortalEndpoint(req.url)) {
+    if (req.headers.Authorization) delete req.headers.Authorization;
+    if (req.headers.authorization) delete req.headers.authorization;
+    if (req.headers['X-Tenant-ID']) delete req.headers['X-Tenant-ID'];
+    if (req.headers['x-tenant-id']) delete req.headers['x-tenant-id'];
+    return req;
+  }
 
   // Mock engine routing
   if (mockMode && req.url) {
